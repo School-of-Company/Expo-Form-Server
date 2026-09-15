@@ -29,20 +29,21 @@ gh pr view --json number,baseRefName -q '{number: .number, base: .baseRefName}'
 Before assessing any comment, discover and read all project convention files:
 
 ```bash
-find .claude/rules -name "*.md" 2>/dev/null
+find .agents/skills/nestjs-arch -name "*.md" 2>/dev/null
 ```
 
 Read each returned file in full. These are the authoritative rules for judging each review comment.
 
-**Rule priority**: `CLAUDE.md` > `.claude/rules/**` > `.gemini/styleguide.md` > `CONTRIBUTING.md`
+**Rule priority**: `.agents/skills/nestjs-arch/**` > everything else. If a root `AGENTS.md` or `CLAUDE.md`
+is added later it outranks them — check for one before relying on this order.
 
 For each comment in `pr_comments.json`, apply the following **layered judgment criteria**:
 
 ### Judgment criteria (priority order)
 
 1. **Project conventions** (primary): apply rules discovered above
-   - DTO annotation rules, commit scope, logging style, exception message format, etc.
-2. **Language/framework best practices** (secondary): Kotlin official guide, Spring Boot recommendations
+   - Zod DTO rules, store pattern, DI tokens, commit scope, logging style, etc.
+2. **Language/framework best practices** (secondary): TypeScript and NestJS official guidance
    - Apply only when no matching project rule exists
 
 ### Verdicts
@@ -51,7 +52,7 @@ For each comment in `pr_comments.json`, apply the following **layered judgment c
 - **INVALID**: reviewer is wrong with a clear refutation → skip, post refutation reply
 - **PARTIAL**: intent is correct but application method or scope is ambiguous → confirm with the user
 
-Always cite a specific source in the rationale (e.g. `CLAUDE.md §Logging Style`, `Kotlin: prefer val over var`).
+Always cite a specific source in the rationale (e.g. `nestjs-arch §Logging`, `NestJS: register global guards via APP_GUARD`).
 
 ## Step 3 — Act on Each Verdict
 
@@ -93,9 +94,9 @@ Accept? (y / n / s = skip for now)
 
 | # | Reviewer | File | Verdict | Rationale | Action |
 |---|----------|------|---------|-----------|--------|
-| 1 | alice | Foo.kt:12 | ✅ VALID | CLAUDE.md §Logging Style | Auto-fixed (abc1234) |
-| 2 | bob | Bar.kt:34 | ❌ INVALID | CLAUDE.md §Exception Message | Skipped |
-| 3 | alice | Baz.kt:56 | ⚠️ PARTIAL | - | PENDING |
+| 1 | alice | form.service.ts:12 | ✅ VALID | nestjs-arch §Logging | Auto-fixed (abc1234) |
+| 2 | bob | form.controller.ts:34 | ❌ INVALID | nestjs-arch §Controllers | Skipped |
+| 3 | alice | submission.store.ts:56 | ⚠️ PARTIAL | - | PENDING |
 ```
 
 ## Step 5 — Push Commits

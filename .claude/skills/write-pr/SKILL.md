@@ -31,7 +31,7 @@ Read `${CLAUDE_SKILL_DIR}/references/commit-conventions.md` for commit type and 
 
 - Scope: determine from changed file paths and directory structure (`server` / `catalog`, or infer a more specific one from the path). Lowercase, wrapped in brackets: `[server]`, `[catalog]`. Use `[global]` / `[ci/cd]` for cross-cutting changes only.
 - Description: Korean, concise, no emojis, max 50 characters total
-- Wrap class names, method names, annotations, file names, and technical terms in backticks (e.g., `@Transactional`, `QueryProjectServiceImpl`, `SKILL.md`)
+- Wrap class names, method names, decorators, file names, and technical terms in backticks (e.g., `@UseGuards`, `SubmissionStore`, `SKILL.md`)
 
 **Body** — Follow the `.github/PULL_REQUEST_TEMPLATE.md` structure:
 

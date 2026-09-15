@@ -9,31 +9,50 @@ description: Dockerfile and docker-compose authoring guide — multi-stage build
 
 ### Multi-stage build
 
-```dockerfile
-FROM eclipse-temurin:21-jdk AS builder
-WORKDIR /app
-COPY gradlew settings.gradle.kts build.gradle.kts ./
-COPY gradle gradle
-RUN ./gradlew dependencies --no-daemon
-COPY src src
-RUN ./gradlew bootJar --no-daemon
+Three stages: build the app, resolve production-only dependencies separately, then copy both into a
+runtime image that carries no toolchain.
 
-FROM eclipse-temurin:21-jre
+```dockerfile
+FROM node:22-alpine AS builder
 WORKDIR /app
-COPY --from=builder /app/build/libs/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+
+FROM node:22-alpine AS deps
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+FROM node:22-alpine
+WORKDIR /app
+RUN addgroup -S app && adduser -S app -G app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY package.json ./
+USER app
+EXPOSE 3000
+CMD ["node", "dist/main"]
 ```
+
+`package.json` sets `"type": "module"`, so it must be present in the runtime image — Node reads it to
+decide the module format for `dist/main.js`.
 
 ### Layer caching rules
 
-- `COPY` dependency manifests first, run install, then `COPY` source
+- `COPY package.json pnpm-lock.yaml` first, install, then `COPY` source
+- Use `--frozen-lockfile` so a stale lockfile fails the build instead of silently resolving new versions
 - Only invalidate layers that actually changed
 
 ### Security
 
 - Use specific digest tags, not `latest`
-- Run as non-root: `RUN adduser --disabled-password app && USER app`
+- Run as non-root: `RUN addgroup -S app && adduser -S app -G app` then `USER app`
 - Never `COPY . .` before installing dependencies
+- Keep `.env` out of the image — pass configuration in as environment variables
 
 ## docker-compose.yml
 
@@ -42,29 +61,40 @@ services:
   app:
     build: .
     ports:
-      - "8080:8080"
+      - '3000:3000'
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/mydb
+      DATABASE_URL: postgres://app:app@db:5432/expoform
     depends_on:
       db:
         condition: service_healthy
 
   db:
-    image: mysql:8.0
+    image: postgres:17-alpine
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: mydb
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: expoform
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ['CMD-SHELL', 'pg_isready -U app -d expoform']
       interval: 10s
       retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
 ```
+
+`condition: service_healthy` matters here — Postgres accepts TCP connections before it is ready to serve
+queries, so without the healthcheck the app races the database on startup.
 
 ## .dockerignore
 
 ```
 .git
-build/
-.gradle/
+node_modules
+dist
 *.log
+.env
+.env.*
 ```
