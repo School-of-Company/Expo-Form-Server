@@ -1,6 +1,6 @@
 ---
 name: api-design
-description: REST API design guide for new endpoints — RESTful URL structure, DTO-only arguments for controllers and services, query parameter binding rules (@RequestParam vs @ModelAttribute), OpenAPI annotations, and response format.
+description: REST API design guide for new endpoints — RESTful URL structure, DTO-only arguments for controllers and services, query parameter binding and coercion rules, OpenAPI annotations, and response format. Use when adding or changing a controller route.
 ---
 
 # REST API Design Guide
@@ -16,29 +16,33 @@ description: REST API design guide for new endpoints — RESTful URL structure, 
 Controllers and services never take loose positional parameters. Every argument that crosses a boundary is
 a DTO, and every response is a DTO:
 
-```kotlin
-// request body → ReqDto
-@PostMapping("/api-keys")
-fun create(@Valid @RequestBody reqDto: CreateApiKeyReqDto): ApiKeyResDto
+```ts
+// request body → RequestDto
+@Post('api-keys')
+create(@Body() dto: CreateApiKeyRequestDto): Promise<ApiKeyResponseDto>
 
-// query parameters → @ModelAttribute ReqDto, not a pile of @RequestParam
-@GetMapping("/students")
-fun query(@Valid @ModelAttribute reqDto: QueryStudentReqDto): List<StudentResDto>
+// query parameters → @Query() + RequestDto, not a pile of primitives
+@Get('students')
+query(@Query() dto: QueryStudentRequestDto): Promise<StudentResponseDto[]>
 
 // service takes the same DTO — not (name, grade, status, page, size)
-fun query(reqDto: QueryStudentReqDto): List<StudentResDto>
+query(dto: QueryStudentRequestDto): Promise<StudentResponseDto[]>
 ```
 
-Why: adding a field doesn't ripple through every signature, argument order can't be mixed up, and
-validation annotations live next to the shape they describe.
+Why: adding a field doesn't ripple through every signature, argument order can't be mixed up, and the
+validation rules live next to the shape they describe.
 
-### `@RequestParam` vs `@ModelAttribute`
+DTO classes come from `createZodDto()` — see `nestjs-arch`'s `references/dto-validation.md` for how the
+schema and the class relate.
 
-- **`@ModelAttribute` + ReqDto** — the default for query parameters. Also the only way to attach
-  `@Valid` constraints to them.
-- **`@RequestParam`** — only for a single, self-contained value that will never grow (e.g. `?force=true`).
+## Binding Rules
+
+- **`@Query()` + RequestDto** — the default for query parameters. Everything arrives as a string, so
+  declare non-string fields with `z.coerce.number()` / `z.coerce.boolean()` rather than converting in the
+  service.
+- **`@Query('name')`** — only for a single, self-contained value that will never grow (e.g. `?force=true`).
   Two or more parameters means a DTO.
-- Path variables (`@PathVariable`) stay as primitives — they're part of the URL, not a payload.
+- **`@Param()`** — path variables stay as primitives; they're part of the URL, not a payload.
 
 ## Query Parameters
 
@@ -48,17 +52,28 @@ validation annotations live next to the shape they describe.
 
 ## OpenAPI Documentation
 
-```kotlin
-@Operation(summary = "Create API key", description = "...")
-@ApiResponse(responseCode = "200", description = "Success")
-@PostMapping("/api-keys")
-fun create(@Valid @RequestBody reqDto: CreateApiKeyReqDto): ApiKeyResDto
+```ts
+@ApiOperation({ summary: 'Create API key', description: '...' })
+@ApiResponse({ status: 201, type: ApiKeyResponseDto })
+@Post('api-keys')
+create(@Body() dto: CreateApiKeyRequestDto): Promise<ApiKeyResponseDto>
 ```
+
+Zod-derived DTOs carry their own schema, so request and response bodies document themselves once the
+classes are named in the signature — don't restate fields with `@ApiProperty`.
 
 ## Response Format
 
-- Success: return the `ResDto` directly — no envelope/wrapper type. The HTTP status carries the outcome.
-- Error: throw a domain exception → global exception handler turns it into the error body.
+- Success: return the `ResponseDto` directly — no envelope/wrapper type. The HTTP status carries the
+  outcome.
+- Error: throw a domain exception → the global exception filter turns it into the error body.
 
 Don't wrap successful payloads in a `data` field. Clients read the resource straight from the body, so an
 envelope only adds a layer to unwrap on every call.
+
+## Streaming Exports
+
+A CSV export is not a JSON resource — stream it instead of building a DTO array in memory. Set the
+headers, hand the controller a `StreamableFile`, and let the store push rows straight from Postgres
+`COPY ... TO STDOUT WITH CSV`. The store owns the SQL; the controller only names the file and content
+type.
