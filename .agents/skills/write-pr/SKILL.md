@@ -14,10 +14,11 @@ git diff origin/develop...HEAD --stat 2>/dev/null || git diff HEAD~5...HEAD --st
 git diff origin/develop...HEAD 2>/dev/null || git diff HEAD~5...HEAD
 ```
 
-Also read the PR template:
+Read the PR template if the repository has one — it does not always exist, so do not let a missing
+file stop the run:
 
 ```bash
-cat .github/PULL_REQUEST_TEMPLATE.md
+cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || echo "(no template)"
 ```
 
 ## Step 2 — Determine Labels
@@ -33,7 +34,9 @@ Read `.agents/skills/write-pr/references/commit-conventions.md` for commit type 
 - Description: Korean, concise, no emojis, max 50 characters total
 - Wrap class names, method names, decorators, file names, and technical terms in backticks (e.g., `@UseGuards`, `SubmissionStore`, `SKILL.md`)
 
-**Body** — Follow the `.github/PULL_REQUEST_TEMPLATE.md` structure:
+**Body** — Follow `.github/PULL_REQUEST_TEMPLATE.md` when it exists. When it does not, use:
+`## 개요` (one or two sentences), `## 변경 사항` (bullet per change), `## 확인` (how it was verified),
+and a closing `Closes #<issue>` line when an issue exists.
 
 - Korean 합쇼체: `~하였습니다`, `~되었습니다`, `~추가하였습니다`
 - No emojis
@@ -42,7 +45,8 @@ Read `.agents/skills/write-pr/references/commit-conventions.md` for commit type 
 
 ## Step 4 — Write Body & Show Preview
 
-Write the body to `PR_BODY.md`, then display:
+Write the body to `PR_BODY.md` **in a temporary directory**, not the repository root — an untracked
+file there can be swept into a later `git add`. Then display:
 
 ```
 ## PR 제목 후보
@@ -64,8 +68,12 @@ Ask the user which title to use (present options 1/2/3). Wait for the answer bef
 Run the creation script with the confirmed title and labels:
 
 ```bash
-bash .agents/skills/write-pr/scripts/create-pr.sh "<confirmed-title>" "PR_BODY.md" "<label1>,<label2>"
+bash .agents/skills/write-pr/scripts/create-pr.sh "<confirmed-title>" "<tmpdir>/PR_BODY.md" "<label1>,<label2>"
 ```
 
+The script picks the base itself (feature branch → `develop`, `develop` → `main`), refuses to run on
+`main`, and fails with a clear message if the base branch does not exist on `origin`.
+
+Label names contain emoji and spaces — pass them verbatim. A mismatched name fails PR creation.
+
 After creation, display the PR URL.
-Cleanup: remove `PR_BODY.md`.
