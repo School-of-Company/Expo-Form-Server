@@ -1,22 +1,11 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { describe, expect, it } from 'vitest';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
 describe('AppController', () => {
-  let appController: AppController;
+  it('AppService의 getHello 결과를 그대로 반환한다', () => {
+    const service = { getHello: () => 'Hello World!' } as AppService;
 
-  beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [AppService],
-    }).compile();
-
-    appController = app.get<AppController>(AppController);
-  });
-
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
-    });
+    expect(new AppController(service).getHello()).toBe('Hello World!');
   });
 });
