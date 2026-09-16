@@ -5,8 +5,13 @@ description: Conduct an in-depth structured interview with the user to uncover n
 allowed-tools: AskUserQuestion, Write
 ---
 
-Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. After I respond to each question, provide your evaluation and recommended answer.
+Interview me relentlessly about every aspect of this plan until we reach a shared understanding.
 
-Ask the questions one at a time.
+1. Walk the design tree one branch at a time, asking a single question per turn.
+2. Before asking a question the codebase can answer, explore the codebase instead of asking.
+3. After each answer, state your evaluation and a recommended answer, then move to the next question.
 
-If a question can be answered by exploring the codebase, explore the codebase instead.
+## Output
+
+Write the finished spec to `<scratchpad>/<topic>-spec.md` with sections: Goal, Constraints, Decisions
+(Q&A log), Open Questions, Implementation Steps.

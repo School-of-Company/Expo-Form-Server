@@ -89,7 +89,7 @@ export class TimingInterceptor implements NestInterceptor {
       .handle()
       .pipe(
         tap(() =>
-          this.logger.log(`${method} ${url} — ${Date.now() - startedAt}ms`),
+          this.logger.log(`${method} ${url} 처리 완료 — ${Date.now() - startedAt}ms`),
         ),
       );
   }

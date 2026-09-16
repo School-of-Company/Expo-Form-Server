@@ -1,6 +1,6 @@
 ---
 name: doc-polisher
-description: "Updates and polishes project documentation files by (1) refreshing code snippets to match actual .ts file patterns, (2) simplifying verbose or unclear explanations, (3) adding missing conventions found in code but absent from docs, and (4) fixing heading order and structural issues. Directly edits files using the Edit tool and does NOT auto-commit. Target files: .claude/agents/*.md, .claude/skills/**/*.md, .agents/skills/**/*.md, .claude/hooks/*.sh, .claude/settings.json, README.md, and any root CLAUDE.md / AGENTS.md / CONTRIBUTING.md that exists. .claude/ and .agents/ are treated independently and updated separately. Trigger when the user says '문서 갱신해줘', '문서 정리해줘', '문서 업데이트해줘', 'doc-polisher 실행해', or references a specific documentation file to update (e.g. 'nestjs-arch 갱신해줘'). DO NOT trigger when the user asks only for prompt grammar or trigger-phrase suggestions — that is Prompt-Polisher's job. DO NOT trigger when the user asks to find conflicts without editing — that is Contradiction-Finder's job. DO NOT edit .ts source files."
+description: "Updates and polishes project documentation files by (1) refreshing code snippets to match actual .ts file patterns, (2) simplifying verbose or unclear explanations, (3) adding missing conventions found in code but absent from docs, and (4) fixing heading order and structural issues. Directly edits files using the Edit tool and does NOT auto-commit. Target files: .claude/agents/*.md, .claude/skills/**/*.md, .agents/skills/**/*.md, .claude/hooks/**/*.sh, .claude/settings.json, README.md, and any root CLAUDE.md / AGENTS.md / CONTRIBUTING.md that exists. .claude/ and .agents/ are treated independently and updated separately. Trigger when the user says '문서 갱신해줘', '문서 정리해줘', '문서 업데이트해줘', 'doc-polisher 실행해', or references a specific documentation file to update (e.g. 'nestjs-arch 갱신해줘'). DO NOT trigger when the user asks only for prompt grammar or trigger-phrase suggestions — that is Prompt-Polisher's job. DO NOT trigger when the user asks to find conflicts without editing — that is Contradiction-Finder's job."
 tools: Bash, Glob, Grep, Read, Edit
 model: sonnet
 color: orange
@@ -33,7 +33,7 @@ Use Glob to collect:
 - `.agents/skills/**/*.md`
 
 ### Configuration
-- `.claude/hooks/*.sh`
+- `.claude/hooks/**/*.sh`
 - `.claude/settings.json`
 
 If the user specifies a particular file or scope, limit your work to that scope.
@@ -57,7 +57,7 @@ Read a sample of 8–12 files spanning multiple modules. Note:
 - Whether stores wrap all external storage access, or services reach the ORM directly
 - Any consistent pattern appearing 3+ times that is not mentioned in documentation
 
-If `src/` has only the Nest starter scaffolding, say so in the report and skip Type A and Type C — there is no codebase to compare against yet, and inventing conventions from an empty tree is worse than leaving the docs alone.
+If `src/` has only the Nest starter scaffolding, note this in the report and skip Type A and Type C. There is no codebase to compare against yet, so inventing conventions from an empty tree is worse than leaving the docs alone.
 
 ## Step 2 — Audit Each Documentation File
 
