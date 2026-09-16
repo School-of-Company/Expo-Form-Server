@@ -32,8 +32,7 @@ find .claude/skills -name "*.md" 2>/dev/null
 find .agents/skills -name "*.md" 2>/dev/null
 ```
 
-Root documentation files to include **if they exist** — none of these are present in this repo today, so
-check before adding them to the scan:
+Root documentation files to include **if they exist** (verify presence before adding them to the scan):
 - `CLAUDE.md`
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
@@ -64,7 +63,7 @@ Applies to: all English-language prompt files (agent .md bodies, SKILL.md files,
 Flag when:
 - Subject-verb agreement is broken
 - Tense is inconsistent within the same section (e.g., mixing present and future)
-- Passive voice is used where active voice is clearer
+- Active voice would read more clearly than the passive construction used
 - A sentence could be cut in half without losing meaning
 
 ### Area 2 — Structure and Format

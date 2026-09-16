@@ -159,8 +159,6 @@ Read the `description` field of each agent in `.claude/agents/*.md`. Identify:
 ## Constraints
 
 - Never edit any file. Output the report only.
-- Never flag `.claude/` vs `.agents/` differences as contradictions — they are intentionally independent.
-- For L2, use grep-based targeted searches. Do not read every `.ts` file in full.
-- If a violation count exceeds 20 for a single rule, report count + first 3 sample locations only.
+- Independence rule — see Layer Overview.
 - Distinguish Hard contradictions (explicit conflict) from Gaps (silence) in L1 and L3.
 - Exclude `node_modules/` and `dist/` from all analysis.

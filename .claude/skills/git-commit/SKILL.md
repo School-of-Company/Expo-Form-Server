@@ -55,4 +55,4 @@ Format: `type(scope): description`
    - `git commit -m "message"`
 4. Verify with `git log --oneline -n <count>`
 
-> **Rule**: One logical change = One commit. Files that must change together belong in the same commit. Unrelated changes must be split.
+> **Rule**: One logical change = one commit (see grouping rules above).

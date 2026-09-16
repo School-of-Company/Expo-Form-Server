@@ -87,9 +87,16 @@ Compare the two lists: a controller with no guard and no global guard covering i
 ### 7. CSV Export Injection
 - [ ] Escaping submitted values that begin with `=`, `+`, `-`, or `@` before writing them to CSV?
 
-Form answers are attacker-controlled text and land in a spreadsheet, where a leading `=` is executed as
-a formula. Prefix such values with a single quote or wrap them, and always quote fields containing
-commas, quotes, or newlines.
+Per `api-design`'s "Exports Belong to the Report Service", this service does not build CSV/Excel
+endpoints — it only exposes submission data as JSON. This check does not apply to this codebase; keep it
+here only as a reminder for whichever service does generate the CSV. Form answers are attacker-controlled
+text and land in a spreadsheet, where a leading `=` is executed as a formula. Prefix such values with a
+single quote or wrap them, and always quote fields containing commas, quotes, or newlines.
+
+## Report
+
+For each of the 7 categories, mark ✅ Pass / ❌ Fail / ⚠️ Needs Review with a one-line justification, and
+list any failing grep matches as `file:line`.
 
 ## References
 
