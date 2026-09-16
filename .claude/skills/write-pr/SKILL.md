@@ -30,7 +30,7 @@ Read `${CLAUDE_SKILL_DIR}/references/commit-conventions.md` for commit type and 
 
 **Title** — Generate 3 options in the format `[scope] description`:
 
-- Scope: determine from changed file paths and directory structure (`server` / `catalog`, or infer a more specific one from the path). Lowercase, wrapped in brackets: `[server]`, `[catalog]`. Use `[global]` / `[ci/cd]` for cross-cutting changes only.
+- Scope: the module the changed files belong to — `form`, `survey`, or `json`. Lowercase, wrapped in brackets: `[form]`, `[survey]`, `[json]`. Use `[global]` for changes outside any module (config, tooling, agent/skill docs) and `[ci/cd]` for pipeline work.
 - Description: Korean, concise, no emojis, max 50 characters total
 - Wrap class names, method names, decorators, file names, and technical terms in backticks (e.g., `@UseGuards`, `SubmissionStore`, `SKILL.md`)
 
