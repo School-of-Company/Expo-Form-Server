@@ -50,8 +50,15 @@ Don't conflate them:
   ```
   `z.object()` strips unknown properties on its own, so there is no `whitelist` flag to set; put
   `.strict()` on a schema that should reject them outright instead of dropping them. Query and path
-  values arrive as strings — declare those fields with `z.coerce.number()` / `z.coerce.boolean()` rather
+  values arrive as strings — declare those fields with `z.coerce.number()` / `z.stringbool()` rather
   than converting inside the service.
+
+  **Never `z.coerce.boolean()` for a query flag.** It is `Boolean(v)`, so every non-empty string is
+  `true` — `?force=false` and `?force=0` both parse as `true`. `z.stringbool()` is the one that reads
+  `'false'` / `'0'` / `'no'` / `'off'` as `false`.
+
+  Coercion is also **mode-dependent**: a JSON request body already carries real types, so coercing there
+  turns `true` into `1`. Coerce query and path values only.
 - **Business rules** (does this repo exist, is this id real, is this state allowed) — plain code in the
   service. Throw; no fallback, no partial success, no silent skip.
 

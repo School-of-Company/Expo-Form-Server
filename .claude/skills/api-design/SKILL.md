@@ -38,8 +38,9 @@ schema and the class relate.
 ## Binding Rules
 
 - **`@Query()` + RequestDto** — the default for query parameters. Everything arrives as a string, so
-  declare non-string fields with `z.coerce.number()` / `z.coerce.boolean()` rather than converting in the
-  service.
+  declare non-string fields with `z.coerce.number()` / `z.stringbool()` rather than converting in the
+  service. **Never `z.coerce.boolean()`** — it is `Boolean(v)`, so `?force=false` parses as `true`.
+  Coerce only query and path values; a JSON body already carries real types.
 - **`@Query('name')`** — only for a single, self-contained value that will never grow (e.g. `?force=true`).
   Two or more parameters means a DTO.
 - **`@Param()`** — path variables stay as primitives; they're part of the URL, not a payload.
@@ -71,9 +72,8 @@ classes are named in the signature — don't restate fields with `@ApiProperty`.
 Don't wrap successful payloads in a `data` field. Clients read the resource straight from the body, so an
 envelope only adds a layer to unwrap on every call.
 
-## Streaming Exports
+## Exports Belong to the Report Service
 
-A CSV export is not a JSON resource — stream it instead of building a DTO array in memory. Set the
-headers, hand the controller a `StreamableFile`, and let the store push rows straight from Postgres
-`COPY ... TO STDOUT WITH CSV`. The store owns the SQL; the controller only names the file and content
-type.
+Do not build CSV or Excel endpoints here. The 리포트 service composes them from other services' APIs, so
+this service's job is to expose submission data as JSON — including the field spec needed to interpret
+it. CSV escaping and formula-injection guarding happen where the CSV is generated, not here.
