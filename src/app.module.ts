@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { FormModule } from './form/form.module.js';
+import { SurveyModule } from './survey/survey.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -16,6 +18,8 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       appSecret: 'YOUR_APP_SECRET',
       serviceId: 'expo-form-server',
     }),
+    FormModule,
+    SurveyModule,
   ],
   controllers: [AppController],
   providers: [AppService],
