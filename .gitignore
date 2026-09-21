@@ -45,6 +45,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# local-only notes, never committed
+*.local.md
+
 # temp directory
 .temp
 .tmp
