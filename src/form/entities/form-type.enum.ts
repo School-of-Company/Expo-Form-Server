@@ -1,0 +1,7 @@
+export enum FormType {
+  SENTENCE = 'SENTENCE',
+  CHECKBOX = 'CHECKBOX',
+  DROPDOWN = 'DROPDOWN',
+  IMAGE = 'IMAGE',
+  MULTIPLE = 'MULTIPLE',
+}
