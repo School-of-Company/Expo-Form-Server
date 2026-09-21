@@ -3,8 +3,22 @@ name: CI
 on:
   pull_request:
     branches: [develop, main]
+    types: [opened, edited, synchronize, reopened]
 
 jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR 제목 형식 검증
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [[ ! "$TITLE" =~ ^\[(form|survey|json|global|ci/cd)\]\ .+ ]]; then
+            echo "PR 제목은 '[scope] description' 형식이어야 합니다 (scope: form/survey/json/global/ci-cd)." >&2
+            echo "현재 제목: $TITLE" >&2
+            exit 1
+          fi
+
   verify:
     runs-on: ubuntu-latest
     steps:
