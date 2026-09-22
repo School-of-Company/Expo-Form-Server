@@ -1,33 +1,49 @@
 # GitHub Labels Reference
 
-Select **1–2 labels** from the PR-eligible list below. Do NOT use issue-only or manual labels.
+Select **1–2 labels** from the PR-eligible list below. Do NOT use issue-only labels.
 
-## PR-Eligible Labels (auto-selectable)
+Verify against the repository before relying on this file — labels drift:
 
-| Label               | When to use                                               |
-|---------------------|-----------------------------------------------------------|
-| `enhancement:개선작업`  | New feature, improvement to existing feature, refactoring |
-| `bug:버그`            | Bug fix                                                   |
-| `documentation:문서화` | Docs-only changes (README, CONTRIBUTING, comments)        |
-| `release:릴리즈`       | Release preparation or version bump                       |
+```bash
+gh label list --limit 30 --json name -q '.[].name'
+```
 
-## Off-limits Labels (do NOT assign)
+Every label name contains an emoji and, in some cases, a space. Pass them **quoted and verbatim**
+(`--label "✨ Feature"`); a name that does not match exactly makes `gh pr create` fail outright.
 
-| Label                      | Reason                                                                     |
-|----------------------------|----------------------------------------------------------------------------|
-| `waiting for review:검토 대기` | Applied manually by the author after the PR is ready — never auto-assigned |
-| `help wanted:도움 필요`        | Issues only                                                                |
-| `invalid:무효한`              | Issues only                                                                |
-| `duplicate:중복`             | Issues only                                                                |
-| `GFI:첫 기여 추천`              | Issues only                                                                |
-| `blocked:차단됨`              | Applied manually when blocked by another PR/issue                          |
+## PR-Eligible Labels
+
+| Label             | When to use                                    |
+|-------------------|------------------------------------------------|
+| `✨ Feature`      | New feature                                    |
+| `🐞 Bug`          | Bug fix                                        |
+| `♻️ Refactor`     | Refactoring with no behavior change            |
+| `📝 Docs`         | Docs-only changes (README, skill files, comments) |
+| `✅ Test`         | Test-only additions or fixes                   |
+| `⚙ Setting`       | Build config, tooling, dependencies, env setup |
+| `⚡️performance`   | Performance improvement                        |
+| `🌏 Deploy`       | Deployment / CI / release work                 |
+| `⚡️ Simple`       | Trivial change (typo, one-liner)               |
+
+## Issue-Only Labels (do NOT assign to a PR)
+
+| Label                    | Reason                        |
+|--------------------------|-------------------------------|
+| `🙋‍♂️ Question`            | Questions belong on issues    |
+| `🪡 Want`                 | Feature requests, not changes |
+| `0️⃣ Priority: Critical`  | Priority is triaged on issues |
+| `1️⃣ Priority: High`      | 〃                             |
+| `2️⃣ Priority: Medium`    | 〃                             |
+| `3️⃣ Priority: Low`       | 〃                             |
 
 ## Quick Decision
 
 ```
-Bug fix?          → bug:버그
-New feature or improvement? → enhancement:개선작업
-Docs only?        → documentation:문서화
-Release?          → release:릴리즈
-Unsure?           → enhancement:개선작업
+Bug fix?                    → 🐞 Bug
+New feature?                → ✨ Feature
+Behavior-preserving cleanup? → ♻️ Refactor
+Docs only?                  → 📝 Docs
+Tests only?                 → ✅ Test
+Config / deps / tooling?    → ⚙ Setting
+Unsure?                     → ✨ Feature
 ```

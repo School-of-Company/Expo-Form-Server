@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR 제목 형식 검증
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if [[ "$BASE_REF" == "main" && "$TITLE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            exit 0
+          fi
+          if [[ ! "$TITLE" =~ ^\[(form|survey|json|global|ci/cd)\]\ .+ ]]; then
+            echo "PR 제목은 '[scope] description' 형식이어야 합니다 (scope: form/survey/json/global/ci-cd)." >&2
+            echo "main으로 가는 릴리즈 PR은 'vX.Y.Z' 형식도 허용됩니다." >&2
+            echo "현재 제목: $TITLE" >&2
+            exit 1
+          fi
+
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run lint
+
+      - run: pnpm run test
+
+      - run: pnpm run build

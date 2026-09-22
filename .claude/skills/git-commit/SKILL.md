@@ -36,7 +36,7 @@ This project uses Git Flow. Feature branches must be created from `develop` and 
 Format: `type(scope): description`
 
 - **Type**: `feat` / `fix` / `refactor` / `docs` / `chore` / `test`
-- **Scope**: `web` / `server` / `catalog` (레포 영역 기준, 필요하면 더 세분화 가능)
+- **Scope**: `form` / `survey` / `json` (모듈 기준). 어느 모듈에도 속하지 않는 변경(설정, 툴링, 에이전트/스킬 문서)은 `global`
 - **Description**: 한글, 명사형 종결, 마침표 없음
   - Good: `레포 선택 드롭다운 구현`, `PR 생성 시 base branch 조회 실패 처리`
 - Subject line only (no body) — breaking change일 때만 예외적으로 본문에 `BREAKING CHANGE: <설명>` 추가
