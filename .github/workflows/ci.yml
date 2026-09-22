@@ -12,9 +12,14 @@ jobs:
       - name: PR 제목 형식 검증
         env:
           TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
+          if [[ "$BASE_REF" == "main" && "$TITLE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            exit 0
+          fi
           if [[ ! "$TITLE" =~ ^\[(form|survey|json|global|ci/cd)\]\ .+ ]]; then
             echo "PR 제목은 '[scope] description' 형식이어야 합니다 (scope: form/survey/json/global/ci-cd)." >&2
+            echo "main으로 가는 릴리즈 PR은 'vX.Y.Z' 형식도 허용됩니다." >&2
             echo "현재 제목: $TITLE" >&2
             exit 1
           fi
