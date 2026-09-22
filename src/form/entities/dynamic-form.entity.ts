@@ -9,7 +9,7 @@ import {
   type Relation,
   UpdateDateColumn,
 } from 'typeorm';
-import { DynamicFormFieldType } from './dynamic-form-field-type.enum.js';
+import { DynamicFormFieldType } from '../../json/dynamic-form-field-type.enum.js';
 import { DynamicFormType } from './dynamic-form-type.enum.js';
 import { FormEntity } from './form.entity.js';
 

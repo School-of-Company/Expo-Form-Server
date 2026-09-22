@@ -7,9 +7,9 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { ParticipationType } from '../../common/enums/participation-type.enum.js';
 import { ApplicationType } from './application-type.enum.js';
 import { DynamicFormEntity } from './dynamic-form.entity.js';
-import { ParticipationType } from './participation-type.enum.js';
 
 /**
  * 하나의 박람회(expo)에서 특정 참여자군 x 신청 방식 조합에 대해 노출되는
