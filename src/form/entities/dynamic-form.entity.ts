@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  type Relation,
   UpdateDateColumn,
 } from 'typeorm';
 import { DynamicFormFieldType } from './dynamic-form-field-type.enum.js';
@@ -35,7 +36,7 @@ export class DynamicFormEntity {
     onDelete: 'CASCADE',
   })
   @JoinColumn()
-  form: FormEntity;
+  form: Relation<FormEntity>;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

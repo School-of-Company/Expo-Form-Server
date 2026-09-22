@@ -16,7 +16,11 @@ import { SnakeNamingStrategy } from './snake-naming.strategy.js';
         synchronize: config.get<string>('NODE_ENV') !== 'production',
         ssl:
           config.get<string>('NODE_ENV') === 'production'
-            ? { rejectUnauthorized: false }
+            ? {
+                rejectUnauthorized:
+                  config.get<string>('DATABASE_SSL_REJECT_UNAUTHORIZED') !==
+                  'false',
+              }
             : false,
       }),
     }),
