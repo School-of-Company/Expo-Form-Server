@@ -1,23 +1,28 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { createObserveModule } from '@nestjs/observe';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { DicoshotModule } from 'dicoshot-nest';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { DatabaseModule } from './database/database.module.js';
 import { FormModule } from './form/form.module.js';
 import { SurveyModule } from './survey/survey.module.js';
 
-export const { ObserveModule, ObserveInstrument } = createObserveModule();
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    // Distributed tracing, auto-correlated logs, request/job metrics, error
-    // telemetry, alarms, and more — out of the box. Sign up at https://observe.nestjs.com
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'expo-form-server',
+    // 앱 시작/종료·처리되지 않은 예외를 Discord 채널로 알림. webhookUrl 미설정 시 자동 비활성화.
+    DicoshotModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: (...args: unknown[]) => {
+        const config = args[0] as ConfigService;
+        return {
+          webhookUrl: config.get<string>('DISCORD_WEBHOOK_URL'),
+          applicationName: 'expo-form-server',
+        };
+      },
+      inject: [ConfigService],
+      global: true,
+      filter: true,
     }),
     DatabaseModule,
     FormModule,
