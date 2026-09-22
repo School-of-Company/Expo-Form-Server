@@ -5,6 +5,7 @@ import { FormEntity } from './entities/form.entity.js';
 import { FormController } from './form.controller.js';
 import { FormService } from './form.service.js';
 
+/** form 도메인(폼 정의 + 입력 필드) 모듈. */
 @Module({
   imports: [TypeOrmModule.forFeature([FormEntity, DynamicFormEntity])],
   controllers: [FormController],
