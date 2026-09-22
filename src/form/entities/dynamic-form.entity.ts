@@ -9,13 +9,13 @@ import {
   type Relation,
   UpdateDateColumn,
 } from 'typeorm';
-import { DynamicFormFieldType } from '../../json/dynamic-form-field-type.enum.js';
+import { DynamicFormFieldType } from '../../common/enums/dynamic-form-field-type.enum.js';
 import { DynamicFormType } from './dynamic-form-type.enum.js';
 import { FormEntity } from './form.entity.js';
 
 /**
- * {@link FormEntity}에 속한 입력 필드 하나. 실제 필드 값 스펙(선택지, 검증 규칙 등)은
- * `json` 모듈이 별도로 다루며, 이 엔티티는 필드의 메타데이터만 가진다.
+ * {@link FormEntity}에 속한 입력 필드 하나. 선택지·검증 규칙 같은 값 스펙은 아직 이 엔티티에
+ * 없고, 지금은 필드의 메타데이터(제목, 위젯 종류, 필수 여부)만 가진다.
  */
 @Entity('dynamic_form')
 export class DynamicFormEntity {

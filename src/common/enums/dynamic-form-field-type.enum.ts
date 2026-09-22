@@ -1,6 +1,6 @@
 /**
  * 입력 필드의 위젯 종류. `form`의 필드와 `survey`의 문항이 같은 위젯 개념을 쓰기 때문에
- * `json`(필드 스펙 공용 모듈)에 둔다.
+ * 두 모듈 어디에도 속하지 않는 공용 위치에 둔다 ({@link ParticipationType}과 같은 기준).
  */
 export enum DynamicFormFieldType {
   /** 한 줄/여러 줄 텍스트 입력. */

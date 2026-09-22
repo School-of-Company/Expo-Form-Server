@@ -9,12 +9,12 @@ import {
   type Relation,
   UpdateDateColumn,
 } from 'typeorm';
-import { DynamicFormFieldType } from '../../json/dynamic-form-field-type.enum.js';
+import { DynamicFormFieldType } from '../../common/enums/dynamic-form-field-type.enum.js';
 import { SurveyEntity } from './survey.entity.js';
 
 /**
- * {@link SurveyEntity}에 속한 문항 하나. 실제 문항 값 스펙(선택지, 검증 규칙 등)은
- * `json` 모듈이 별도로 다루며, 이 엔티티는 문항의 메타데이터만 가진다.
+ * {@link SurveyEntity}에 속한 문항 하나. 선택지·검증 규칙 같은 값 스펙은 아직 이 엔티티에
+ * 없고, 지금은 문항의 메타데이터(제목, 위젯 종류, 필수 여부)만 가진다.
  */
 @Entity('dynamic_survey')
 export class DynamicSurveyEntity {
