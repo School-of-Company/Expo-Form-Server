@@ -28,11 +28,13 @@ Read `${CLAUDE_SKILL_DIR}/references/commit-conventions.md` for commit type and 
 
 ## Step 3 — Generate PR Content
 
-**Title** — Generate 3 options in the format `[scope] description`:
+**Title** — the format depends on the base branch:
 
-- Scope: the module the changed files belong to — `form`, `survey`, or `json`. Lowercase, wrapped in brackets: `[form]`, `[survey]`, `[json]`. Use `[global]` for changes outside any module (config, tooling, agent/skill docs) and `[ci/cd]` for pipeline work.
-- Description: Korean, concise, no emojis, max 50 characters total
-- Wrap class names, method names, decorators, file names, and technical terms in backticks (e.g., `@UseGuards`, `SubmissionStore`, `SKILL.md`)
+- Base is `develop` (or any non-`main` base): generate 3 options in the format `[scope] description`.
+  - Scope: the module the changed files belong to — `form`, `survey`, or `json`. Lowercase, wrapped in brackets: `[form]`, `[survey]`, `[json]`. Use `[global]` for changes outside any module (config, tooling, agent/skill docs) and `[ci/cd]` for pipeline work.
+  - Description: Korean, concise, no emojis, max 50 characters total
+  - Wrap class names, method names, decorators, file names, and technical terms in backticks (e.g., `@UseGuards`, `SubmissionStore`, `SKILL.md`)
+- Base is `main`: this is a release PR. Title is a single bare `vX.Y.Z` (no scope brackets, no description) — see `${CLAUDE_SKILL_DIR}/references/commit-conventions.md` for how to pick X/Y/Z from the commits going in, and bump `version` in `package.json` to match in the same PR.
 
 **Body** — Follow `.github/PULL_REQUEST_TEMPLATE.md` when it exists. When it does not, use:
 `## 개요` (one or two sentences), `## 변경 사항` (bullet per change), `## 확인` (how it was verified),
@@ -73,6 +75,9 @@ bash "${CLAUDE_SKILL_DIR}/scripts/create-pr.sh" "<confirmed-title>" "<scratchpad
 
 The script picks the base itself (feature branch → `develop`, `develop` → `main`), refuses to run on
 `main`, and fails with a clear message if the base branch does not exist on `origin`.
+
+For a release PR to `main`, the title (`vX.Y.Z`) must still pass unquoted — the CI `pr-title` check
+special-cases exactly that pattern when the PR base is `main`.
 
 Label names contain emoji and spaces — pass them verbatim. A mismatched name fails PR creation.
 
