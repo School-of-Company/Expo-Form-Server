@@ -8,8 +8,8 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { DynamicFormFieldType } from './dynamic-form-field-type.enum.js';
 import { DynamicFormType } from './dynamic-form-type.enum.js';
-import { FormType } from './form-type.enum.js';
 import { FormEntity } from './form.entity.js';
 
 @Entity('dynamic_form')
@@ -20,17 +20,13 @@ export class DynamicFormEntity {
   @Column({ length: 100 })
   title: string;
 
-  @Column({ name: 'form_type', type: 'enum', enum: FormType })
-  formType: FormType;
+  @Column({ type: 'enum', enum: DynamicFormFieldType })
+  formType: DynamicFormFieldType;
 
-  @Column({ name: 'required_status', type: 'boolean' })
+  @Column({ type: 'boolean' })
   requiredStatus: boolean;
 
-  @Column({
-    name: 'dynamic_form_type',
-    type: 'enum',
-    enum: DynamicFormType,
-  })
+  @Column({ type: 'enum', enum: DynamicFormType })
   dynamicFormType: DynamicFormType;
 
   @Index()
@@ -38,12 +34,12 @@ export class DynamicFormEntity {
     nullable: false,
     onDelete: 'CASCADE',
   })
-  @JoinColumn({ name: 'form_id' })
+  @JoinColumn()
   form: FormEntity;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }

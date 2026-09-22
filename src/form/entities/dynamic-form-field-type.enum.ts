@@ -1,4 +1,4 @@
-export enum FormType {
+export enum DynamicFormFieldType {
   SENTENCE = 'SENTENCE',
   CHECKBOX = 'CHECKBOX',
   DROPDOWN = 'DROPDOWN',
