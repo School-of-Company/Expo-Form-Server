@@ -19,8 +19,9 @@ import { FormEntity } from './form.entity.js';
  */
 @Entity('dynamic_form')
 export class DynamicFormEntity {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  /** 항상 부모 {@link FormEntity}를 통해서만 접근되고 외부 서비스가 참조하지 않아 auto-increment로 충분하다. */
+  @PrimaryGeneratedColumn()
+  id: number;
 
   @Column({ length: 100 })
   title: string;
