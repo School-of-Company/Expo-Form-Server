@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PARTICIPANT_CLIENT } from './participant-client.interface.js';
+import { USER_CLIENT } from './user-client.interface.js';
 
 /**
  * 유저 서비스가 아직 코드로 존재하지 않아 실제 구현체가 없다.
@@ -8,14 +8,14 @@ import { PARTICIPANT_CLIENT } from './participant-client.interface.js';
 @Module({
   providers: [
     {
-      provide: PARTICIPANT_CLIENT,
+      provide: USER_CLIENT,
       useFactory: () => {
         throw new Error(
-          'ParticipantClient is not implemented. 유저 서비스 연동 후 구현체를 등록하세요.',
+          'UserClient is not implemented. 유저 서비스 연동 후 구현체를 등록하세요.',
         );
       },
     },
   ],
-  exports: [PARTICIPANT_CLIENT],
+  exports: [USER_CLIENT],
 })
-export class ParticipantClientModule {}
+export class UserClientModule {}
