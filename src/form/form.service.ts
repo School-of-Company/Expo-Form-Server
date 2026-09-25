@@ -11,6 +11,18 @@ import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormStore } from './form.store.js';
 
+/** 폼을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
+type FormFields = Omit<FormEntity, 'id' | 'createdAt' | 'updatedAt'>;
+
+/** 수정 요청으로 바꿀 수 있는 폼 메타데이터. 소속 박람회와 필드 목록은 여기 포함되지 않는다. */
+type UpdatableFormFields = Omit<FormFields, 'expoId' | 'dynamicForms'>;
+
+/** 입력 필드를 새로 만들 때 채워야 하는 값들 — 부모 관계(`form`)는 저장 시점에 TypeORM이 연결한다. */
+type DynamicFormFields = Omit<
+  DynamicFormEntity,
+  'id' | 'form' | 'createdAt' | 'updatedAt'
+>;
+
 /**
  * 폼 정의의 생성·조회·수정·삭제를 담당한다.
  *
@@ -40,17 +52,13 @@ export class FormService {
 
     if (duplicated) throw new FormAlreadyExistsException();
 
-    const form = new FormEntity();
-    form.expoId = dto.expoId;
-    form.title = dto.title;
-    form.informationText = dto.informationText;
-    form.participationType = dto.participationType;
-    form.applicationType = dto.applicationType;
-    form.startDate = dto.startDate;
-    form.endDate = dto.endDate;
-    form.dynamicForms = dto.dynamicForm.map((field) =>
-      this.toFieldEntity(field),
-    );
+    // dynamicForm만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라 한 번에 옮긴다.
+    // `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면 여기서 먼저 깨진다.
+    const { dynamicForm, ...meta } = dto;
+    const form = Object.assign(new FormEntity(), {
+      ...meta,
+      dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
+    } satisfies FormFields);
 
     const saved = await this.formStore.save(form);
     this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${dto.expoId}`);
@@ -69,14 +77,10 @@ export class FormService {
     const form = await this.formStore.findById(formId);
     if (!form) throw new FormNotFoundException();
 
-    form.title = dto.title;
-    form.informationText = dto.informationText;
-    form.participationType = dto.participationType;
-    form.applicationType = dto.applicationType;
-    form.startDate = dto.startDate;
-    form.endDate = dto.endDate;
+    const { dynamicForm, ...meta } = dto;
+    Object.assign(form, meta satisfies UpdatableFormFields);
 
-    const fields = dto.dynamicForm.map((field) => this.toFieldEntity(field));
+    const fields = dynamicForm.map((field) => this.toFieldEntity(field));
 
     await this.formStore.updateWithFields(form, fields);
     this.logger.log(
@@ -122,14 +126,10 @@ export class FormService {
   private toFieldEntity(
     field: CreateFormRequestDto['dynamicForm'][number],
   ): DynamicFormEntity {
-    const entity = new DynamicFormEntity();
-    entity.title = field.title;
-    entity.formType = field.formType;
-    entity.requiredStatus = field.requiredStatus;
-    entity.jsonData = field.jsonData;
-    entity.otherJson = field.otherJson;
-    entity.dynamicFormType = field.dynamicFormType;
-    return entity;
+    return Object.assign(
+      new DynamicFormEntity(),
+      field satisfies DynamicFormFields,
+    );
   }
 
   /**
