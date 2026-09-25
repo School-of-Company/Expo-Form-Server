@@ -18,6 +18,7 @@ export class DomainException extends HttpException {
   }
 }
 
+/** 조회·수정·삭제하려는 폼이 없을 때. */
 export class FormNotFoundException extends DomainException {
   constructor() {
     super(
@@ -28,6 +29,10 @@ export class FormNotFoundException extends DomainException {
   }
 }
 
+/**
+ * 같은 (박람회, 참여자군, 신청방식) 조합의 폼을 또 만들려 할 때.
+ * 이 조합은 폼을 유일하게 식별하는 값이라 중복을 허용하지 않는다.
+ */
 export class FormAlreadyExistsException extends DomainException {
   constructor() {
     super(
