@@ -71,11 +71,24 @@ export class FormService {
    * 그래서 기존 필드의 id는 보존되지 않는다 — 이미 제출된 응답이 옛 필드를 가리키고 있다면
    * 연결이 끊긴다. 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
    *
+   * 참여자군·신청방식도 바꿀 수 있기 때문에, 바꾼 결과가 다른 폼과 같은 조합이 되지 않는지
+   * 여기서 확인한다. DB 유니크 제약이 최종 방어선이지만 그건 500으로 터지므로, 409로 돌려주려면
+   * 애플리케이션에서도 걸러야 한다.
+   *
    * @throws {FormNotFoundException} 해당 id의 폼이 없을 때
+   * @throws {FormAlreadyExistsException} 바꾸려는 조합을 이미 다른 폼이 쓰고 있을 때
    */
   async update(formId: string, dto: UpdateFormRequestDto): Promise<void> {
     const form = await this.formStore.findById(formId);
     if (!form) throw new FormNotFoundException();
+
+    const conflict = await this.formStore.findByExpoAndTypes(
+      form.expoId,
+      dto.participationType,
+      dto.applicationType,
+    );
+    if (conflict && conflict.id !== formId)
+      throw new FormAlreadyExistsException();
 
     const { dynamicForm, ...meta } = dto;
     Object.assign(form, meta satisfies UpdatableFormFields);

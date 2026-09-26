@@ -14,7 +14,11 @@ import { DynamicFormEntity } from './dynamic-form.entity.js';
 /**
  * 하나의 박람회(expo)에서 특정 참여자군 x 신청 방식 조합에 대해 노출되는
  * 신청서 정의. 실제 입력 필드 목록은 {@link dynamicForms}로 별도 정규화되어 있다.
+ *
+ * `(expoId, participationType, applicationType)`은 폼을 유일하게 식별하는 조합이라
+ * DB 유니크 제약으로 막는다 — 애플리케이션 레벨 중복 검사만으로는 동시 요청을 걸러내지 못한다.
  */
+@Index(['expoId', 'participationType', 'applicationType'], { unique: true })
 @Entity('form')
 export class FormEntity {
   @PrimaryGeneratedColumn('uuid')

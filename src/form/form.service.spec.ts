@@ -98,12 +98,32 @@ describe('FormService', () => {
 
     it('기존 필드를 새 필드로 통째로 교체한다', async () => {
       formStore.findById.mockResolvedValue(existingForm);
+      formStore.findByExpoAndTypes.mockResolvedValue(existingForm);
 
       await service.update('form-1', createDto);
 
       const [, fields] = formStore.updateWithFields.mock.calls[0];
       expect(fields).toHaveLength(1);
       expect(fields[0].title).toBe('참여 형태');
+    });
+
+    it('바꾸려는 조합을 다른 폼이 이미 쓰고 있으면 거부한다', async () => {
+      formStore.findById.mockResolvedValue(existingForm);
+      formStore.findByExpoAndTypes.mockResolvedValue({ id: 'form-2' });
+
+      await expect(service.update('form-1', createDto)).rejects.toThrow(
+        FormAlreadyExistsException,
+      );
+      expect(formStore.updateWithFields).not.toHaveBeenCalled();
+    });
+
+    it('조합이 그대로여서 자기 자신이 조회되는 경우는 통과시킨다', async () => {
+      formStore.findById.mockResolvedValue(existingForm);
+      formStore.findByExpoAndTypes.mockResolvedValue({ id: 'form-1' });
+
+      await service.update('form-1', createDto);
+
+      expect(formStore.updateWithFields).toHaveBeenCalled();
     });
   });
 

@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -36,11 +37,14 @@ export class FormController {
     return this.formService.findOne(dto);
   }
 
-  /** 폼을 수정한다. 입력 필드는 병합이 아니라 통째로 교체된다. */
+  /**
+   * 폼을 수정한다. 입력 필드는 병합이 아니라 통째로 교체된다.
+   * `formId`는 그대로 DB 쿼리에 들어가므로, uuid가 아닌 값은 여기서 400으로 걸러낸다.
+   */
   @Patch(':formId')
   @HttpCode(HttpStatus.NO_CONTENT)
   update(
-    @Param('formId') formId: string,
+    @Param('formId', ParseUUIDPipe) formId: string,
     @Body() dto: UpdateFormRequestDto,
   ): Promise<void> {
     return this.formService.update(formId, dto);
@@ -49,7 +53,7 @@ export class FormController {
   /** 폼을 삭제한다. 딸린 입력 필드도 함께 지워진다. */
   @Delete(':formId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  delete(@Param('formId') formId: string): Promise<void> {
+  delete(@Param('formId', ParseUUIDPipe) formId: string): Promise<void> {
     return this.formService.delete(formId);
   }
 }
