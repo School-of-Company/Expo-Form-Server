@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
+import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
 import { FormResponseDto } from './dto/form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
@@ -24,7 +25,7 @@ export class FormController {
 
   /** 폼을 생성한다. 같은 조합의 폼이 이미 있으면 409가 나간다. */
   @Post()
-  create(@Body() dto: CreateFormRequestDto): Promise<void> {
+  create(@Body() dto: CreateFormRequestDto): Promise<CreateFormResponseDto> {
     return this.formService.create(dto);
   }
 

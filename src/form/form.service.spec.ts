@@ -84,6 +84,15 @@ describe('FormService', () => {
         '2': '오프라인',
       });
     });
+
+    it('생성된 폼의 id를 돌려준다', async () => {
+      formStore.existsByExpoAndTypes.mockResolvedValue(false);
+      formStore.save.mockResolvedValue({ id: 'form-1' });
+
+      await expect(service.create(createDto)).resolves.toEqual({
+        id: 'form-1',
+      });
+    });
   });
 
   describe('update', () => {

@@ -23,12 +23,15 @@ export const dynamicFormFieldSchema = z.object({
 });
 
 /**
- * 폼 생성 요청.
+ * 폼 생성 요청의 필드 구성.
  *
  * `expoId`는 박람회 서비스 소유 값이라 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
  * 날짜는 JSON으로 문자열이 실려오므로 `z.coerce.date()`로 `Date`로 바꿔 받는다.
+ *
+ * 수정 요청도 이 구성을 재사용하므로, `.refine()`을 붙이기 전 상태를 따로 내보낸다 —
+ * refine이 붙은 스키마에는 `.omit()`을 쓸 수 없다.
  */
-export const createFormSchema = z.object({
+export const createFormFieldsSchema = z.object({
   expoId: z.uuid(),
   title: z.string().min(1).max(100),
   informationText: z.string().max(500),
@@ -38,5 +41,20 @@ export const createFormSchema = z.object({
   endDate: z.coerce.date(),
   dynamicForm: z.array(dynamicFormFieldSchema),
 });
+
+/** 접수 시작일이 종료일보다 앞서는지 — 두 필드가 서로 맞아야 하는 규칙이라 스키마에서 검증한다. */
+export const withValidPeriod = <T extends { startDate: Date; endDate: Date }>(
+  value: T,
+): boolean => value.startDate < value.endDate;
+
+export const PERIOD_ERROR = {
+  message: '접수 시작일은 종료일보다 앞서야 합니다.',
+  path: ['endDate'],
+};
+
+export const createFormSchema = createFormFieldsSchema.refine(
+  withValidPeriod,
+  PERIOD_ERROR,
+);
 
 export class CreateFormRequestDto extends createZodDto(createFormSchema) {}

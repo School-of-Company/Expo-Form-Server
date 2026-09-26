@@ -4,6 +4,7 @@ import {
   FormNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
+import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
 import { FormResponseDto } from './dto/form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
@@ -41,9 +42,10 @@ export class FormService {
   /**
    * 폼과 그 입력 필드들을 함께 생성한다.
    *
+   * @returns 생성된 폼의 id — 이어서 수정·삭제하려면 필요하다.
    * @throws {FormAlreadyExistsException} 같은 (박람회, 참여자군, 신청방식) 조합의 폼이 이미 있을 때
    */
-  async create(dto: CreateFormRequestDto): Promise<void> {
+  async create(dto: CreateFormRequestDto): Promise<CreateFormResponseDto> {
     const duplicated = await this.formStore.existsByExpoAndTypes(
       dto.expoId,
       dto.participationType,
@@ -62,6 +64,8 @@ export class FormService {
 
     const saved = await this.formStore.save(form);
     this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${dto.expoId}`);
+
+    return { id: saved.id };
   }
 
   /**
