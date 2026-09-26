@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_FILTER } from '@nestjs/core';
 import { DicoshotModule } from 'dicoshot-nest';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { DomainExceptionFilter } from './common/exceptions/domain-exception.filter.js';
 import { DatabaseModule } from './database/database.module.js';
 import { FormModule } from './form/form.module.js';
 import { SurveyModule } from './survey/survey.module.js';
@@ -29,6 +31,9 @@ import { SurveyModule } from './survey/survey.module.js';
     SurveyModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_FILTER, useClass: DomainExceptionFilter },
+  ],
 })
 export class AppModule {}

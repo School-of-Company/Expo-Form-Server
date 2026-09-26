@@ -10,6 +10,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { DynamicFormFieldType } from '../../common/enums/dynamic-form-field-type.enum.js';
+import type { JsonData, OtherJson } from '../../json/field-spec.schema.js';
 import { DynamicFormType } from './dynamic-form-type.enum.js';
 import { FormEntity } from './form.entity.js';
 
@@ -33,6 +34,14 @@ export class DynamicFormEntity {
   /** 신청자가 값을 채우지 않으면 제출을 막을지 여부. */
   @Column({ type: 'boolean' })
   requiredStatus: boolean;
+
+  /** 드롭다운·체크박스 등의 선택지 목록. */
+  @Column({ type: 'jsonb' })
+  jsonData: JsonData;
+
+  /** 기타 입력 허용·최대 선택 개수·조건부 표시 같은 부가 설정. 없으면 null. */
+  @Column({ type: 'jsonb', nullable: true })
+  otherJson: OtherJson | null;
 
   /**
    * 다른 서비스가 소비하는 고정 의미를 가진 필드인지 표시.
