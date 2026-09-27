@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { QueryFailedError } from 'typeorm';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
@@ -92,6 +93,30 @@ describe('SurveyService', () => {
       expect(saved.totalAnswers).toBe(0);
     });
 
+    it('중복 검사 통과 후 동시 요청과 경합해 유니크 제약에 걸리면 409로 변환한다', async () => {
+      surveyStore.existsByExpoAndType.mockResolvedValue(false);
+      surveyStore.save.mockRejectedValue(
+        new QueryFailedError('INSERT ...', undefined, {
+          name: 'error',
+          message: 'duplicate key value violates unique constraint',
+          code: '23505',
+        } as Error),
+      );
+
+      await expect(service.create(createDto)).rejects.toThrow(
+        SurveyAlreadyExistsException,
+      );
+    });
+
+    it('유니크 제약 위반이 아닌 저장 에러는 그대로 전파한다', async () => {
+      surveyStore.existsByExpoAndType.mockResolvedValue(false);
+      surveyStore.save.mockRejectedValue(new Error('connection lost'));
+
+      await expect(service.create(createDto)).rejects.toThrow(
+        'connection lost',
+      );
+    });
+
     it('생성된 설문의 id를 돌려준다', async () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(false);
       surveyStore.save.mockResolvedValue({ id: 'survey-1' });
@@ -150,6 +175,22 @@ describe('SurveyService', () => {
 
       const [updated] = surveyStore.updateWithQuestions.mock.calls[0];
       expect(updated.totalAnswers).toBe(7);
+    });
+
+    it('조합 충돌 검사 통과 후 동시 요청과 경합해 유니크 제약에 걸리면 409로 변환한다', async () => {
+      surveyStore.findById.mockResolvedValue(existingSurvey);
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+      surveyStore.updateWithQuestions.mockRejectedValue(
+        new QueryFailedError('UPDATE ...', undefined, {
+          name: 'error',
+          message: 'duplicate key value violates unique constraint',
+          code: '23505',
+        } as Error),
+      );
+
+      await expect(service.update('survey-1', createDto)).rejects.toThrow(
+        SurveyAlreadyExistsException,
+      );
     });
   });
 

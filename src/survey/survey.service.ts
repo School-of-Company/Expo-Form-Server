@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import {
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
@@ -11,6 +12,14 @@ import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyStore } from './survey.store.js';
+
+/**
+ * PostgreSQL의 유니크 제약 위반 에러 코드.
+ * `existsByExpoAndType`로 하는 애플리케이션 레벨 중복 검사는 동시 요청 사이의 경합을
+ * 막지 못한다 — 두 요청이 동시에 검사를 통과하면 DB의 유니크 제약이 최종 방어선이 되고,
+ * 그 위반을 여기서 잡아 409로 변환하지 않으면 500이 그대로 나간다.
+ */
+const POSTGRES_UNIQUE_VIOLATION_CODE = '23505';
 
 /** 설문을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
 type SurveyFields = Omit<SurveyEntity, 'id' | 'createdAt' | 'updatedAt'>;
@@ -51,6 +60,7 @@ export class SurveyService {
    *
    * @returns 생성된 설문의 id — 이어서 수정·삭제하려면 필요하다.
    * @throws {SurveyAlreadyExistsException} 같은 (박람회, 참여자군) 조합의 설문이 이미 있을 때
+   *   (동시 요청 사이의 경합으로 DB 유니크 제약이 걸린 경우 포함)
    */
   async create(dto: CreateSurveyRequestDto): Promise<CreateSurveyResponseDto> {
     const duplicated = await this.surveyStore.existsByExpoAndType(
@@ -73,7 +83,16 @@ export class SurveyService {
       ),
     } satisfies SurveyFields);
 
-    const saved = await this.surveyStore.save(survey);
+    // 위 existsByExpoAndType 검사와 이 save 사이에 다른 요청이 끼어들면 둘 다 통과한 채로
+    // 여기까지 올 수 있다. 그럴 땐 DB 유니크 제약이 마지막으로 걸러주는데, 그 위반을 그대로
+    // 두면 409가 아니라 500이 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
+    let saved: SurveyEntity;
+    try {
+      saved = await this.surveyStore.save(survey);
+    } catch (err) {
+      if (this.isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
+      throw err;
+    }
     this.logger.log(
       `설문 생성 완료: surveyId=${saved.id}, expoId=${dto.expoId}`,
     );
@@ -93,6 +112,7 @@ export class SurveyService {
    *
    * @throws {SurveyNotFoundException} 해당 id의 설문이 없을 때
    * @throws {SurveyAlreadyExistsException} 바꾸려는 조합을 이미 다른 설문이 쓰고 있을 때
+   *   (동시 요청 사이의 경합으로 DB 유니크 제약이 걸린 경우 포함)
    */
   async update(surveyId: string, dto: UpdateSurveyRequestDto): Promise<void> {
     const survey = await this.surveyStore.findById(surveyId);
@@ -112,7 +132,14 @@ export class SurveyService {
       this.toQuestionEntity(question),
     );
 
-    await this.surveyStore.updateWithQuestions(survey, questions);
+    // create()와 같은 이유로, 위 조합 충돌 검사와 이 저장 사이의 경합은 애플리케이션
+    // 레벨에서 못 막는다 — DB 유니크 제약 위반을 여기서 409로 변환한다.
+    try {
+      await this.surveyStore.updateWithQuestions(survey, questions);
+    } catch (err) {
+      if (this.isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
+      throw err;
+    }
     this.logger.log(
       `설문 수정 완료: surveyId=${surveyId}, 문항 ${questions.length}개로 교체`,
     );
@@ -146,6 +173,20 @@ export class SurveyService {
     if (!survey) throw new SurveyNotFoundException();
 
     return this.toResponse(survey);
+  }
+
+  /**
+   * store가 던진 에러가 PostgreSQL 유니크 제약 위반인지 확인한다.
+   * TypeORM은 드라이버 에러를 `QueryFailedError`로 감싸고, pg 드라이버는 그 안의
+   * `driverError.code`에 SQLSTATE를 담아 보낸다. 이 코드가 아니면 우리가 다룰 수 없는
+   * 에러이므로 호출부가 그대로 다시 던진다.
+   */
+  private isUniqueViolation(err: unknown): boolean {
+    return (
+      err instanceof QueryFailedError &&
+      (err.driverError as { code?: string })?.code ===
+        POSTGRES_UNIQUE_VIOLATION_CODE
+    );
   }
 
   /**
