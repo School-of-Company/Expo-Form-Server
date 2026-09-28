@@ -67,3 +67,47 @@ export class SurveyAlreadyExistsException extends DomainException {
     );
   }
 }
+
+/**
+ * 제출된 답변이 저장된 문항 스펙과 맞지 않을 때 — 필수 문항 누락, 선택지에 없는 값,
+ * `maxSelection` 초과, 스펙에 없는 문항 id 등. `ZodError`를 이 예외로 옮겨 담는다.
+ */
+export class SurveyAnswerInvalidException extends DomainException {
+  constructor(detail: string) {
+    super(
+      ErrorCode.SURVEY_ANSWER_INVALID,
+      `답변이 문항 스펙과 맞지 않습니다: ${detail}`,
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
+
+/**
+ * 같은 응답자가 같은 설문에 이미 답변을 제출했을 때.
+ * 답변 자체는 이 서비스에 저장하지 않으므로, 이 판정은 유저 서비스가 내린다 — 여기서는
+ * 유저 서비스가 알려준 결과를 도메인 예외로 옮겨 담을 뿐이다.
+ */
+export class SurveyAnswerAlreadyExistsException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.SURVEY_ANSWER_ALREADY_EXISTS,
+      '이미 제출한 설문입니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/**
+ * 전화번호로 응답자를 찾지 못했을 때. 해당 박람회에 등록되지 않았거나, 등록은 됐지만
+ * 참여자군이 설문 대상과 달라 자격이 없는 경우도 같은 예외로 다룬다 — 둘을 구분해서 알려주면
+ * 등록 여부 자체가 노출되기 때문이다.
+ */
+export class ParticipantNotFoundException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.PARTICIPANT_NOT_FOUND,
+      '해당 전화번호로 등록된 참가자를 찾을 수 없습니다.',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+}
