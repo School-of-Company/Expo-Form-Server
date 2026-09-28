@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
 import {
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
@@ -12,14 +12,6 @@ import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyStore } from './survey.store.js';
-
-/**
- * PostgreSQL의 유니크 제약 위반 에러 코드.
- * `existsByExpoAndType`로 하는 애플리케이션 레벨 중복 검사는 동시 요청 사이의 경합을
- * 막지 못한다 — 두 요청이 동시에 검사를 통과하면 DB의 유니크 제약이 최종 방어선이 되고,
- * 그 위반을 여기서 잡아 409로 변환하지 않으면 500이 그대로 나간다.
- */
-const POSTGRES_UNIQUE_VIOLATION_CODE = '23505';
 
 /** 설문을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
 type SurveyFields = Omit<SurveyEntity, 'id' | 'createdAt' | 'updatedAt'>;
@@ -90,7 +82,7 @@ export class SurveyService {
     try {
       saved = await this.surveyStore.save(survey);
     } catch (err) {
-      if (this.isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
+      if (isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
       throw err;
     }
     this.logger.log(
@@ -137,7 +129,7 @@ export class SurveyService {
     try {
       await this.surveyStore.updateWithQuestions(survey, questions);
     } catch (err) {
-      if (this.isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
+      if (isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
       throw err;
     }
     this.logger.log(
@@ -173,20 +165,6 @@ export class SurveyService {
     if (!survey) throw new SurveyNotFoundException();
 
     return this.toResponse(survey);
-  }
-
-  /**
-   * store가 던진 에러가 PostgreSQL 유니크 제약 위반인지 확인한다.
-   * TypeORM은 드라이버 에러를 `QueryFailedError`로 감싸고, pg 드라이버는 그 안의
-   * `driverError.code`에 SQLSTATE를 담아 보낸다. 이 코드가 아니면 우리가 다룰 수 없는
-   * 에러이므로 호출부가 그대로 다시 던진다.
-   */
-  private isUniqueViolation(err: unknown): boolean {
-    return (
-      err instanceof QueryFailedError &&
-      (err.driverError as { code?: string })?.code ===
-        POSTGRES_UNIQUE_VIOLATION_CODE
-    );
   }
 
   /**
