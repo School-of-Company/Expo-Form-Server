@@ -42,3 +42,28 @@ export class FormAlreadyExistsException extends DomainException {
     );
   }
 }
+
+/** 조회·수정·삭제하려는 설문이 없을 때. */
+export class SurveyNotFoundException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.SURVEY_NOT_FOUND,
+      '해당 설문을 찾을 수 없습니다.',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+}
+
+/**
+ * 같은 (박람회, 참여자군) 조합의 설문을 또 만들려 할 때.
+ * 폼과 달리 신청 방식 구분이 없어 이 두 값만으로 설문이 유일하게 식별된다.
+ */
+export class SurveyAlreadyExistsException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.SURVEY_ALREADY_EXISTS,
+      '같은 조건의 설문이 이미 존재합니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}

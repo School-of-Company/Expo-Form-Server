@@ -10,12 +10,14 @@ allowed-tools: Bash(bash *get-pr-data.sh:*), Bash(gh api:*), Bash(gh pr view:*),
 bash .agents/skills/resolve-reviews/scripts/get-pr-data.sh
 ```
 
-Output files:
+The script creates a temp directory outside the repo (via `mktemp`) so it can never be swept into a commit,
+and prints its path as the first line: `PR_TMP_DIR=<path>`. Capture that value — every file below is
+`$PR_TMP_DIR/<name>`, not a path inside the repo:
 
-- `.pr-tmp/pr_comments.json` — inline review comments (id, path, line, body, user)
-- `.pr-tmp/pr_changed_files.txt` — changed files
-- `.pr-tmp/pr_commits.txt` — commits in this PR
-- `.pr-tmp/pr_diff.txt` — full diff
+- `$PR_TMP_DIR/pr_comments.json` — inline review comments (id, path, line, body, user)
+- `$PR_TMP_DIR/pr_changed_files.txt` — changed files
+- `$PR_TMP_DIR/pr_commits.txt` — commits in this PR
+- `$PR_TMP_DIR/pr_diff.txt` — full diff
 
 Also fetch repo and PR metadata:
 
@@ -123,5 +125,5 @@ For reply body templates, read `.agents/skills/resolve-reviews/references/reply-
 ## Step 7 — Cleanup
 
 ```bash
-rm -rf .pr-tmp
+rm -rf "$PR_TMP_DIR"
 ```
