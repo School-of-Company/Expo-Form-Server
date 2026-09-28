@@ -15,46 +15,50 @@ export interface QuestionSpec {
   otherJson: OtherJson | null;
 }
 
-/**
- * 문항 하나가 허용하는 답변 값의 형태를 문항 스펙에서 조립한다.
- *
- * - `SENTENCE` — 빈 문자열이 아닌 텍스트.
- * - `CHECKBOX` — 예/아니오 성격의 단일 체크박스라 `jsonData`를 쓰지 않는다.
- * - `DROPDOWN` — `jsonData`의 키 중 하나.
- * - `MULTIPLE` — `jsonData`의 키로 이루어진 배열, 있으면 `otherJson.maxSelection`까지만 허용.
- * - `IMAGE` — 실제 업로드 처리(파일 저장·CDN)는 이 서비스 범위 밖이다. 별도 업로드 흐름이 이미
- *   만들어낸 참조 값(URL 등)을 문자열로만 받는다고 가정한다.
- */
-function buildValueSchema(question: QuestionSpec): z.ZodTypeAny {
-  const base = ((): z.ZodTypeAny => {
-    switch (question.formType) {
-      case DynamicFormFieldType.SENTENCE:
-      case DynamicFormFieldType.IMAGE:
-        return z.string().min(1);
-      case DynamicFormFieldType.CHECKBOX:
-        return z.boolean();
-      case DynamicFormFieldType.DROPDOWN: {
-        const keys = Object.keys(question.jsonData);
-        return z.string().refine((value) => keys.includes(value), {
-          message: '선택 가능한 값이 아닙니다.',
-        });
-      }
-      case DynamicFormFieldType.MULTIPLE: {
-        const keys = Object.keys(question.jsonData);
-        const maxSelection = question.otherJson?.maxSelection;
-        let schema = z
-          .array(
-            z.string().refine((value) => keys.includes(value), {
-              message: '선택 가능한 값이 아닙니다.',
-            }),
-          )
-          .min(1);
-        if (maxSelection !== undefined) schema = schema.max(maxSelection);
-        return schema;
-      }
-    }
-  })();
+/** `DROPDOWN`/`MULTIPLE` 공통 — 값이 `jsonData`의 키 중 하나인지 확인한다. */
+function oneOfJsonDataKeys(jsonData: JsonData): z.ZodString {
+  const keys = Object.keys(jsonData);
+  return z.string().refine((value) => keys.includes(value), {
+    message: '선택 가능한 값이 아닙니다.',
+  });
+}
 
+/**
+ * 실제 업로드 처리(파일 저장·CDN)는 이 서비스 범위 밖이다. 별도 업로드 흐름이 이미
+ * 만들어낸 참조 값(URL 등)을 문자열로만 받는다고 가정한다.
+ */
+const buildImageSchema = (): z.ZodTypeAny => z.string().min(1);
+
+/**
+ * 문항 타입별 답변 값 스펙 조립기.
+ *
+ * `Record<DynamicFormFieldType, ...>`로 선언해서, 타입이 하나 늘고 여기 빠뜨리면
+ * "OOO 프로퍼티가 없다"고 컴파일 타임에 정확히 짚어준다 — switch였다면 "코드 경로가
+ * 안 끝났다"는 문구만 나와 어떤 케이스가 빠졌는지 여기서 다시 찾아봐야 한다.
+ */
+const VALUE_SCHEMA_BUILDERS: Record<
+  DynamicFormFieldType,
+  (question: QuestionSpec) => z.ZodTypeAny
+> = {
+  /** 빈 문자열이 아닌 텍스트. */
+  [DynamicFormFieldType.SENTENCE]: () => z.string().min(1),
+  [DynamicFormFieldType.IMAGE]: buildImageSchema,
+  /** 예/아니오 성격의 단일 체크박스라 `jsonData`를 쓰지 않는다. */
+  [DynamicFormFieldType.CHECKBOX]: () => z.boolean(),
+  [DynamicFormFieldType.DROPDOWN]: (question) =>
+    oneOfJsonDataKeys(question.jsonData),
+  /** `jsonData`의 키로 이루어진 배열. 있으면 `otherJson.maxSelection`까지만 허용한다. */
+  [DynamicFormFieldType.MULTIPLE]: (question) => {
+    const maxSelection = question.otherJson?.maxSelection;
+    let schema = z.array(oneOfJsonDataKeys(question.jsonData)).min(1);
+    if (maxSelection !== undefined) schema = schema.max(maxSelection);
+    return schema;
+  },
+};
+
+/** 문항 하나가 허용하는 답변 값의 형태를 문항 스펙에서 조립한다. */
+function buildValueSchema(question: QuestionSpec): z.ZodTypeAny {
+  const base = VALUE_SCHEMA_BUILDERS[question.formType](question);
   return question.requiredStatus ? base : base.optional();
 }
 
