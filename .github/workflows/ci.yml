@@ -50,14 +50,12 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     steps:
-      - name: Discord 멘션 알림
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          DISCORD_USER_ID_1: ${{ secrets.DISCORD_USER_ID_1 }}
-          DISCORD_USER_ID_2: ${{ secrets.DISCORD_USER_ID_2 }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          MENTION="<@${DISCORD_USER_ID_1}> <@${DISCORD_USER_ID_2}>"
-          PAYLOAD=$(jq -n --arg content "${MENTION} PR CI가 성공했습니다: ${PR_TITLE} ${PR_URL}" '{content: $content}')
-          curl -sf -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
+      - name: Discord 알림 전송
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: success
+          title: Expo Form CI
+          content: |
+            <@${{ secrets.DISCORD_USER_ID_1 }}> <@${{ secrets.DISCORD_USER_ID_2 }}>
+            확인해주세요.
