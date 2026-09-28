@@ -45,3 +45,19 @@ jobs:
       - run: pnpm run test
 
       - run: pnpm run build
+
+  notify-discord:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Discord 멘션 알림
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USER_ID_1: ${{ secrets.DISCORD_USER_ID_1 }}
+          DISCORD_USER_ID_2: ${{ secrets.DISCORD_USER_ID_2 }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          MENTION="<@${DISCORD_USER_ID_1}> <@${DISCORD_USER_ID_2}>"
+          PAYLOAD=$(jq -n --arg content "${MENTION} PR CI가 성공했습니다: ${PR_TITLE} ${PR_URL}" '{content: $content}')
+          curl -sf -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
