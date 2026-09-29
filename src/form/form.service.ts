@@ -4,6 +4,7 @@ import {
   FormAlreadyExistsException,
   FormNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
 import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
@@ -46,6 +47,7 @@ export class FormService {
    *
    * @returns 생성된 폼의 id — 이어서 수정·삭제하려면 필요하다.
    * @throws {FormAlreadyExistsException} 같은 (박람회, 참여자군, 신청방식) 조합의 폼이 이미 있을 때
+   *   (동시 요청 사이의 경합으로 DB 유니크 제약이 걸린 경우 포함)
    */
   async create(
     expoId: string,
@@ -68,7 +70,16 @@ export class FormService {
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
 
-    const saved = await this.formStore.save(form);
+    // 위 existsByExpoAndTypes 검사와 이 save 사이에 다른 요청이 끼어들면 둘 다 통과한 채로
+    // 여기까지 올 수 있다. 그럴 땐 DB 유니크 제약이 마지막으로 걸러주는데, 그 위반을 그대로
+    // 두면 409가 아니라 500이 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
+    let saved: FormEntity;
+    try {
+      saved = await this.formStore.save(form);
+    } catch (err) {
+      if (isUniqueViolation(err)) throw new FormAlreadyExistsException();
+      throw err;
+    }
     this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${expoId}`);
 
     return { id: saved.id };

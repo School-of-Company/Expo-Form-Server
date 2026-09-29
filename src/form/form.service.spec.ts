@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { QueryFailedError } from 'typeorm';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
@@ -92,6 +93,30 @@ describe('FormService', () => {
       await expect(service.create(expoId, createDto)).resolves.toEqual({
         id: 'form-1',
       });
+    });
+
+    it('중복 검사 통과 후 동시 요청과 경합해 유니크 제약에 걸리면 409로 변환한다', async () => {
+      formStore.existsByExpoAndTypes.mockResolvedValue(false);
+      formStore.save.mockRejectedValue(
+        new QueryFailedError('INSERT ...', undefined, {
+          name: 'error',
+          message: 'duplicate key value violates unique constraint',
+          code: '23505',
+        } as Error),
+      );
+
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
+        FormAlreadyExistsException,
+      );
+    });
+
+    it('유니크 제약 위반이 아닌 저장 에러는 그대로 전파한다', async () => {
+      formStore.existsByExpoAndTypes.mockResolvedValue(false);
+      formStore.save.mockRejectedValue(new Error('connection lost'));
+
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
+        'connection lost',
+      );
     });
   });
 
