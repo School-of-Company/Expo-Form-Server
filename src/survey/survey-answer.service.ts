@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   ParticipantNotFoundException,
   SurveyAnswerAlreadyExistsException,
@@ -35,7 +36,10 @@ export class SurveyAnswerService {
    * 전화번호로 응답자를 확인하고, 저장된 문항 스펙으로 답변을 검증한 뒤 유저 서비스에
    * 위임한다. 성공하면 설문의 누적 응답 수를 늘린다.
    *
-   * @throws {SurveyNotFoundException} 해당 id의 설문이 없을 때
+   * 대상 설문은 (박람회, 참여자군) 조합으로 식별한다 — standard/trainee 제출 라우트가
+   * 각각 자신의 참여자군을 고정해서 넘긴다.
+   *
+   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
    * @throws {ParticipantNotFoundException} 전화번호로 응답자를 찾을 수 없거나, 찾았지만
    *   참여자군이 이 설문의 대상과 다를 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙(필수 여부·선택지·최대 선택 개수)과
@@ -43,10 +47,14 @@ export class SurveyAnswerService {
    * @throws {SurveyAnswerAlreadyExistsException} 같은 응답자가 이미 제출한 적 있을 때
    */
   async submit(
-    surveyId: string,
+    expoId: string,
+    participationType: ParticipationType,
     dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {
-    const survey = await this.surveyStore.findById(surveyId);
+    const survey = await this.surveyStore.findByExpoAndType(
+      expoId,
+      participationType,
+    );
     if (!survey) throw new SurveyNotFoundException();
 
     const participant = await this.userClient.findByPhoneNumber(
@@ -70,7 +78,7 @@ export class SurveyAnswerService {
 
     try {
       await this.userClient.submitSurveyAnswer({
-        surveyId,
+        surveyId: survey.id,
         userId: participant.userId,
         answers: result.data,
         personalInformationStatus: dto.personalInformationStatus,
@@ -82,7 +90,7 @@ export class SurveyAnswerService {
       throw err;
     }
 
-    await this.surveyStore.incrementTotalAnswers(surveyId);
-    this.logger.log(`설문 답변 제출 완료: surveyId=${surveyId}`);
+    await this.surveyStore.incrementTotalAnswers(survey.id);
+    this.logger.log(`설문 답변 제출 완료: surveyId=${survey.id}`);
   }
 }

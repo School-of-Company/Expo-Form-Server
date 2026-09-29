@@ -24,22 +24,28 @@ describe('SurveyController', () => {
     );
   });
 
-  it('조회 요청을 쿼리 DTO 그대로 서비스에 넘긴다', async () => {
-    const query = {
-      expoId: '11111111-1111-1111-1111-111111111111',
-      participationType: ParticipationType.TRAINEE,
-    };
+  it('조회 요청에 경로의 expoId와 쿼리 DTO를 함께 넘긴다', async () => {
+    const query = { participationType: ParticipationType.TRAINEE };
 
-    await controller.findOne(query);
+    await controller.findOne('expo-1', query);
 
-    expect(surveyService.findOne).toHaveBeenCalledWith(query);
+    expect(surveyService.findOne).toHaveBeenCalledWith('expo-1', query);
   });
 
-  it('수정 요청에 경로의 surveyId와 바디를 함께 넘긴다', async () => {
+  it('수정 요청에 경로의 expoId와 바디를 함께 넘긴다', async () => {
     const dto = { title: '수정된 설문' } as never;
 
-    await controller.update('survey-1', dto);
+    await controller.update('expo-1', dto);
 
-    expect(surveyService.update).toHaveBeenCalledWith('survey-1', dto);
+    expect(surveyService.update).toHaveBeenCalledWith('expo-1', dto);
+  });
+
+  it('삭제 요청에 경로의 expoId와 participationType을 함께 넘긴다', async () => {
+    await controller.delete('expo-1', ParticipationType.STANDARD);
+
+    expect(surveyService.delete).toHaveBeenCalledWith(
+      'expo-1',
+      ParticipationType.STANDARD,
+    );
   });
 });

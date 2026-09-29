@@ -25,15 +25,6 @@ export class SurveyStore {
     private readonly dataSource: DataSource,
   ) {}
 
-  /** id로 설문 하나를 문항까지 함께 조회한다. 없으면 null. */
-  findById(id: string): Promise<SurveyEntity | null> {
-    return this.surveys.findOne({
-      where: { id },
-      relations: { dynamicSurveys: true },
-      order: DYNAMIC_SURVEY_ORDER,
-    });
-  }
-
   /**
    * 설문을 유일하게 식별하는 (박람회, 참여자군) 조합으로 조회한다.
    * 응답 페이지는 surveyId를 모르고 이 두 값만 알기 때문에 이 경로가 따로 필요하다.

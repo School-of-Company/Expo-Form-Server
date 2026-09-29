@@ -40,12 +40,15 @@ const submitDto = {
 } satisfies SubmitSurveyAnswerRequestDto;
 
 describe('SurveyAnswerService', () => {
-  let surveyStore: { findById: Mock; incrementTotalAnswers: Mock };
+  let surveyStore: { findByExpoAndType: Mock; incrementTotalAnswers: Mock };
   let userClient: { findByPhoneNumber: Mock; submitSurveyAnswer: Mock };
   let service: SurveyAnswerService;
 
   beforeEach(() => {
-    surveyStore = { findById: vi.fn(), incrementTotalAnswers: vi.fn() };
+    surveyStore = {
+      findByExpoAndType: vi.fn(),
+      incrementTotalAnswers: vi.fn(),
+    };
     userClient = { findByPhoneNumber: vi.fn(), submitSurveyAnswer: vi.fn() };
     service = new SurveyAnswerService(
       surveyStore as unknown as SurveyStore,
@@ -54,19 +57,19 @@ describe('SurveyAnswerService', () => {
   });
 
   it('설문이 없으면 예외를 던진다', async () => {
-    surveyStore.findById.mockResolvedValue(null);
+    surveyStore.findByExpoAndType.mockResolvedValue(null);
 
-    await expect(service.submit('survey-1', submitDto)).rejects.toThrow(
-      SurveyNotFoundException,
-    );
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(SurveyNotFoundException);
     expect(userClient.findByPhoneNumber).not.toHaveBeenCalled();
   });
 
   it('전화번호를 숫자만 남겨 정규화한 뒤 조회한다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(participant);
 
-    await service.submit('survey-1', submitDto);
+    await service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto);
 
     expect(userClient.findByPhoneNumber).toHaveBeenCalledWith(
       survey.expoId,
@@ -75,42 +78,45 @@ describe('SurveyAnswerService', () => {
   });
 
   it('전화번호로 참가자를 찾지 못하면 예외를 던진다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(null);
 
-    await expect(service.submit('survey-1', submitDto)).rejects.toThrow(
-      ParticipantNotFoundException,
-    );
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(ParticipantNotFoundException);
     expect(userClient.submitSurveyAnswer).not.toHaveBeenCalled();
   });
 
   it('참가자의 참여자군이 설문 대상과 다르면 예외를 던진다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue({
       userId: 'user-1',
       participationType: ParticipationType.STANDARD,
     });
 
-    await expect(service.submit('survey-1', submitDto)).rejects.toThrow(
-      ParticipantNotFoundException,
-    );
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(ParticipantNotFoundException);
   });
 
   it('필수 문항이 빠진 답변은 거부한다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(participant);
 
     await expect(
-      service.submit('survey-1', { ...submitDto, answers: {} }),
+      service.submit(survey.expoId, ParticipationType.TRAINEE, {
+        ...submitDto,
+        answers: {},
+      }),
     ).rejects.toThrow(SurveyAnswerInvalidException);
     expect(userClient.submitSurveyAnswer).not.toHaveBeenCalled();
   });
 
   it('검증을 통과하면 유저 서비스에 위임하고 누적 응답 수를 늘린다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(participant);
 
-    await service.submit('survey-1', submitDto);
+    await service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto);
 
     expect(userClient.submitSurveyAnswer).toHaveBeenCalledWith({
       surveyId: 'survey-1',
@@ -122,27 +128,27 @@ describe('SurveyAnswerService', () => {
   });
 
   it('이미 제출한 응답자면 409로 변환한다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(participant);
     userClient.submitSurveyAnswer.mockRejectedValue(
       new DuplicateSurveyAnswerError('이미 제출됨'),
     );
 
-    await expect(service.submit('survey-1', submitDto)).rejects.toThrow(
-      SurveyAnswerAlreadyExistsException,
-    );
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(SurveyAnswerAlreadyExistsException);
     expect(surveyStore.incrementTotalAnswers).not.toHaveBeenCalled();
   });
 
   it('유저 서비스 위임이 다른 이유로 실패하면 그대로 전파한다', async () => {
-    surveyStore.findById.mockResolvedValue(survey);
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(participant);
     userClient.submitSurveyAnswer.mockRejectedValue(
       new Error('connection lost'),
     );
 
-    await expect(service.submit('survey-1', submitDto)).rejects.toThrow(
-      'connection lost',
-    );
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow('connection lost');
   });
 });

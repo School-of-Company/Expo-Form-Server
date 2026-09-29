@@ -7,24 +7,43 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
+import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 
-/** `/v1/surveys/:surveyId/answers` HTTP 엔트리포인트 — 응답자의 답변 제출 전용. */
-@Controller('v1/surveys/:surveyId/answers')
+/** `/v1/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출 전용. */
+@Controller('v1/surveys/answer')
 export class SurveyAnswerController {
   constructor(private readonly surveyAnswerService: SurveyAnswerService) {}
 
   /**
-   * 설문에 답변을 제출한다. 전화번호로 응답자를 확인하고, 문항 스펙으로 답변을 검증한 뒤
-   * 유저 서비스에 저장을 위임한다.
+   * 일반 참가자 설문에 답변을 제출한다. 전화번호로 응답자를 확인하고, 문항 스펙으로
+   * 답변을 검증한 뒤 유저 서비스에 저장을 위임한다.
    */
-  @Post()
+  @Post('standard/:expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  submit(
-    @Param('surveyId', ParseUUIDPipe) surveyId: string,
+  submitStandard(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {
-    return this.surveyAnswerService.submit(surveyId, dto);
+    return this.surveyAnswerService.submit(
+      expoId,
+      ParticipationType.STANDARD,
+      dto,
+    );
+  }
+
+  /** 교원연수자 설문에 답변을 제출한다. 검증·위임 과정은 일반 참가자와 같다. */
+  @Post('trainee/:expoId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  submitTrainee(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Body() dto: SubmitSurveyAnswerRequestDto,
+  ): Promise<void> {
+    return this.surveyAnswerService.submit(
+      expoId,
+      ParticipationType.TRAINEE,
+      dto,
+    );
   }
 }

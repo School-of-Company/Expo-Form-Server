@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
+import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
@@ -62,9 +63,12 @@ export class SurveyService {
    * @throws {SurveyAlreadyExistsException} 같은 (박람회, 참여자군) 조합의 설문이 이미 있을 때
    *   (동시 요청 사이의 경합으로 DB 유니크 제약이 걸린 경우 포함)
    */
-  async create(dto: CreateSurveyRequestDto): Promise<CreateSurveyResponseDto> {
+  async create(
+    expoId: string,
+    dto: CreateSurveyRequestDto,
+  ): Promise<CreateSurveyResponseDto> {
     const duplicated = await this.surveyStore.existsByExpoAndType(
-      dto.expoId,
+      expoId,
       dto.participationType,
     );
 
@@ -75,6 +79,7 @@ export class SurveyService {
     const { dynamicSurvey, ...meta } = dto;
     const survey = Object.assign(new SurveyEntity(), {
       ...meta,
+      expoId,
       // 컬럼 default(0)에 맡기지 않고 명시한다. SurveyFields에서 빼버리면 위의 안전망에 구멍이
       // 생기고, 저장 직전 엔티티의 totalAnswers가 number 타입인 채 undefined가 된다.
       totalAnswers: 0,
@@ -93,9 +98,7 @@ export class SurveyService {
       if (this.isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
       throw err;
     }
-    this.logger.log(
-      `설문 생성 완료: surveyId=${saved.id}, expoId=${dto.expoId}`,
-    );
+    this.logger.log(`설문 생성 완료: surveyId=${saved.id}, expoId=${expoId}`);
 
     return { id: saved.id };
   }
@@ -103,27 +106,21 @@ export class SurveyService {
   /**
    * 설문 메타데이터를 갱신하고 문항을 통째로 교체한다.
    *
+   * 대상 설문은 경로의 `expoId`와 바디의 `participationType` 조합으로 식별한다. 이 조합이
+   * 곧 설문을 유일하게 식별하는 키이므로, 이 요청으로 참여자군 자체를 바꿀 수는 없다 —
+   * 바디의 값이 실제 소유 설문과 다르면 그 설문을 찾지 못해 404가 난다.
+   *
    * 문항은 개별로 수정/추가/삭제하는 게 아니라 **전부 지우고 새로 만든다**(폼과 동일).
    * 그래서 기존 문항의 id는 보존되지 않는다.
    *
-   * 참여자군도 바꿀 수 있기 때문에, 바꾼 결과가 다른 설문과 같은 조합이 되지 않는지 여기서
-   * 확인한다. DB 유니크 제약이 최종 방어선이지만 그건 500으로 터지므로, 409로 돌려주려면
-   * 애플리케이션에서도 걸러야 한다.
-   *
-   * @throws {SurveyNotFoundException} 해당 id의 설문이 없을 때
-   * @throws {SurveyAlreadyExistsException} 바꾸려는 조합을 이미 다른 설문이 쓰고 있을 때
-   *   (동시 요청 사이의 경합으로 DB 유니크 제약이 걸린 경우 포함)
+   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
    */
-  async update(surveyId: string, dto: UpdateSurveyRequestDto): Promise<void> {
-    const survey = await this.surveyStore.findById(surveyId);
-    if (!survey) throw new SurveyNotFoundException();
-
-    const conflict = await this.surveyStore.findByExpoAndType(
-      survey.expoId,
+  async update(expoId: string, dto: UpdateSurveyRequestDto): Promise<void> {
+    const survey = await this.surveyStore.findByExpoAndType(
+      expoId,
       dto.participationType,
     );
-    if (conflict && conflict.id !== surveyId)
-      throw new SurveyAlreadyExistsException();
+    if (!survey) throw new SurveyNotFoundException();
 
     const { dynamicSurvey, ...meta } = dto;
     Object.assign(survey, meta satisfies UpdatableSurveyFields);
@@ -132,30 +129,30 @@ export class SurveyService {
       this.toQuestionEntity(question),
     );
 
-    // create()와 같은 이유로, 위 조합 충돌 검사와 이 저장 사이의 경합은 애플리케이션
-    // 레벨에서 못 막는다 — DB 유니크 제약 위반을 여기서 409로 변환한다.
-    try {
-      await this.surveyStore.updateWithQuestions(survey, questions);
-    } catch (err) {
-      if (this.isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
-      throw err;
-    }
+    await this.surveyStore.updateWithQuestions(survey, questions);
     this.logger.log(
-      `설문 수정 완료: surveyId=${surveyId}, 문항 ${questions.length}개로 교체`,
+      `설문 수정 완료: surveyId=${survey.id}, 문항 ${questions.length}개로 교체`,
     );
   }
 
   /**
    * 설문을 삭제한다. 딸린 문항은 DB의 FK CASCADE로 함께 지워진다.
+   * 대상 설문은 (박람회, 참여자군) 조합으로 식별한다.
    *
-   * @throws {SurveyNotFoundException} 해당 id의 설문이 없을 때
+   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
    */
-  async delete(surveyId: string): Promise<void> {
-    const survey = await this.surveyStore.findById(surveyId);
+  async delete(
+    expoId: string,
+    participationType: ParticipationType,
+  ): Promise<void> {
+    const survey = await this.surveyStore.findByExpoAndType(
+      expoId,
+      participationType,
+    );
     if (!survey) throw new SurveyNotFoundException();
 
-    await this.surveyStore.deleteById(surveyId);
-    this.logger.log(`설문 삭제 완료: surveyId=${surveyId}`);
+    await this.surveyStore.deleteById(survey.id);
+    this.logger.log(`설문 삭제 완료: surveyId=${survey.id}`);
   }
 
   /**
@@ -164,9 +161,12 @@ export class SurveyService {
    *
    * @throws {SurveyNotFoundException} 조건에 맞는 설문이 없을 때
    */
-  async findOne(dto: FindSurveyRequestDto): Promise<SurveyResponseDto> {
+  async findOne(
+    expoId: string,
+    dto: FindSurveyRequestDto,
+  ): Promise<SurveyResponseDto> {
     const survey = await this.surveyStore.findByExpoAndType(
-      dto.expoId,
+      expoId,
       dto.participationType,
     );
 
