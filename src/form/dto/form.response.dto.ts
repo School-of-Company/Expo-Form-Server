@@ -18,7 +18,7 @@ export const formResponseSchema = z.object({
   expoId: z.uuid(),
   title: z.string(),
   informationText: z.string(),
-  participationType: z.enum(ParticipationType),
+  participantType: z.enum(ParticipationType),
   applicationType: z.enum(ApplicationType),
   startDate: z.date(),
   endDate: z.date(),

@@ -55,7 +55,7 @@ export class FormService {
   ): Promise<CreateFormResponseDto> {
     const duplicated = await this.formStore.existsByExpoAndTypes(
       expoId,
-      dto.participationType,
+      dto.participantType,
       dto.applicationType,
     );
 
@@ -63,9 +63,11 @@ export class FormService {
 
     // dynamicForm만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라 한 번에 옮긴다.
     // `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면 여기서 먼저 깨진다.
-    const { dynamicForm, ...meta } = dto;
+    // DTO의 `participantType`은 엔티티 컬럼 `participationType`으로 이름을 맞춰 옮긴다.
+    const { dynamicForm, participantType, ...meta } = dto;
     const form = Object.assign(new FormEntity(), {
       ...meta,
+      participationType: participantType,
       expoId,
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
@@ -101,13 +103,16 @@ export class FormService {
   async update(expoId: string, dto: UpdateFormRequestDto): Promise<void> {
     const form = await this.formStore.findByExpoAndTypes(
       expoId,
-      dto.participationType,
+      dto.participantType,
       dto.applicationType,
     );
     if (!form) throw new FormNotFoundException();
 
-    const { dynamicForm, ...meta } = dto;
-    Object.assign(form, meta satisfies UpdatableFormFields);
+    const { dynamicForm, participantType, ...meta } = dto;
+    Object.assign(form, {
+      ...meta,
+      participationType: participantType,
+    } satisfies UpdatableFormFields);
 
     const fields = dynamicForm.map((field) => this.toFieldEntity(field));
 
@@ -151,7 +156,7 @@ export class FormService {
   ): Promise<FormResponseDto> {
     const form = await this.formStore.findByExpoAndTypes(
       expoId,
-      dto.participationType,
+      dto.type,
       dto.applicationType,
     );
 
@@ -184,7 +189,7 @@ export class FormService {
       expoId: form.expoId,
       title: form.title,
       informationText: form.informationText,
-      participationType: form.participationType,
+      participantType: form.participationType,
       applicationType: form.applicationType,
       startDate: form.startDate,
       endDate: form.endDate,

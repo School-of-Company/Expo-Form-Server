@@ -30,11 +30,14 @@ export const dynamicFormFieldSchema = z.object({
  * 날짜는 JSON으로 문자열이 실려오므로 `z.coerce.date()`로 `Date`로 바꿔 받는다.
  *
  * 수정 요청도 이 구성을 재사용한다.
+ *
+ * `participantType`은 오타처럼 보이지만 v1의 실제 필드명이다 — 아직 연결된 클라이언트가
+ * 없는 신규 구현이라도 이 계약은 일부러 v1과 어긋나게 두지 않기로 했다.
  */
 export const createFormFieldsSchema = z.object({
   title: z.string().min(1).max(100),
   informationText: z.string().max(500),
-  participationType: z.enum(ParticipationType),
+  participantType: z.enum(ParticipationType),
   applicationType: z.enum(ApplicationType),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),

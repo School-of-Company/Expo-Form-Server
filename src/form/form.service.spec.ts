@@ -18,7 +18,7 @@ const expoId = '11111111-1111-1111-1111-111111111111';
 const createDto = {
   title: '사전 등록 폼',
   informationText: '안내문',
-  participationType: ParticipationType.TRAINEE,
+  participantType: ParticipationType.TRAINEE,
   applicationType: ApplicationType.PRE,
   startDate: new Date('2026-01-01T00:00:00Z'),
   endDate: new Date('2026-01-31T00:00:00Z'),
@@ -170,7 +170,7 @@ describe('FormService', () => {
 
       await expect(
         service.findOne(expoId, {
-          participationType: createDto.participationType,
+          type: createDto.participantType,
           applicationType: createDto.applicationType,
         }),
       ).rejects.toThrow(FormNotFoundException);
@@ -181,11 +181,12 @@ describe('FormService', () => {
         ...createDto,
         id: 'form-1',
         expoId,
+        participationType: createDto.participantType,
         dynamicForms: [{ ...createDto.dynamicForm[0], id: 1 }],
       });
 
       const result = await service.findOne(expoId, {
-        participationType: createDto.participationType,
+        type: createDto.participantType,
         applicationType: createDto.applicationType,
       });
 
