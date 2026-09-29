@@ -21,8 +21,8 @@ import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { FormService } from './form.service.js';
 
-/** `/v1/forms` HTTP 엔트리포인트. */
-@Controller('v1/forms')
+/** `/forms` HTTP 엔트리포인트. */
+@Controller('forms')
 export class FormController {
   constructor(private readonly formService: FormService) {}
 
