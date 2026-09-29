@@ -9,7 +9,7 @@ const base = {
   title: '행사 만족도 설문',
   informationText: '안내문',
   participationType: ParticipationType.TRAINEE,
-  dynamicSurvey: [
+  dynamicSurveyRequestDto: [
     {
       title: '만족도',
       formType: DynamicFormFieldType.DROPDOWN,
@@ -25,7 +25,9 @@ describe('createSurveySchema', () => {
     expect(() =>
       createSurveySchema.parse({
         ...base,
-        dynamicSurvey: [{ ...base.dynamicSurvey[0], jsonData: { '1': 123 } }],
+        dynamicSurveyRequestDto: [
+          { ...base.dynamicSurveyRequestDto[0], jsonData: { '1': 123 } },
+        ],
       }),
     ).toThrow();
   });
@@ -33,7 +35,7 @@ describe('createSurveySchema', () => {
   it('부가 설정이 없는 문항은 otherJson에 null을 허용한다', () => {
     const parsed = createSurveySchema.parse(base);
 
-    expect(parsed.dynamicSurvey[0].otherJson).toBeNull();
+    expect(parsed.dynamicSurveyRequestDto[0].otherJson).toBeNull();
   });
 
   it('누적 응답 수는 요청으로 받지 않는다', () => {

@@ -17,7 +17,7 @@ const createDto = {
   title: '행사 만족도 설문',
   informationText: '안내문',
   participationType: ParticipationType.TRAINEE,
-  dynamicSurvey: [
+  dynamicSurveyRequestDto: [
     {
       title: '만족도',
       formType: DynamicFormFieldType.DROPDOWN,
@@ -181,7 +181,7 @@ describe('SurveyService', () => {
 
       await expect(
         service.findOne(expoId, {
-          participationType: createDto.participationType,
+          type: createDto.participationType,
         }),
       ).rejects.toThrow(SurveyNotFoundException);
     });
@@ -192,16 +192,16 @@ describe('SurveyService', () => {
         id: 'survey-1',
         expoId,
         totalAnswers: 7,
-        dynamicSurveys: [{ ...createDto.dynamicSurvey[0], id: 1 }],
+        dynamicSurveys: [{ ...createDto.dynamicSurveyRequestDto[0], id: 1 }],
       });
 
       const result = await service.findOne(expoId, {
-        participationType: createDto.participationType,
+        type: createDto.participationType,
       });
 
       expect(result.id).toBe('survey-1');
       expect(result.totalAnswers).toBe(7);
-      expect(result.dynamicSurvey[0].jsonData).toEqual({
+      expect(result.dynamicSurveyResponseDto[0].jsonData).toEqual({
         '1': '만족',
         '2': '불만족',
       });

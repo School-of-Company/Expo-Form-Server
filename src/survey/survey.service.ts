@@ -66,16 +66,17 @@ export class SurveyService {
 
     if (duplicated) throw new SurveyAlreadyExistsException();
 
-    // dynamicSurvey만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라 한 번에 옮긴다.
-    // `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면 여기서 먼저 깨진다.
-    const { dynamicSurvey, ...meta } = dto;
+    // dynamicSurveyRequestDto만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라
+    // 한 번에 옮긴다. `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면
+    // 여기서 먼저 깨진다.
+    const { dynamicSurveyRequestDto, ...meta } = dto;
     const survey = Object.assign(new SurveyEntity(), {
       ...meta,
       expoId,
       // 컬럼 default(0)에 맡기지 않고 명시한다. SurveyFields에서 빼버리면 위의 안전망에 구멍이
       // 생기고, 저장 직전 엔티티의 totalAnswers가 number 타입인 채 undefined가 된다.
       totalAnswers: 0,
-      dynamicSurveys: dynamicSurvey.map((question) =>
+      dynamicSurveys: dynamicSurveyRequestDto.map((question) =>
         this.toQuestionEntity(question),
       ),
     } satisfies SurveyFields);
@@ -115,10 +116,10 @@ export class SurveyService {
     );
     if (!survey) throw new SurveyNotFoundException();
 
-    const { dynamicSurvey, ...meta } = dto;
+    const { dynamicSurveyRequestDto, ...meta } = dto;
     Object.assign(survey, meta satisfies UpdatableSurveyFields);
 
-    const questions = dynamicSurvey.map((question) =>
+    const questions = dynamicSurveyRequestDto.map((question) =>
       this.toQuestionEntity(question),
     );
 
@@ -158,10 +159,7 @@ export class SurveyService {
     expoId: string,
     dto: FindSurveyRequestDto,
   ): Promise<SurveyResponseDto> {
-    const survey = await this.surveyStore.findByExpoAndType(
-      expoId,
-      dto.participationType,
-    );
+    const survey = await this.surveyStore.findByExpoAndType(expoId, dto.type);
 
     if (!survey) throw new SurveyNotFoundException();
 
@@ -173,7 +171,7 @@ export class SurveyService {
    * id와 부모 관계(`survey`)는 여기서 채우지 않는다 — 저장 시점에 TypeORM이 정한다.
    */
   private toQuestionEntity(
-    question: CreateSurveyRequestDto['dynamicSurvey'][number],
+    question: CreateSurveyRequestDto['dynamicSurveyRequestDto'][number],
   ): DynamicSurveyEntity {
     return Object.assign(
       new DynamicSurveyEntity(),
@@ -194,7 +192,7 @@ export class SurveyService {
       informationText: survey.informationText,
       participationType: survey.participationType,
       totalAnswers: survey.totalAnswers,
-      dynamicSurvey: survey.dynamicSurveys.map((question) => ({
+      dynamicSurveyResponseDto: survey.dynamicSurveys.map((question) => ({
         id: question.id,
         title: question.title,
         formType: question.formType,

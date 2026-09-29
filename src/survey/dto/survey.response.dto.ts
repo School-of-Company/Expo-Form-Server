@@ -20,7 +20,7 @@ export const surveyResponseSchema = z.object({
   participationType: z.enum(ParticipationType),
   /** 누적 응답 수. 응답 제출 API가 생기기 전까지는 항상 0이다. */
   totalAnswers: z.number().int().nonnegative(),
-  dynamicSurvey: z.array(
+  dynamicSurveyResponseDto: z.array(
     z.object({
       id: z.number().int(),
       title: z.string(),

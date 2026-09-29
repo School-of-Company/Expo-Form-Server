@@ -29,12 +29,16 @@ export const dynamicSurveyQuestionSchema = z.object({
  *
  * `totalAnswers`는 요청으로 받지 않는다. 누적 응답 수는 응답 제출이 만들어내는 값이지
  * 설문 작성자가 정하는 값이 아니다.
+ *
+ * `dynamicSurveyRequestDto`는 v1의 실제 필드명을 그대로 따른다 — DTO 클래스명이 필드명에
+ * 그대로 남아 있어 장황하지만, 아직 연결된 클라이언트가 없는 신규 구현이라도 이 계약은
+ * 일부러 v1과 어긋나게 두지 않기로 했다.
  */
 export const createSurveySchema = z.object({
   title: z.string().min(1).max(100),
   informationText: z.string().max(500),
   participationType: z.enum(ParticipationType),
-  dynamicSurvey: z.array(dynamicSurveyQuestionSchema),
+  dynamicSurveyRequestDto: z.array(dynamicSurveyQuestionSchema),
 });
 
 export class CreateSurveyRequestDto extends createZodDto(createSurveySchema) {}

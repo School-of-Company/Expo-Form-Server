@@ -25,7 +25,7 @@ describe('SurveyController', () => {
   });
 
   it('조회 요청에 경로의 expoId와 쿼리 DTO를 함께 넘긴다', async () => {
-    const query = { participationType: ParticipationType.TRAINEE };
+    const query = { type: ParticipationType.TRAINEE };
 
     await controller.findOne('expo-1', query);
 
