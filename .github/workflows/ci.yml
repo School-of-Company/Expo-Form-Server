@@ -45,3 +45,17 @@ jobs:
       - run: pnpm run test
 
       - run: pnpm run build
+
+  notify-discord:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Discord 알림 전송
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: success
+          title: Expo Form CI
+          content: |
+            <@${{ secrets.DISCORD_USER_ID_1 }}> <@${{ secrets.DISCORD_USER_ID_2 }}>
+            확인해주세요.
