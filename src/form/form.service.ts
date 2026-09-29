@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   FormAlreadyExistsException,
   FormNotFoundException,
@@ -8,6 +9,7 @@ import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
 import { FormResponseDto } from './dto/form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
+import { ApplicationType } from './entities/application-type.enum.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormStore } from './form.store.js';
@@ -45,9 +47,12 @@ export class FormService {
    * @returns 생성된 폼의 id — 이어서 수정·삭제하려면 필요하다.
    * @throws {FormAlreadyExistsException} 같은 (박람회, 참여자군, 신청방식) 조합의 폼이 이미 있을 때
    */
-  async create(dto: CreateFormRequestDto): Promise<CreateFormResponseDto> {
+  async create(
+    expoId: string,
+    dto: CreateFormRequestDto,
+  ): Promise<CreateFormResponseDto> {
     const duplicated = await this.formStore.existsByExpoAndTypes(
-      dto.expoId,
+      expoId,
       dto.participationType,
       dto.applicationType,
     );
@@ -59,11 +64,12 @@ export class FormService {
     const { dynamicForm, ...meta } = dto;
     const form = Object.assign(new FormEntity(), {
       ...meta,
+      expoId,
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
 
     const saved = await this.formStore.save(form);
-    this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${dto.expoId}`);
+    this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${expoId}`);
 
     return { id: saved.id };
   }
@@ -71,28 +77,23 @@ export class FormService {
   /**
    * 폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다.
    *
+   * 대상 폼은 경로의 `expoId`와 바디의 `participationType`+`applicationType` 조합으로
+   * 식별한다. 이 조합이 곧 폼을 유일하게 식별하는 키이므로, 이 요청으로 참여자군·신청방식
+   * 자체를 바꿀 수는 없다 — 바디의 값이 실제 소유 폼과 다르면 그 폼을 찾지 못해 404가 난다.
+   *
    * 필드는 개별로 수정/추가/삭제하는 게 아니라 **전부 지우고 새로 만든다**(v1과 동일).
    * 그래서 기존 필드의 id는 보존되지 않는다 — 이미 제출된 응답이 옛 필드를 가리키고 있다면
    * 연결이 끊긴다. 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
    *
-   * 참여자군·신청방식도 바꿀 수 있기 때문에, 바꾼 결과가 다른 폼과 같은 조합이 되지 않는지
-   * 여기서 확인한다. DB 유니크 제약이 최종 방어선이지만 그건 500으로 터지므로, 409로 돌려주려면
-   * 애플리케이션에서도 걸러야 한다.
-   *
-   * @throws {FormNotFoundException} 해당 id의 폼이 없을 때
-   * @throws {FormAlreadyExistsException} 바꾸려는 조합을 이미 다른 폼이 쓰고 있을 때
+   * @throws {FormNotFoundException} 해당 조합의 폼이 없을 때
    */
-  async update(formId: string, dto: UpdateFormRequestDto): Promise<void> {
-    const form = await this.formStore.findById(formId);
-    if (!form) throw new FormNotFoundException();
-
-    const conflict = await this.formStore.findByExpoAndTypes(
-      form.expoId,
+  async update(expoId: string, dto: UpdateFormRequestDto): Promise<void> {
+    const form = await this.formStore.findByExpoAndTypes(
+      expoId,
       dto.participationType,
       dto.applicationType,
     );
-    if (conflict && conflict.id !== formId)
-      throw new FormAlreadyExistsException();
+    if (!form) throw new FormNotFoundException();
 
     const { dynamicForm, ...meta } = dto;
     Object.assign(form, meta satisfies UpdatableFormFields);
@@ -101,21 +102,30 @@ export class FormService {
 
     await this.formStore.updateWithFields(form, fields);
     this.logger.log(
-      `폼 수정 완료: formId=${formId}, 필드 ${fields.length}개로 교체`,
+      `폼 수정 완료: formId=${form.id}, 필드 ${fields.length}개로 교체`,
     );
   }
 
   /**
    * 폼을 삭제한다. 딸린 입력 필드는 DB의 FK CASCADE로 함께 지워진다.
+   * 대상 폼은 (박람회, 참여자군, 신청방식) 조합으로 식별한다.
    *
-   * @throws {FormNotFoundException} 해당 id의 폼이 없을 때
+   * @throws {FormNotFoundException} 해당 조합의 폼이 없을 때
    */
-  async delete(formId: string): Promise<void> {
-    const form = await this.formStore.findById(formId);
+  async delete(
+    expoId: string,
+    participationType: ParticipationType,
+    applicationType: ApplicationType,
+  ): Promise<void> {
+    const form = await this.formStore.findByExpoAndTypes(
+      expoId,
+      participationType,
+      applicationType,
+    );
     if (!form) throw new FormNotFoundException();
 
-    await this.formStore.deleteById(formId);
-    this.logger.log(`폼 삭제 완료: formId=${formId}`);
+    await this.formStore.deleteById(form.id);
+    this.logger.log(`폼 삭제 완료: formId=${form.id}`);
   }
 
   /**
@@ -124,9 +134,12 @@ export class FormService {
    *
    * @throws {FormNotFoundException} 조건에 맞는 폼이 없을 때
    */
-  async findOne(dto: FindFormRequestDto): Promise<FormResponseDto> {
+  async findOne(
+    expoId: string,
+    dto: FindFormRequestDto,
+  ): Promise<FormResponseDto> {
     const form = await this.formStore.findByExpoAndTypes(
-      dto.expoId,
+      expoId,
       dto.participationType,
       dto.applicationType,
     );

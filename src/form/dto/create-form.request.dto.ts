@@ -25,14 +25,13 @@ export const dynamicFormFieldSchema = z.object({
 /**
  * 폼 생성 요청의 필드 구성.
  *
- * `expoId`는 박람회 서비스 소유 값이라 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
+ * `expoId`는 경로 파라미터로 받으므로 바디에는 없다 — 박람회 서비스 소유 값이라 컨트롤러에서
+ * 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
  * 날짜는 JSON으로 문자열이 실려오므로 `z.coerce.date()`로 `Date`로 바꿔 받는다.
  *
- * 수정 요청도 이 구성을 재사용하므로, `.refine()`을 붙이기 전 상태를 따로 내보낸다 —
- * refine이 붙은 스키마에는 `.omit()`을 쓸 수 없다.
+ * 수정 요청도 이 구성을 재사용한다.
  */
 export const createFormFieldsSchema = z.object({
-  expoId: z.uuid(),
   title: z.string().min(1).max(100),
   informationText: z.string().max(500),
   participationType: z.enum(ParticipationType),

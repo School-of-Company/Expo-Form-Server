@@ -12,8 +12,9 @@ import { FormEntity } from './entities/form.entity.js';
 import { FormService } from './form.service.js';
 import { FormStore } from './form.store.js';
 
+const expoId = '11111111-1111-1111-1111-111111111111';
+
 const createDto = {
-  expoId: '11111111-1111-1111-1111-111111111111',
   title: '사전 등록 폼',
   informationText: '안내문',
   participationType: ParticipationType.TRAINEE,
@@ -34,12 +35,12 @@ const createDto = {
 
 const existingForm = {
   id: 'form-1',
+  expoId,
   dynamicForms: [],
 } as unknown as FormEntity;
 
 describe('FormService', () => {
   let formStore: {
-    findById: Mock;
     findByExpoAndTypes: Mock;
     existsByExpoAndTypes: Mock;
     save: Mock;
@@ -50,7 +51,6 @@ describe('FormService', () => {
 
   beforeEach(() => {
     formStore = {
-      findById: vi.fn(),
       findByExpoAndTypes: vi.fn(),
       existsByExpoAndTypes: vi.fn(),
       save: vi.fn(),
@@ -64,7 +64,7 @@ describe('FormService', () => {
     it('같은 조합의 폼이 이미 있으면 거부한다', async () => {
       formStore.existsByExpoAndTypes.mockResolvedValue(true);
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
         FormAlreadyExistsException,
       );
       expect(formStore.save).not.toHaveBeenCalled();
@@ -74,10 +74,10 @@ describe('FormService', () => {
       formStore.existsByExpoAndTypes.mockResolvedValue(false);
       formStore.save.mockResolvedValue({ id: 'form-1' });
 
-      await service.create(createDto);
+      await service.create(expoId, createDto);
 
       const saved = formStore.save.mock.calls[0][0] as FormEntity;
-      expect(saved.expoId).toBe(createDto.expoId);
+      expect(saved.expoId).toBe(expoId);
       expect(saved.dynamicForms).toHaveLength(1);
       expect(saved.dynamicForms[0].jsonData).toEqual({
         '1': '온라인',
@@ -89,7 +89,7 @@ describe('FormService', () => {
       formStore.existsByExpoAndTypes.mockResolvedValue(false);
       formStore.save.mockResolvedValue({ id: 'form-1' });
 
-      await expect(service.create(createDto)).resolves.toEqual({
+      await expect(service.create(expoId, createDto)).resolves.toEqual({
         id: 'form-1',
       });
     });
@@ -97,53 +97,45 @@ describe('FormService', () => {
 
   describe('update', () => {
     it('폼이 없으면 예외를 던진다', async () => {
-      formStore.findById.mockResolvedValue(null);
+      formStore.findByExpoAndTypes.mockResolvedValue(null);
 
-      await expect(service.update('form-1', createDto)).rejects.toThrow(
+      await expect(service.update(expoId, createDto)).rejects.toThrow(
         FormNotFoundException,
       );
       expect(formStore.updateWithFields).not.toHaveBeenCalled();
     });
 
     it('기존 필드를 새 필드로 통째로 교체한다', async () => {
-      formStore.findById.mockResolvedValue(existingForm);
       formStore.findByExpoAndTypes.mockResolvedValue(existingForm);
 
-      await service.update('form-1', createDto);
+      await service.update(expoId, createDto);
 
       const [, fields] = formStore.updateWithFields.mock.calls[0];
       expect(fields).toHaveLength(1);
       expect(fields[0].title).toBe('참여 형태');
     });
-
-    it('바꾸려는 조합을 다른 폼이 이미 쓰고 있으면 거부한다', async () => {
-      formStore.findById.mockResolvedValue(existingForm);
-      formStore.findByExpoAndTypes.mockResolvedValue({ id: 'form-2' });
-
-      await expect(service.update('form-1', createDto)).rejects.toThrow(
-        FormAlreadyExistsException,
-      );
-      expect(formStore.updateWithFields).not.toHaveBeenCalled();
-    });
-
-    it('조합이 그대로여서 자기 자신이 조회되는 경우는 통과시킨다', async () => {
-      formStore.findById.mockResolvedValue(existingForm);
-      formStore.findByExpoAndTypes.mockResolvedValue({ id: 'form-1' });
-
-      await service.update('form-1', createDto);
-
-      expect(formStore.updateWithFields).toHaveBeenCalled();
-    });
   });
 
   describe('delete', () => {
     it('폼이 없으면 예외를 던진다', async () => {
-      formStore.findById.mockResolvedValue(null);
+      formStore.findByExpoAndTypes.mockResolvedValue(null);
 
-      await expect(service.delete('form-1')).rejects.toThrow(
-        FormNotFoundException,
-      );
+      await expect(
+        service.delete(expoId, ParticipationType.TRAINEE, ApplicationType.PRE),
+      ).rejects.toThrow(FormNotFoundException);
       expect(formStore.deleteById).not.toHaveBeenCalled();
+    });
+
+    it('찾은 폼의 id로 삭제한다', async () => {
+      formStore.findByExpoAndTypes.mockResolvedValue(existingForm);
+
+      await service.delete(
+        expoId,
+        ParticipationType.TRAINEE,
+        ApplicationType.PRE,
+      );
+
+      expect(formStore.deleteById).toHaveBeenCalledWith(existingForm.id);
     });
   });
 
@@ -152,8 +144,7 @@ describe('FormService', () => {
       formStore.findByExpoAndTypes.mockResolvedValue(null);
 
       await expect(
-        service.findOne({
-          expoId: createDto.expoId,
+        service.findOne(expoId, {
           participationType: createDto.participationType,
           applicationType: createDto.applicationType,
         }),
@@ -164,11 +155,11 @@ describe('FormService', () => {
       formStore.findByExpoAndTypes.mockResolvedValue({
         ...createDto,
         id: 'form-1',
+        expoId,
         dynamicForms: [{ ...createDto.dynamicForm[0], id: 1 }],
       });
 
-      const result = await service.findOne({
-        expoId: createDto.expoId,
+      const result = await service.findOne(expoId, {
         participationType: createDto.participationType,
         applicationType: createDto.applicationType,
       });
