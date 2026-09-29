@@ -20,8 +20,8 @@ import { SurveyResponseDto } from './dto/survey.response.dto.js';
 import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { SurveyService } from './survey.service.js';
 
-/** `/v1/surveys` HTTP 엔트리포인트. */
-@Controller('v1/surveys')
+/** `/surveys` HTTP 엔트리포인트. */
+@Controller('surveys')
 export class SurveyController {
   constructor(private readonly surveyService: SurveyService) {}
 

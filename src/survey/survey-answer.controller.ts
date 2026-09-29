@@ -11,8 +11,8 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 
-/** `/v1/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출 전용. */
-@Controller('v1/surveys/answer')
+/** `/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출 전용. */
+@Controller('surveys/answer')
 export class SurveyAnswerController {
   constructor(private readonly surveyAnswerService: SurveyAnswerService) {}
 
