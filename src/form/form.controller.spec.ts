@@ -18,23 +18,36 @@ describe('FormController', () => {
     controller = new FormController(formService as unknown as FormService);
   });
 
-  it('조회 요청을 쿼리 DTO 그대로 서비스에 넘긴다', async () => {
+  it('조회 요청에 경로의 expoId와 쿼리 DTO를 함께 넘긴다', async () => {
     const query = {
-      expoId: '11111111-1111-1111-1111-111111111111',
-      participationType: ParticipationType.TRAINEE,
+      type: ParticipationType.TRAINEE,
       applicationType: ApplicationType.PRE,
     };
 
-    await controller.findOne(query);
+    await controller.findOne('expo-1', query);
 
-    expect(formService.findOne).toHaveBeenCalledWith(query);
+    expect(formService.findOne).toHaveBeenCalledWith('expo-1', query);
   });
 
-  it('수정 요청에 경로의 formId와 바디를 함께 넘긴다', async () => {
+  it('수정 요청에 경로의 expoId와 바디를 함께 넘긴다', async () => {
     const dto = { title: '수정된 폼' } as never;
 
-    await controller.update('form-1', dto);
+    await controller.update('expo-1', dto);
 
-    expect(formService.update).toHaveBeenCalledWith('form-1', dto);
+    expect(formService.update).toHaveBeenCalledWith('expo-1', dto);
+  });
+
+  it('삭제 요청에 경로의 expoId·participationType·applicationType을 함께 넘긴다', async () => {
+    await controller.delete(
+      'expo-1',
+      ParticipationType.STANDARD,
+      ApplicationType.PRE,
+    );
+
+    expect(formService.delete).toHaveBeenCalledWith(
+      'expo-1',
+      ParticipationType.STANDARD,
+      ApplicationType.PRE,
+    );
   });
 });

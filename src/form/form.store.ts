@@ -26,15 +26,6 @@ export class FormStore {
     private readonly dataSource: DataSource,
   ) {}
 
-  /** id로 폼 하나를 입력 필드까지 함께 조회한다. 없으면 null. */
-  findById(id: string): Promise<FormEntity | null> {
-    return this.forms.findOne({
-      where: { id },
-      relations: { dynamicForms: true },
-      order: DYNAMIC_FORM_ORDER,
-    });
-  }
-
   /**
    * 폼을 유일하게 식별하는 (박람회, 참여자군, 신청방식) 조합으로 조회한다.
    * 신청 페이지는 formId를 모르고 이 세 값만 알기 때문에 이 경로가 따로 필요하다.

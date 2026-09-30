@@ -10,7 +10,7 @@ const base = {
   expoId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
   title: '사전 등록 폼',
   informationText: '안내문',
-  participationType: ParticipationType.TRAINEE,
+  participantType: ParticipationType.TRAINEE,
   applicationType: ApplicationType.PRE,
   startDate: '2026-01-01T00:00:00Z',
   endDate: '2026-12-31T00:00:00Z',
