@@ -12,6 +12,11 @@ const notImplementedUserClient: UserClient = {
       'UserClient is not implemented. 유저 서비스 연동 후 구현체를 등록하세요.',
     );
   },
+  async submitSurveyAnswer() {
+    throw new Error(
+      'UserClient is not implemented. 유저 서비스 연동 후 구현체를 등록하세요.',
+    );
+  },
 };
 
 @Module({

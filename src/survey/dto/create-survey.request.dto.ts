@@ -24,19 +24,21 @@ export const dynamicSurveyQuestionSchema = z.object({
 /**
  * 설문 생성 요청의 필드 구성.
  *
- * `expoId`는 박람회 서비스 소유 값이라 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
- * 폼과 달리 접수 기간·신청 방식이 없어 필드 간 교차 검증(`.refine()`)이 필요 없고, 그래서 이
- * 스키마가 순수 `ZodObject`로 남는다 — 수정 스키마가 중간 단계 없이 여기에 바로 `.omit()`을 건다.
+ * `expoId`는 경로 파라미터로 받으므로 바디에는 없다 — 박람회 서비스 소유 값이라 컨트롤러에서
+ * 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
  *
  * `totalAnswers`는 요청으로 받지 않는다. 누적 응답 수는 응답 제출이 만들어내는 값이지
  * 설문 작성자가 정하는 값이 아니다.
+ *
+ * `dynamicSurveyRequestDto`는 v1의 실제 필드명을 그대로 따른다 — DTO 클래스명이 필드명에
+ * 그대로 남아 있어 장황하지만, 아직 연결된 클라이언트가 없는 신규 구현이라도 이 계약은
+ * 일부러 v1과 어긋나게 두지 않기로 했다.
  */
 export const createSurveySchema = z.object({
-  expoId: z.uuid(),
   title: z.string().min(1).max(100),
   informationText: z.string().max(500),
   participationType: z.enum(ParticipationType),
-  dynamicSurvey: z.array(dynamicSurveyQuestionSchema),
+  dynamicSurveyRequestDto: z.array(dynamicSurveyQuestionSchema),
 });
 
 export class CreateSurveyRequestDto extends createZodDto(createSurveySchema) {}

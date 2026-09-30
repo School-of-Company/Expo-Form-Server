@@ -11,12 +11,13 @@ import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyService } from './survey.service.js';
 import { SurveyStore } from './survey.store.js';
 
+const expoId = '11111111-1111-1111-1111-111111111111';
+
 const createDto = {
-  expoId: '11111111-1111-1111-1111-111111111111',
   title: '행사 만족도 설문',
   informationText: '안내문',
   participationType: ParticipationType.TRAINEE,
-  dynamicSurvey: [
+  dynamicSurveyRequestDto: [
     {
       title: '만족도',
       formType: DynamicFormFieldType.DROPDOWN,
@@ -30,14 +31,13 @@ const createDto = {
 /** 이미 응답이 쌓인 설문 — 수정이 누적 응답 수를 건드리지 않는지 보려고 0이 아닌 값을 준다. */
 const existingSurvey = {
   id: 'survey-1',
-  expoId: createDto.expoId,
+  expoId,
   totalAnswers: 7,
   dynamicSurveys: [],
 } as unknown as SurveyEntity;
 
 describe('SurveyService', () => {
   let surveyStore: {
-    findById: Mock;
     findByExpoAndType: Mock;
     existsByExpoAndType: Mock;
     save: Mock;
@@ -48,7 +48,6 @@ describe('SurveyService', () => {
 
   beforeEach(() => {
     surveyStore = {
-      findById: vi.fn(),
       findByExpoAndType: vi.fn(),
       existsByExpoAndType: vi.fn(),
       save: vi.fn(),
@@ -62,7 +61,7 @@ describe('SurveyService', () => {
     it('같은 조합의 설문이 이미 있으면 거부한다', async () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(true);
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
         SurveyAlreadyExistsException,
       );
       expect(surveyStore.save).not.toHaveBeenCalled();
@@ -72,10 +71,10 @@ describe('SurveyService', () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(false);
       surveyStore.save.mockResolvedValue({ id: 'survey-1' });
 
-      await service.create(createDto);
+      await service.create(expoId, createDto);
 
       const saved = surveyStore.save.mock.calls[0][0] as SurveyEntity;
-      expect(saved.expoId).toBe(createDto.expoId);
+      expect(saved.expoId).toBe(expoId);
       expect(saved.dynamicSurveys).toHaveLength(1);
       expect(saved.dynamicSurveys[0].jsonData).toEqual({
         '1': '만족',
@@ -87,7 +86,7 @@ describe('SurveyService', () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(false);
       surveyStore.save.mockResolvedValue({ id: 'survey-1' });
 
-      await service.create(createDto);
+      await service.create(expoId, createDto);
 
       const saved = surveyStore.save.mock.calls[0][0] as SurveyEntity;
       expect(saved.totalAnswers).toBe(0);
@@ -103,7 +102,7 @@ describe('SurveyService', () => {
         } as Error),
       );
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
         SurveyAlreadyExistsException,
       );
     });
@@ -112,7 +111,7 @@ describe('SurveyService', () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(false);
       surveyStore.save.mockRejectedValue(new Error('connection lost'));
 
-      await expect(service.create(createDto)).rejects.toThrow(
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
         'connection lost',
       );
     });
@@ -121,7 +120,7 @@ describe('SurveyService', () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(false);
       surveyStore.save.mockResolvedValue({ id: 'survey-1' });
 
-      await expect(service.create(createDto)).resolves.toEqual({
+      await expect(service.create(expoId, createDto)).resolves.toEqual({
         id: 'survey-1',
       });
     });
@@ -129,79 +128,50 @@ describe('SurveyService', () => {
 
   describe('update', () => {
     it('설문이 없으면 예외를 던진다', async () => {
-      surveyStore.findById.mockResolvedValue(null);
+      surveyStore.findByExpoAndType.mockResolvedValue(null);
 
-      await expect(service.update('survey-1', createDto)).rejects.toThrow(
+      await expect(service.update(expoId, createDto)).rejects.toThrow(
         SurveyNotFoundException,
       );
       expect(surveyStore.updateWithQuestions).not.toHaveBeenCalled();
     });
 
     it('기존 문항을 새 문항으로 통째로 교체한다', async () => {
-      surveyStore.findById.mockResolvedValue(existingSurvey);
       surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
 
-      await service.update('survey-1', createDto);
+      await service.update(expoId, createDto);
 
       const [, questions] = surveyStore.updateWithQuestions.mock.calls[0];
       expect(questions).toHaveLength(1);
       expect(questions[0].title).toBe('만족도');
     });
 
-    it('바꾸려는 참여자군을 다른 설문이 이미 쓰고 있으면 거부한다', async () => {
-      surveyStore.findById.mockResolvedValue(existingSurvey);
-      surveyStore.findByExpoAndType.mockResolvedValue({ id: 'survey-2' });
-
-      await expect(service.update('survey-1', createDto)).rejects.toThrow(
-        SurveyAlreadyExistsException,
-      );
-      expect(surveyStore.updateWithQuestions).not.toHaveBeenCalled();
-    });
-
-    it('참여자군이 그대로여서 자기 자신이 조회되는 경우는 통과시킨다', async () => {
-      surveyStore.findById.mockResolvedValue(existingSurvey);
-      surveyStore.findByExpoAndType.mockResolvedValue({ id: 'survey-1' });
-
-      await service.update('survey-1', createDto);
-
-      expect(surveyStore.updateWithQuestions).toHaveBeenCalled();
-    });
-
     it('누적 응답 수는 수정 요청으로 덮어쓰지 않는다', async () => {
-      surveyStore.findById.mockResolvedValue(existingSurvey);
       surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
 
-      await service.update('survey-1', createDto);
+      await service.update(expoId, createDto);
 
       const [updated] = surveyStore.updateWithQuestions.mock.calls[0];
       expect(updated.totalAnswers).toBe(7);
-    });
-
-    it('조합 충돌 검사 통과 후 동시 요청과 경합해 유니크 제약에 걸리면 409로 변환한다', async () => {
-      surveyStore.findById.mockResolvedValue(existingSurvey);
-      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
-      surveyStore.updateWithQuestions.mockRejectedValue(
-        new QueryFailedError('UPDATE ...', undefined, {
-          name: 'error',
-          message: 'duplicate key value violates unique constraint',
-          code: '23505',
-        } as Error),
-      );
-
-      await expect(service.update('survey-1', createDto)).rejects.toThrow(
-        SurveyAlreadyExistsException,
-      );
     });
   });
 
   describe('delete', () => {
     it('설문이 없으면 예외를 던진다', async () => {
-      surveyStore.findById.mockResolvedValue(null);
+      surveyStore.findByExpoAndType.mockResolvedValue(null);
 
-      await expect(service.delete('survey-1')).rejects.toThrow(
-        SurveyNotFoundException,
-      );
+      await expect(
+        service.delete(expoId, ParticipationType.TRAINEE),
+      ).rejects.toThrow(SurveyNotFoundException);
       expect(surveyStore.deleteById).not.toHaveBeenCalled();
+    });
+
+    it('찾은 설문의 id로 삭제한다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+
+      await service.delete(expoId, ParticipationType.TRAINEE);
+
+      expect(surveyStore.deleteById).toHaveBeenCalledWith(existingSurvey.id);
     });
   });
 
@@ -210,9 +180,8 @@ describe('SurveyService', () => {
       surveyStore.findByExpoAndType.mockResolvedValue(null);
 
       await expect(
-        service.findOne({
-          expoId: createDto.expoId,
-          participationType: createDto.participationType,
+        service.findOne(expoId, {
+          type: createDto.participationType,
         }),
       ).rejects.toThrow(SurveyNotFoundException);
     });
@@ -221,18 +190,18 @@ describe('SurveyService', () => {
       surveyStore.findByExpoAndType.mockResolvedValue({
         ...createDto,
         id: 'survey-1',
+        expoId,
         totalAnswers: 7,
-        dynamicSurveys: [{ ...createDto.dynamicSurvey[0], id: 1 }],
+        dynamicSurveys: [{ ...createDto.dynamicSurveyRequestDto[0], id: 1 }],
       });
 
-      const result = await service.findOne({
-        expoId: createDto.expoId,
-        participationType: createDto.participationType,
+      const result = await service.findOne(expoId, {
+        type: createDto.participationType,
       });
 
       expect(result.id).toBe('survey-1');
       expect(result.totalAnswers).toBe(7);
-      expect(result.dynamicSurvey[0].jsonData).toEqual({
+      expect(result.dynamicSurveyResponseDto[0].jsonData).toEqual({
         '1': '만족',
         '2': '불만족',
       });
