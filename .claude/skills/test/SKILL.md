@@ -1,45 +1,64 @@
 ---
 name: test
-description: Run tests with coverage analysis and report results. Determines appropriate test scope (single file / pattern / all) based on context and analyzes failures in detail.
+description: Run this project's tests and report results. Detects the project's own test runner, picks the narrowest useful scope (single test / module / all), and analyzes failures in detail.
 allowed-tools: Bash, Glob, Grep
 ---
 
-## Determine Test Scope
+## Step 1 — Find the Test Runner
 
-Based on the user's request or changed files, choose the narrowest scope that covers the change:
+Read it off the project instead of assuming a stack. The build file that exists tells you the runner:
 
-| Scope             | Command                             |
-|-------------------|-------------------------------------|
-| Single file       | `pnpm vitest run <path>`            |
-| Matching name     | `pnpm vitest run -t "<test name>"`  |
-| All unit tests    | `pnpm test`                         |
-| E2E tests         | `pnpm test:e2e`                     |
-| With coverage     | `pnpm test:cov`                     |
-
-Unit and e2e runs use separate configs (`vitest.config.ts` and `vitest.config.e2e.ts`), so `pnpm test`
-does **not** cover `test/*.e2e-spec.ts`. Run both before concluding a change is green.
-
-## Run Tests
-
-Execute the chosen command. Vitest reports failures in full by default — add `--reporter=verbose` when
-you need per-test output for a passing run.
+| Marker file                     | Runner     | All              | One module / package       | One test                                             |
+| ------------------------------- | ---------- | ---------------- | -------------------------- | ---------------------------------------------------- |
+| `gradlew`, `build.gradle(.kts)` | Gradle     | `./gradlew test` | `./gradlew :<module>:test` | `./gradlew test --tests "fully.qualified.ClassName"` |
+| `pom.xml`                       | Maven      | `./mvnw test`    | `./mvnw -pl <module> test` | `./mvnw test -Dtest=ClassName`                       |
+| `package.json`                  | npm script | `npm test`       | `npm test -w <workspace>`  | `npm test -- <path-or-pattern>`                      |
+| `pyproject.toml`, `pytest.ini`  | pytest     | `pytest`         | `pytest <dir>`             | `pytest <file>::<test>`                              |
+| `go.mod`                        | go         | `go test ./...`  | `go test ./<pkg>/...`      | `go test -run <TestName> ./<pkg>`                    |
+| `Cargo.toml`                    | cargo      | `cargo test`     | `cargo test -p <crate>`    | `cargo test <name>`                                  |
 
 ```bash
-pnpm vitest run --reporter=verbose
+ls gradlew build.gradle.kts build.gradle pom.xml package.json pyproject.toml go.mod Cargo.toml 2>/dev/null
 ```
 
-Do not use watch mode (`pnpm test:watch`) in an automated run; it never exits.
+For `package.json`, read the actual scripts — the test command is whatever the project defined, and the
+underlying runner (vitest, jest, playwright) changes how you pass a filter:
 
-## Analyze Results
+```bash
+node -e "console.log(require('./package.json').scripts)"
+```
 
-After the run, report:
+If several markers exist (a monorepo with a server and a web app), run the one that covers the changed
+files, not everything.
 
-- Total tests / passed / failed / skipped
-- Execution time
-- For each failure:
-  - Test name and file
-  - Failure message and root cause
-  - The assertion diff, and the relevant stack frames pointing into `src/`
+## Step 2 — Pick the Narrowest Scope
 
-If there are failures, read the relevant source files and suggest the most likely fix. When a test fails
-only inside a full run but passes alone, suspect shared state between files rather than the test itself.
+Match the scope to what changed — a full run on every edit wastes minutes and buries the failure you
+care about.
+
+```bash
+git diff --name-only HEAD          # uncommitted work
+
+# this branch — resolve the base rather than assuming `origin/HEAD` is set; it usually isn't in a CI clone
+BASE=$(git ls-remote --heads origin develop development dev | sed 's#.*refs/heads/##' | head -1)
+BASE=${BASE:-$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null)}
+git diff --name-only "origin/${BASE:-main}...HEAD"
+```
+
+One source file changed → run its test file. One module → that module. Broad or unclear → everything.
+
+## Step 3 — Run and Get Detail on Failures
+
+Run the chosen command. When a failure needs more output, add the runner's verbose flag rather than
+re-running blind: Gradle `--info`, Maven `-X`, pytest `-vv`, vitest/jest `--reporter=verbose`,
+go `-v`, cargo `-- --nocapture`.
+
+## Step 4 — Report
+
+- Total / passed / failed / skipped, and execution time
+- For each failure: test name, failure message, root cause, the relevant stack or trace lines
+- State which command was run, so the scope of the result is visible
+
+If tests failed, read the relevant source files and name the most likely fix. A test that fails because
+the code is wrong and a test that fails because the test is stale need opposite fixes — say which one
+this is.

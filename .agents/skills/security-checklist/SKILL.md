@@ -1,100 +1,121 @@
 ---
 name: security-checklist
-description: Verify security vulnerabilities — hardcoded secrets, SQL injection, JWT validation, API key masking, sensitive logging, authorization checks, and CSV export injection. Run before merging any auth or API-related changes.
+description: Verify security vulnerabilities — hardcoded secrets, injection, token validation, credential masking, sensitive logging, and authorization checks. Stack-agnostic. Run before merging any auth or API-related changes.
 ---
 
 # Security Checklist
 
+## Step 0 — Decide What to Search (do this first)
+
+Every grep below needs the extensions this project actually uses. **Never assume a language.** A scan
+pointed at the wrong extension returns zero hits, and zero hits reads exactly like "no problems found".
+
+```bash
+git ls-files | sed -n 's/.*\.\([A-Za-z0-9]*\)$/\1/p' | sort | uniq -c | sort -rn | head -12
+```
+
+Pick the source extensions from that output and reuse them in every command below:
+
+```bash
+SRC=(--include="*.kt" --include="*.java")                    # JVM
+SRC=(--include="*.ts" --include="*.tsx" --include="*.js")    # TypeScript/JavaScript
+SRC=(--include="*.py")                                       # Python
+EXCL=(--exclude-dir=build --exclude-dir=target --exclude-dir=dist \
+      --exclude-dir=.next --exclude-dir=node_modules --exclude-dir=.venv)
+```
+
+If a scan comes back empty, prove the extensions matched real files before reporting "clean":
+
+```bash
+grep -rl "" "${SRC[@]}" "${EXCL[@]}" . | head -3   # empty means SRC is wrong, not that the code is safe
+```
+
 ## Verification Items
 
 ### 1. Hardcoded Secrets
-- [ ] No API Key, Secret, Password in code?
-- [ ] Read through `ConfigService.getOrThrow()`, never `process.env` inside a service?
 
-Verification commands:
-
-```bash
-grep -rn "password\s*[:=]\s*['\"]" --include="*.ts" src/ test/
-grep -rn "secret\s*[:=]\s*['\"]" --include="*.ts" src/ test/
-grep -rn "apiKey\s*[:=]\s*['\"]" --include="*.ts" src/ test/
-
-# process.env read outside ConfigModule wiring
-grep -rn "process\.env" --include="*.ts" src/
-
-# env files that must never be committed
-git ls-files | grep -E '^\.env'
-
-# YAML / JSON config
-grep -rn "password\|secret\|apiKey" --include="*.yml" --include="*.yaml" --include="*.json" . \
-  --exclude-dir=node_modules --exclude=pnpm-lock.yaml
-
-# base64-looking literals (potential secrets)
-grep -rnE "['\"][A-Za-z0-9+/]{40,}={0,2}['\"]" --include="*.ts" src/
-```
-
-**Limitations:**
-- May miss secrets encoded in base64 or other formats
-- May not detect secrets loaded from external sources at runtime
-- May not find secrets in configuration files outside the codebase
-- Manual review is still recommended for sensitive areas
-
-### 2. SQL Injection
-- [ ] Using repository methods or the query builder with bound parameters?
-- [ ] No user input interpolated into raw SQL?
-
-TypeORM binds `:named` parameters; a template literal in these positions means the value is being
-concatenated into the statement instead.
+- [ ] No API key, secret, or password literal in source?
+- [ ] Loaded from environment variables or a secret store instead?
 
 ```bash
-grep -rn 'query(`' --include="*.ts" src/
-grep -rnE '\.(where|andWhere|orWhere|having)\(`' --include="*.ts" src/
+grep -rniE "(password|secret|api_?key|token|credential)s?[[:space:]]*[:=][[:space:]]*['\"][^'\"]{6,}" "${SRC[@]}" "${EXCL[@]}" .
+grep -rniE "(password|secret|api_?key|token)" \
+  --include="*.yml" --include="*.yaml" --include="*.properties" --include="*.toml" --include="*.json" "${EXCL[@]}" .
+# high-entropy literals; expect false positives from hashes and test fixtures
+grep -rE "['\"][A-Za-z0-9+/]{40,}={0,2}['\"]" "${SRC[@]}" "${EXCL[@]}" .
+# provider-specific shapes worth looking at directly
+grep -rE "(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY)" "${EXCL[@]}" .
 ```
 
-JSONB path access takes the same care — a key coming from a form field spec must be passed as a
-parameter, never spliced into the `->>` expression.
+Secret-shaped files must be _ignored_, not merely absent from the working tree:
 
-### 3. JWT Verification
-- [ ] Verifying JWT signature?
-- [ ] Checking expiration time?
-- [ ] Validating claims?
+```bash
+git check-ignore -v .env *.pem 2>/dev/null || echo "not ignored — add to .gitignore"
+git log --diff-filter=A --name-only --pretty=format: | grep -iE "\.(pem|key|p12|jks)$|(^|/)\.env" | sort -u
+```
 
-### 4. API Key Security
-- [ ] Masking API Key in responses?
-- [ ] Hashing API Key when storing?
+That second command earns its place: a credential committed once stays in history after the file is
+deleted, so a hit there means **rotate the credential** — removing the file is not a fix.
+
+**Limitations** — this is a first pass, not proof:
+
+- Misses secrets assembled at runtime, or encoded beyond the patterns above
+- Misses anything outside the repo (CI settings, deploy configs)
+- Auth and payment paths still need to be read by a person
+
+### 2. Injection
+
+- [ ] Queries use parameter binding (prepared statement, ORM, query builder) — never string concatenation?
+- [ ] Shell commands never interpolate user input?
+
+```bash
+grep -rniE "(select|insert|update|delete)[^;]*(\+|\\\$\{|%s|f\")" "${SRC[@]}" "${EXCL[@]}" .
+grep -rniE "(exec|execSync|system\(|Runtime\.getRuntime|subprocess|child_process)" "${SRC[@]}" "${EXCL[@]}" .
+```
+
+### 3. Token / Session Validation
+
+- [ ] Signature verified with an expected algorithm (reject `alg: none` and algorithm confusion)?
+- [ ] Expiry checked?
+- [ ] Issuer/audience claims validated, not just read?
+
+```bash
+grep -rniE "(decode|verify)[^(]*\(.*(jwt|token)" "${SRC[@]}" "${EXCL[@]}" .
+```
+
+Decoding is not validating — a `decode` with no `verify` beside it is exactly what this check is for.
+
+### 4. Credential Handling
+
+- [ ] Keys and tokens masked or omitted in API responses?
+- [ ] Stored hashed or encrypted, never in plaintext?
 
 ### 5. Logging
-- [ ] Not logging sensitive info (password, token, submission payloads)?
-- [ ] Appropriate log level?
+
+- [ ] No passwords, tokens, or personal data in log lines?
+- [ ] Log level appropriate (no request/response dumps at info)?
 
 ```bash
-grep -rnE "logger\.(log|debug|warn|error)\(.*(password|token|secret|apiKey)" --include="*.ts" src/
-
-# console.* bypasses the Nest logger entirely
-grep -rn "console\." --include="*.ts" src/
+grep -rniE "log(ger)?\.(debug|info|warn|error).*(password|token|secret|authorization)" "${SRC[@]}" "${EXCL[@]}" .
 ```
 
 ### 6. Authorization
-- [ ] `@UseGuards()` on auth-required endpoints, or a global `APP_GUARD`?
-- [ ] Verifying access to own resources only — form and submission reads scoped to the owner?
+
+- [ ] Every endpoint needing auth actually enforces it — with whatever this project uses (framework
+      annotation, filter, middleware, guard, decorator)?
+- [ ] Ownership checked, so changing an id in the path can't reach another user's resource?
+
+Find how this project declares protection, then look for the endpoints that lack it:
 
 ```bash
-grep -rn "@UseGuards\|APP_GUARD" --include="*.ts" src/
-grep -rln "@Controller" --include="*.ts" src/
+grep -rnoE "@(PreAuthorize|Secured|RolesAllowed|UseGuards|Roles)|requireAuth|isAuthenticated" "${SRC[@]}" "${EXCL[@]}" . \
+  | sed 's/.*://' | sort | uniq -c | sort -rn
 ```
 
-Compare the two lists: a controller with no guard and no global guard covering it is the finding.
+The counts matter less than the gap: list the route handlers, list the protected ones, and read the
+difference. A public-by-default endpoint that takes a user id from the path is the classic finding.
 
-### 7. CSV Export Injection
-- [ ] Escaping submitted values that begin with `=`, `+`, `-`, or `@` before writing them to CSV?
+## Reporting
 
-Form answers are attacker-controlled text and land in a spreadsheet, where a leading `=` is executed as
-a formula. Prefix such values with a single quote or wrap them, and always quote fields containing
-commas, quotes, or newlines.
-
-## References
-
-Locate reference files at runtime:
-
-```bash
-find src -name "*.guard.ts" -o -name "*.store.ts" -o -name "*auth*" -not -path "*/node_modules/*"
-```
+State the scope alongside the findings — which extensions were searched and which directories skipped.
+A checklist reported without its scope is indistinguishable from one that searched the wrong files.

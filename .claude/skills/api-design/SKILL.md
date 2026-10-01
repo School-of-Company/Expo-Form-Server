@@ -1,9 +1,13 @@
 ---
 name: api-design
-description: REST API design guide for new endpoints — RESTful URL structure, DTO-only arguments for controllers and services, query parameter binding and coercion rules, OpenAPI annotations, and response format. Use when adding or changing a controller route.
+description: REST API design guide for new endpoints — RESTful URL structure, DTO-only arguments for controllers and services, how query parameters bind, OpenAPI documentation, and response format. Examples for Spring and NestJS; the principles apply to any stack.
 ---
 
 # REST API Design Guide
+
+The rules below are about the shape of the API, not about one framework. Each one is shown in Spring
+(Kotlin) and NestJS (TypeScript) — **read the example matching this project** and ignore the other.
+If it's neither, keep the principle and use the project's own binding syntax.
 
 ## URL Design
 
@@ -13,37 +17,47 @@ description: REST API design guide for new endpoints — RESTful URL structure, 
 
 ## Everything Crosses a Boundary as a DTO
 
-Controllers and services never take loose positional parameters. Every argument that crosses a boundary is
-a DTO, and every response is a DTO:
+Controllers and services never take loose positional parameters. Every argument that crosses a boundary
+is a DTO, and every response is a DTO.
 
-```ts
-// request body → RequestDto
-@Post('api-keys')
-create(@Body() dto: CreateApiKeyRequestDto): Promise<ApiKeyResponseDto>
+```kotlin
+// Spring — request body → ReqDto
+@PostMapping("/api-keys")
+fun create(@Valid @RequestBody reqDto: CreateApiKeyReqDto): ApiKeyResDto
 
-// query parameters → @Query() + RequestDto, not a pile of primitives
-@Get('students')
-query(@Query() dto: QueryStudentRequestDto): Promise<StudentResponseDto[]>
+// query parameters → @ModelAttribute ReqDto, not a pile of @RequestParam
+@GetMapping("/students")
+fun query(@Valid @ModelAttribute reqDto: QueryStudentReqDto): List<StudentResDto>
 
 // service takes the same DTO — not (name, grade, status, page, size)
-query(dto: QueryStudentRequestDto): Promise<StudentResponseDto[]>
+fun query(reqDto: QueryStudentReqDto): List<StudentResDto>
 ```
 
-Why: adding a field doesn't ripple through every signature, argument order can't be mixed up, and the
+```typescript
+// NestJS — request body → ReqDto (ValidationPipe validates it)
+@Post('api-keys')
+create(@Body() reqDto: CreateApiKeyReqDto): Promise<ApiKeyResDto>
+
+// query parameters → a single @Query() DTO, not several @Query('name') scalars
+@Get('students')
+query(@Query() reqDto: QueryStudentReqDto): Promise<StudentResDto[]>
+
+// service takes the same DTO — not (name, grade, status, page, size)
+query(reqDto: QueryStudentReqDto): Promise<StudentResDto[]>
+```
+
+Why: adding a field doesn't ripple through every signature, argument order can't be mixed up, and
 validation rules live next to the shape they describe.
 
-DTO classes come from `createZodDto()` — see `nestjs-arch`'s `references/dto-validation.md` for how the
-schema and the class relate.
+### One Scalar vs. a DTO
 
-## Binding Rules
-
-- **`@Query()` + RequestDto** — the default for query parameters. Everything arrives as a string, so
-  declare non-string fields with `z.coerce.number()` / `z.stringbool()` rather than converting in the
-  service. **Never `z.coerce.boolean()`** — it is `Boolean(v)`, so `?force=false` parses as `true`.
-  Coerce only query and path values; a JSON body already carries real types.
-- **`@Query('name')`** — only for a single, self-contained value that will never grow (e.g. `?force=true`).
-  Two or more parameters means a DTO.
-- **`@Param()`** — path variables stay as primitives; they're part of the URL, not a payload.
+- **A DTO is the default for query parameters.** It is also what makes validation possible on them —
+  Spring needs `@ModelAttribute` + `@Valid`, NestJS needs `@Query()` on a class with `ValidationPipe`.
+- **A single scalar binding** (`@RequestParam` / `@Query('force')`) is for one self-contained value that
+  will never grow, e.g. `?force=true`. Two or more parameters means a DTO.
+- Path variables (`@PathVariable` / `@Param`) stay primitives — they're part of the URL, not a payload.
+- Query and path values arrive as **strings**. Convert them explicitly where the stack requires it, and
+  be careful with booleans: a naive string→boolean conversion makes `?force=false` come out `true`.
 
 ## Query Parameters
 
@@ -53,27 +67,28 @@ schema and the class relate.
 
 ## OpenAPI Documentation
 
-```ts
-@ApiOperation({ summary: 'Create API key', description: '...' })
-@ApiResponse({ status: 201, type: ApiKeyResponseDto })
-@Post('api-keys')
-create(@Body() dto: CreateApiKeyRequestDto): Promise<ApiKeyResponseDto>
+Document each endpoint with whatever the project already uses — `springdoc` annotations on Spring,
+`@nestjs/swagger` decorators on NestJS:
+
+```kotlin
+@Operation(summary = "Create API key", description = "...")
+@ApiResponse(responseCode = "200", description = "Success")
+@PostMapping("/api-keys")
+fun create(@Valid @RequestBody reqDto: CreateApiKeyReqDto): ApiKeyResDto
 ```
 
-Zod-derived DTOs carry their own schema, so request and response bodies document themselves once the
-classes are named in the signature — don't restate fields with `@ApiProperty`.
+```typescript
+@ApiOperation({ summary: 'Create API key' })
+@ApiResponse({ status: 201, type: ApiKeyResDto })
+@Post('api-keys')
+create(@Body() reqDto: CreateApiKeyReqDto): Promise<ApiKeyResDto>
+```
 
 ## Response Format
 
-- Success: return the `ResponseDto` directly — no envelope/wrapper type. The HTTP status carries the
-  outcome.
-- Error: throw a domain exception → the global exception filter turns it into the error body.
+- Success: return the `ResDto` directly — no envelope/wrapper type. The HTTP status carries the outcome.
+- Error: throw a domain exception → the global exception handler (Spring `@RestControllerAdvice`,
+  NestJS exception filter) turns it into the error body.
 
 Don't wrap successful payloads in a `data` field. Clients read the resource straight from the body, so an
 envelope only adds a layer to unwrap on every call.
-
-## Exports Belong to the Report Service
-
-Do not build CSV or Excel endpoints here. The 리포트 service composes them from other services' APIs, so
-this service's job is to expose submission data as JSON — including the field spec needed to interpret
-it. CSV escaping and formula-injection guarding happen where the CSV is generated, not here.
