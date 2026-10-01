@@ -5,16 +5,14 @@
 For a plain service, `new` it with object-literal mocks — faster to read and write than wiring a module:
 
 ```ts
-import { beforeEach, describe, vi, type Mock } from 'vitest';
-
-describe('ReviewDispatcherService', () => {
-  let idempotencyStore: { exists: Mock; markProcessed: Mock };
-  let kafkaProducer: { send: Mock };
+describe("ReviewDispatcherService", () => {
+  let idempotencyStore: { exists: jest.Mock; markProcessed: jest.Mock };
+  let kafkaProducer: { send: jest.Mock };
   let service: ReviewDispatcherService;
 
   beforeEach(() => {
-    idempotencyStore = { exists: vi.fn(), markProcessed: vi.fn() };
-    kafkaProducer = { send: vi.fn() };
+    idempotencyStore = { exists: jest.fn(), markProcessed: jest.fn() };
+    kafkaProducer = { send: jest.fn() };
 
     service = new ReviewDispatcherService(
       idempotencyStore as unknown as IdempotencyStore,
