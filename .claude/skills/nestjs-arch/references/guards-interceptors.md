@@ -75,7 +75,8 @@ Cross-cutting concerns that wrap the handler, not per-request decisions:
 - **Exception mapping** — `catchError()` to convert a low-level error into a domain exception.
 
 **Not** for wrapping successful responses in an envelope. Controllers return the response DTO directly and
-the HTTP status carries the outcome (see the `api-design` skill), so clients have nothing to unwrap.
+the HTTP status carries the outcome — the same rule as the Spring side (see the `api-design` skill), so a
+client talking to both stacks has nothing to unwrap.
 
 ```ts
 @Injectable()
@@ -89,7 +90,7 @@ export class TimingInterceptor implements NestInterceptor {
       .handle()
       .pipe(
         tap(() =>
-          this.logger.log(`${method} ${url} 처리 완료 — ${Date.now() - startedAt}ms`),
+          this.logger.log(`${method} ${url} — ${Date.now() - startedAt}ms`),
         ),
       );
   }

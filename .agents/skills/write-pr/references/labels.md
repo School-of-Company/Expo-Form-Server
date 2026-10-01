@@ -1,49 +1,45 @@
 # GitHub Labels Reference
 
-Select **1–2 labels** from the PR-eligible list below. Do NOT use issue-only labels.
-
-Verify against the repository before relying on this file — labels drift:
+Label names differ per repo, so **read the repo's own set first** and match against it:
 
 ```bash
-gh label list --limit 30 --json name -q '.[].name'
+gh label list --limit 100
 ```
 
-Every label name contains an emoji and, in some cases, a space. Pass them **quoted and verbatim**
-(`--label "✨ Feature"`); a name that does not match exactly makes `gh pr create` fail outright.
+Select **1–2** by meaning. If nothing matches, attach none — an undefined label makes PR creation fail,
+and a wrong one is worse than no label.
 
-## PR-Eligible Labels
+## Mapping Guide
 
-| Label             | When to use                                    |
-|-------------------|------------------------------------------------|
-| `✨ Feature`      | New feature                                    |
-| `🐞 Bug`          | Bug fix                                        |
-| `♻️ Refactor`     | Refactoring with no behavior change            |
-| `📝 Docs`         | Docs-only changes (README, skill files, comments) |
-| `✅ Test`         | Test-only additions or fixes                   |
-| `⚙ Setting`       | Build config, tooling, dependencies, env setup |
-| `⚡️performance`   | Performance improvement                        |
-| `🌏 Deploy`       | Deployment / CI / release work                 |
-| `⚡️ Simple`       | Trivial change (typo, one-liner)               |
+Match by meaning, not exact string. The middle column lists names seen across these repos; yours may
+differ in wording, language, or the `name:설명` suffix style.
 
-## Issue-Only Labels (do NOT assign to a PR)
+| Change | Names to look for | Fallback |
+|---|---|---|
+| New feature, improvement, refactoring | `enhancement`, `feature`, `개선작업` | the repo's most-used PR label |
+| Bug fix | `bug`, `fix`, `버그` | — |
+| Docs only (README, comments) | `documentation`, `docs`, `문서화` | — |
+| Release prep, version bump | `release`, `릴리즈` | — |
+| Build, CI, dependencies | `chore`, `ci`, `dependencies` | — |
 
-| Label                    | Reason                        |
-|--------------------------|-------------------------------|
-| `🙋‍♂️ Question`            | Questions belong on issues    |
-| `🪡 Want`                 | Feature requests, not changes |
-| `0️⃣ Priority: Critical`  | Priority is triaged on issues |
-| `1️⃣ Priority: High`      | 〃                             |
-| `2️⃣ Priority: Medium`    | 〃                             |
-| `3️⃣ Priority: Low`       | 〃                             |
+## Off-limits Labels (do NOT assign)
+
+These are assigned by people, not by this skill. Names vary; the reason is what matters.
+
+| Label                      | Reason                                                                     |
+| Label kind | Names to look for | Reason |
+|---|---|---|
+| Review state | `waiting for review`, `검토 대기`, `needs review` | The author applies it when the PR is ready |
+| Contribution invites | `help wanted`, `good first issue`, `GFI` | Issues only |
+| Triage verdicts | `invalid`, `duplicate`, `wontfix` | Issues only |
+| Blocked | `blocked`, `차단됨`, `on hold` | Applied by a person when another PR/issue blocks this one |
 
 ## Quick Decision
 
 ```
-Bug fix?                    → 🐞 Bug
-New feature?                → ✨ Feature
-Behavior-preserving cleanup? → ♻️ Refactor
-Docs only?                  → 📝 Docs
-Tests only?                 → ✅ Test
-Config / deps / tooling?    → ⚙ Setting
-Unsure?                     → ✨ Feature
+Bug fix?                      → the repo's bug-ish label
+New feature or improvement?   → the repo's enhancement-ish label
+Docs only?                    → the repo's documentation-ish label
+Release?                      → the repo's release-ish label
+Nothing fits?                 → no label (never invent one — PR creation fails on an unknown label)
 ```
