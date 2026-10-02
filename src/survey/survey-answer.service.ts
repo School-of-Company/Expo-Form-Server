@@ -14,6 +14,7 @@ import {
   type UserClient,
 } from '../user-client/user-client.interface.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
+import { SubmitSurveyQrAnswerRequestDto } from './dto/submit-survey-qr-answer.request.dto.js';
 import { SurveyStore } from './survey.store.js';
 
 /**
@@ -92,5 +93,35 @@ export class SurveyAnswerService {
 
     await this.surveyStore.incrementTotalAnswers(survey.id);
     this.logger.log(`설문 답변 제출 완료: surveyId=${survey.id}`);
+  }
+
+  /**
+   * 종이 QR로 들어온 익명 답변을 검증해 이 서비스에 직접 저장한다. 묶을 응답자가 없어서
+   * 유저 서비스로 보내지 않는다 — "답변은 유저 서비스가 저장" 원칙의 유일한 예외다.
+   *
+   * @throws {SurveyNotFoundException} 없는 토큰일 때
+   * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙과 맞지 않을 때
+   * @throws {SurveyAnswerAlreadyExistsException} 이미 응답한 토큰일 때
+   */
+  async submitQr(
+    token: string,
+    dto: SubmitSurveyQrAnswerRequestDto,
+  ): Promise<void> {
+    const qrToken = await this.surveyStore.findQrToken(token);
+    if (!qrToken) throw new SurveyNotFoundException();
+
+    const schema = buildAnswerSchema(qrToken.survey.dynamicSurveys);
+    const result = schema.safeParse(dto.answers);
+    if (!result.success) {
+      throw new SurveyAnswerInvalidException(result.error.message);
+    }
+
+    const submitted = await this.surveyStore.submitQrAnswer(
+      token,
+      qrToken.survey.id,
+      result.data,
+    );
+    if (!submitted) throw new SurveyAnswerAlreadyExistsException();
+    this.logger.log(`QR 설문 답변 저장 완료: surveyId=${qrToken.survey.id}`);
   }
 }

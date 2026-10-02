@@ -16,6 +16,8 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
+import { IssueSurveyQrTokensRequestDto } from './dto/issue-survey-qr-tokens.request.dto.js';
+import { IssueSurveyQrTokensResponseDto } from './dto/issue-survey-qr-tokens.response.dto.js';
 import { SurveyResponseDto } from './dto/survey.response.dto.js';
 import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { SurveyService } from './survey.service.js';
@@ -44,6 +46,21 @@ export class SurveyController {
     @Query() dto: FindSurveyRequestDto,
   ): Promise<SurveyResponseDto> {
     return this.surveyService.findOne(expoId, dto);
+  }
+
+  /** 종이 QR로 들어온 응답자에게 보여 줄 설문을 조회한다. 이미 쓴 QR이면 409. */
+  @Get('qr/:token')
+  findOneByQrToken(@Param('token') token: string): Promise<SurveyResponseDto> {
+    return this.surveyService.findOneByQrToken(token);
+  }
+
+  /** 일반 참가자 설문용 종이 QR 토큰을 발급한다. */
+  @Post(':expoId/qr-tokens')
+  issueQrTokens(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Body() dto: IssueSurveyQrTokensRequestDto,
+  ): Promise<IssueSurveyQrTokensResponseDto> {
+    return this.surveyService.issueQrTokens(expoId, dto);
   }
 
   /**

@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import {
+  DataSource,
+  IsNull,
+  Repository,
+  type QueryDeepPartialEntity,
+} from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
+import { SurveyQrTokenEntity } from './entities/survey-qr-token.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
 /**
@@ -22,6 +28,8 @@ export class SurveyStore {
   constructor(
     @InjectRepository(SurveyEntity)
     private readonly surveys: Repository<SurveyEntity>,
+    @InjectRepository(SurveyQrTokenEntity)
+    private readonly qrTokens: Repository<SurveyQrTokenEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -105,8 +113,59 @@ export class SurveyStore {
     await this.surveys.increment({ id }, 'totalAnswers', 1);
   }
 
-  /** 설문을 삭제한다. 딸린 문항은 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
+  /** 설문을 삭제한다. 딸린 문항과 QR 토큰은 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
     await this.surveys.delete({ id });
+  }
+
+  async saveQrTokens(surveyId: string, tokens: string[]): Promise<void> {
+    await this.qrTokens.insert(
+      tokens.map((token) => ({ token, survey: { id: surveyId } })),
+    );
+  }
+
+  /** 토큰과 그 설문(문항 포함)을 함께 조회한다. */
+  findQrToken(token: string): Promise<SurveyQrTokenEntity | null> {
+    return this.qrTokens.findOne({
+      where: { token },
+      relations: { survey: { dynamicSurveys: true } },
+      order: { survey: DYNAMIC_SURVEY_ORDER },
+    });
+  }
+
+  /**
+   * 아직 쓰지 않은 토큰에만 답변을 기록하고 누적 응답 수를 늘린다.
+   *
+   * 미리 조회해서 확인하는 것만으로는 같은 QR로 동시에 들어온 두 제출을 막지 못한다 — 조건부
+   * UPDATE가 둘 중 하나만 통과시킨다.
+   *
+   * @returns 기록했으면 true, 이미 쓴 토큰이면 false
+   */
+  submitQrAnswer(
+    token: string,
+    surveyId: string,
+    answers: Record<string, unknown>,
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      const result = await manager.update(
+        SurveyQrTokenEntity,
+        { token, submittedAt: IsNull() },
+        {
+          // QueryDeepPartialEntity가 Record<string, unknown>을 깊게 펼치다 타입이 어긋난다.
+          // 값은 그대로 jsonb로 들어간다.
+          answers: answers as QueryDeepPartialEntity<Record<string, unknown>>,
+          submittedAt: new Date(),
+        },
+      );
+      if (!result.affected) return false;
+
+      await manager.increment(
+        SurveyEntity,
+        { id: surveyId },
+        'totalAnswers',
+        1,
+      );
+      return true;
+    });
   }
 }

@@ -4,6 +4,7 @@ import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.en
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   SurveyAlreadyExistsException,
+  SurveyAnswerAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
@@ -43,6 +44,8 @@ describe('SurveyService', () => {
     save: Mock;
     updateWithQuestions: Mock;
     deleteById: Mock;
+    saveQrTokens: Mock;
+    findQrToken: Mock;
   };
   let service: SurveyService;
 
@@ -53,6 +56,8 @@ describe('SurveyService', () => {
       save: vi.fn(),
       updateWithQuestions: vi.fn(),
       deleteById: vi.fn(),
+      saveQrTokens: vi.fn(),
+      findQrToken: vi.fn(),
     };
     service = new SurveyService(surveyStore as unknown as SurveyStore);
   });
@@ -205,6 +210,50 @@ describe('SurveyService', () => {
         '1': '만족',
         '2': '불만족',
       });
+    });
+  });
+
+  describe('issueQrTokens', () => {
+    it('일반 참가자 설문이 없으면 404', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(null);
+
+      await expect(service.issueQrTokens(expoId, { count: 3 })).rejects.toThrow(
+        SurveyNotFoundException,
+      );
+      expect(surveyStore.findByExpoAndType).toHaveBeenCalledWith(
+        expoId,
+        ParticipationType.STANDARD,
+      );
+    });
+
+    it('요청한 개수만큼 서로 다른 토큰을 저장하고 돌려준다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+
+      const { tokens } = await service.issueQrTokens(expoId, { count: 3 });
+
+      expect(new Set(tokens).size).toBe(3);
+      expect(surveyStore.saveQrTokens).toHaveBeenCalledWith('survey-1', tokens);
+    });
+  });
+
+  describe('findOneByQrToken', () => {
+    it('없는 토큰이면 404', async () => {
+      surveyStore.findQrToken.mockResolvedValue(null);
+
+      await expect(service.findOneByQrToken('qr-1')).rejects.toThrow(
+        SurveyNotFoundException,
+      );
+    });
+
+    it('이미 쓴 토큰이면 설문을 보여 주기 전에 409', async () => {
+      surveyStore.findQrToken.mockResolvedValue({
+        survey: existingSurvey,
+        submittedAt: new Date(),
+      });
+
+      await expect(service.findOneByQrToken('qr-1')).rejects.toThrow(
+        SurveyAnswerAlreadyExistsException,
+      );
     });
   });
 });

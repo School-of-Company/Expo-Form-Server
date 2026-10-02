@@ -152,3 +152,53 @@ describe('SurveyAnswerService', () => {
     ).rejects.toThrow('connection lost');
   });
 });
+
+describe('SurveyAnswerService.submitQr', () => {
+  let surveyStore: { findQrToken: Mock; submitQrAnswer: Mock };
+  let service: SurveyAnswerService;
+  const qrDto = { answers: { '1': '좋았습니다' } };
+
+  beforeEach(() => {
+    surveyStore = { findQrToken: vi.fn(), submitQrAnswer: vi.fn() };
+    surveyStore.findQrToken.mockResolvedValue({ token: 'qr-1', survey });
+    service = new SurveyAnswerService(
+      surveyStore as unknown as SurveyStore,
+      {} as never,
+    );
+  });
+
+  it('없는 토큰이면 404', async () => {
+    surveyStore.findQrToken.mockResolvedValue(null);
+
+    await expect(service.submitQr('qr-1', qrDto)).rejects.toThrow(
+      SurveyNotFoundException,
+    );
+  });
+
+  it('문항 스펙과 맞지 않으면 저장하지 않는다', async () => {
+    await expect(service.submitQr('qr-1', { answers: {} })).rejects.toThrow(
+      SurveyAnswerInvalidException,
+    );
+    expect(surveyStore.submitQrAnswer).not.toHaveBeenCalled();
+  });
+
+  it('조건부 갱신이 실패하면(이미 쓴 토큰) 409', async () => {
+    surveyStore.submitQrAnswer.mockResolvedValue(false);
+
+    await expect(service.submitQr('qr-1', qrDto)).rejects.toThrow(
+      SurveyAnswerAlreadyExistsException,
+    );
+  });
+
+  it('검증된 답변을 토큰에 기록한다', async () => {
+    surveyStore.submitQrAnswer.mockResolvedValue(true);
+
+    await service.submitQr('qr-1', qrDto);
+
+    expect(surveyStore.submitQrAnswer).toHaveBeenCalledWith(
+      'qr-1',
+      'survey-1',
+      { '1': '좋았습니다' },
+    );
+  });
+});
