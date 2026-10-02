@@ -1,18 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   SurveyAlreadyExistsException,
-  SurveyAnswerAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
-import { IssueSurveyQrTokensRequestDto } from './dto/issue-survey-qr-tokens.request.dto.js';
-import { IssueSurveyQrTokensResponseDto } from './dto/issue-survey-qr-tokens.response.dto.js';
-import { SurveyResponseDto } from './dto/survey.response.dto.js';
+import {
+  SurveyResponseDto,
+  toSurveyResponse,
+} from './dto/survey.response.dto.js';
 import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -167,48 +166,7 @@ export class SurveyService {
 
     if (!survey) throw new SurveyNotFoundException();
 
-    return this.toResponse(survey);
-  }
-
-  /**
-   * 박람회 일반 참가자 설문에 쓸 종이 QR 토큰을 발급한다. 순번처럼 예측할 수 있는 값을 쓰면
-   * 남의 QR로 대신 응답할 수 있어서, 128bit 난수를 쓴다.
-   *
-   * @throws {SurveyNotFoundException} 해당 박람회에 일반 참가자 설문이 없을 때
-   */
-  async issueQrTokens(
-    expoId: string,
-    dto: IssueSurveyQrTokensRequestDto,
-  ): Promise<IssueSurveyQrTokensResponseDto> {
-    const survey = await this.surveyStore.findByExpoAndType(
-      expoId,
-      ParticipationType.STANDARD,
-    );
-    if (!survey) throw new SurveyNotFoundException();
-
-    const tokens = Array.from({ length: dto.count }, () =>
-      randomBytes(16).toString('base64url'),
-    );
-    await this.surveyStore.saveQrTokens(survey.id, tokens);
-    this.logger.log(
-      `QR 토큰 발급 완료: surveyId=${survey.id}, ${tokens.length}개`,
-    );
-
-    return { tokens };
-  }
-
-  /**
-   * QR을 찍은 응답자에게 보여 줄 설문을 조회한다. 이미 쓴 QR은 설문을 채우기 전에 막는다.
-   *
-   * @throws {SurveyNotFoundException} 없는 토큰일 때
-   * @throws {SurveyAnswerAlreadyExistsException} 이미 응답한 토큰일 때
-   */
-  async findOneByQrToken(token: string): Promise<SurveyResponseDto> {
-    const qrToken = await this.surveyStore.findQrToken(token);
-    if (!qrToken) throw new SurveyNotFoundException();
-    if (qrToken.submittedAt) throw new SurveyAnswerAlreadyExistsException();
-
-    return this.toResponse(qrToken.survey);
+    return toSurveyResponse(survey);
   }
 
   /**
@@ -222,29 +180,5 @@ export class SurveyService {
       new DynamicSurveyEntity(),
       question satisfies DynamicSurveyFields,
     );
-  }
-
-  /**
-   * 엔티티를 응답 DTO로 변환한다. 엔티티를 그대로 내보내지 않는 이유는,
-   * 감사 컬럼(`createdAt`/`updatedAt`)이나 양방향 관계처럼 외부에 노출할 필요 없는 것들을
-   * 응답 계약에서 분리해두기 위해서다.
-   */
-  private toResponse(survey: SurveyEntity): SurveyResponseDto {
-    return {
-      id: survey.id,
-      expoId: survey.expoId,
-      title: survey.title,
-      informationText: survey.informationText,
-      participationType: survey.participationType,
-      totalAnswers: survey.totalAnswers,
-      dynamicSurveyResponseDto: survey.dynamicSurveys.map((question) => ({
-        id: question.id,
-        title: question.title,
-        formType: question.formType,
-        requiredStatus: question.requiredStatus,
-        jsonData: question.jsonData,
-        otherJson: question.otherJson,
-      })),
-    };
   }
 }
