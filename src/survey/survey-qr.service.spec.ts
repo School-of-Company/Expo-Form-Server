@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { QueryFailedError } from 'typeorm';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
@@ -7,6 +8,7 @@ import {
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
 import { SurveyQrService } from './survey-qr.service.js';
 import { SurveyStore } from './survey.store.js';
 
@@ -30,66 +32,57 @@ const survey = {
 const answerDto = { answers: { '1': '좋았습니다' } };
 
 describe('SurveyQrService', () => {
-  let surveyStore: {
-    findByExpoAndType: Mock;
-    saveQrTokens: Mock;
-    findQrToken: Mock;
-    submitQrAnswer: Mock;
-  };
+  let surveyStore: { findByExpoAndType: Mock };
+  let qrAnswerStore: { existsByToken: Mock; create: Mock };
+  let participationClient: { findEnteredToken: Mock };
   let service: SurveyQrService;
 
   beforeEach(() => {
-    surveyStore = {
-      findByExpoAndType: vi.fn(),
-      saveQrTokens: vi.fn(),
-      findQrToken: vi.fn(),
-      submitQrAnswer: vi.fn(),
+    surveyStore = { findByExpoAndType: vi.fn().mockResolvedValue(survey) };
+    qrAnswerStore = {
+      existsByToken: vi.fn().mockResolvedValue(false),
+      create: vi.fn(),
     };
-    surveyStore.findQrToken.mockResolvedValue({
-      token: 'qr-1',
-      survey,
-      submittedAt: null,
-    });
-    service = new SurveyQrService(surveyStore as unknown as SurveyStore);
+    participationClient = {
+      findEnteredToken: vi.fn().mockResolvedValue({ expoId }),
+    };
+    service = new SurveyQrService(
+      surveyStore as unknown as SurveyStore,
+      qrAnswerStore as unknown as SurveyQrAnswerStore,
+      participationClient as never,
+    );
   });
 
-  describe('issueTokens', () => {
-    it('일반 참가자 설문이 없으면 404', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(null);
+  describe('findSurvey', () => {
+    it('입장하지 않았거나 없는 토큰이면 404', async () => {
+      participationClient.findEnteredToken.mockResolvedValue(null);
 
-      await expect(service.issueTokens(expoId, { count: 3 })).rejects.toThrow(
+      await expect(service.findSurvey('qr-1')).rejects.toThrow(
         SurveyNotFoundException,
       );
+      expect(surveyStore.findByExpoAndType).not.toHaveBeenCalled();
+    });
+
+    it('참여 서비스가 알려 준 박람회의 일반 참가자 설문을 찾는다', async () => {
+      const result = await service.findSurvey('qr-1');
+
       expect(surveyStore.findByExpoAndType).toHaveBeenCalledWith(
         expoId,
         ParticipationType.STANDARD,
       );
+      expect(result.id).toBe('survey-1');
     });
 
-    it('요청한 개수만큼 서로 다른 토큰을 저장하고 돌려준다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(survey);
-
-      const { tokens } = await service.issueTokens(expoId, { count: 3 });
-
-      expect(new Set(tokens).size).toBe(3);
-      expect(surveyStore.saveQrTokens).toHaveBeenCalledWith('survey-1', tokens);
-    });
-  });
-
-  describe('findSurvey', () => {
-    it('없는 토큰이면 404', async () => {
-      surveyStore.findQrToken.mockResolvedValue(null);
+    it('그 박람회에 일반 참가자 설문이 없으면 404', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(null);
 
       await expect(service.findSurvey('qr-1')).rejects.toThrow(
         SurveyNotFoundException,
       );
     });
 
-    it('이미 쓴 토큰이면 설문을 보여 주기 전에 409', async () => {
-      surveyStore.findQrToken.mockResolvedValue({
-        survey,
-        submittedAt: new Date(),
-      });
+    it('이미 응답한 토큰이면 설문을 보여 주기 전에 409', async () => {
+      qrAnswerStore.existsByToken.mockResolvedValue(true);
 
       await expect(service.findSurvey('qr-1')).rejects.toThrow(
         SurveyAnswerAlreadyExistsException,
@@ -98,39 +91,46 @@ describe('SurveyQrService', () => {
   });
 
   describe('submit', () => {
-    it('없는 토큰이면 404', async () => {
-      surveyStore.findQrToken.mockResolvedValue(null);
+    it('입장하지 않았거나 없는 토큰이면 404', async () => {
+      participationClient.findEnteredToken.mockResolvedValue(null);
 
       await expect(service.submit('qr-1', answerDto)).rejects.toThrow(
         SurveyNotFoundException,
       );
+      expect(qrAnswerStore.create).not.toHaveBeenCalled();
     });
 
     it('문항 스펙과 맞지 않으면 저장하지 않는다', async () => {
       await expect(service.submit('qr-1', { answers: {} })).rejects.toThrow(
         SurveyAnswerInvalidException,
       );
-      expect(surveyStore.submitQrAnswer).not.toHaveBeenCalled();
+      expect(qrAnswerStore.create).not.toHaveBeenCalled();
     });
 
-    it('조건부 갱신이 실패하면(이미 쓴 토큰) 409', async () => {
-      surveyStore.submitQrAnswer.mockResolvedValue(false);
+    it('같은 토큰의 동시 제출이 유니크 위반에 걸리면 409로 변환한다', async () => {
+      qrAnswerStore.create.mockRejectedValue(
+        new QueryFailedError('INSERT', [], { code: '23505' } as never),
+      );
 
       await expect(service.submit('qr-1', answerDto)).rejects.toThrow(
         SurveyAnswerAlreadyExistsException,
       );
     });
 
-    it('검증된 답변을 토큰에 기록한다', async () => {
-      surveyStore.submitQrAnswer.mockResolvedValue(true);
+    it('유니크 위반이 아닌 오류는 그대로 전파한다', async () => {
+      qrAnswerStore.create.mockRejectedValue(new Error('connection lost'));
 
+      await expect(service.submit('qr-1', answerDto)).rejects.toThrow(
+        'connection lost',
+      );
+    });
+
+    it('검증된 답변을 토큰 키로 저장한다', async () => {
       await service.submit('qr-1', answerDto);
 
-      expect(surveyStore.submitQrAnswer).toHaveBeenCalledWith(
-        'qr-1',
-        'survey-1',
-        { '1': '좋았습니다' },
-      );
+      expect(qrAnswerStore.create).toHaveBeenCalledWith('qr-1', 'survey-1', {
+        '1': '좋았습니다',
+      });
     });
   });
 });
