@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
+    "build:clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true});fs.rmSync('tsconfig.build.tsbuildinfo',{force:true})\" && nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -20,7 +21,12 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:integration": "vitest run --config ./vitest.config.integration.ts",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "typeorm": "node --env-file-if-exists=.env ./node_modules/typeorm/cli.js",
+    "migration:generate": "pnpm build:clean && pnpm typeorm migration:generate -d dist/database/data-source.js",
+    "migration:run": "pnpm build:clean && pnpm typeorm migration:run -d dist/database/data-source.js",
+    "migration:revert": "pnpm build:clean && pnpm typeorm migration:revert -d dist/database/data-source.js",
+    "migration:show": "pnpm build:clean && pnpm typeorm migration:show -d dist/database/data-source.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.5",
