@@ -60,6 +60,27 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Database migrations
+
+개발에서는 엔티티를 보고 스키마를 자동으로 맞추지만(`synchronize`), **운영에서는 끄고** `src/database/migrations`의 마이그레이션으로만 바꾼다. 컬럼 이름을 바꾸면 TypeORM이 "삭제 후 추가"로 처리해서 운영 데이터가 사라질 수 있기 때문이다.
+
+```bash
+# 운영/클린 DB에 마이그레이션 적용 (배포 단계에서 한 번)
+$ pnpm migration:run
+
+# 적용 상태 확인 / 마지막 마이그레이션 되돌리기
+$ pnpm migration:show
+$ pnpm migration:revert
+
+# 엔티티를 바꾼 뒤 마이그레이션 생성
+$ pnpm migration:generate src/database/migrations/<이름>
+```
+
+- 명령은 `DATABASE_URL`(없으면 `.env`)의 DB를 대상으로 하고, 실행 전에 `dist`를 비우고 다시 빌드한다. 컴파일된 엔티티를 읽기 때문에 오래된 빌드 결과가 남아 있으면 없는 엔티티까지 스키마에 들어간다.
+- `migration:generate`는 **대상 DB의 현재 스키마와 엔티티의 차이**를 만든다. `synchronize`로 자동 갱신되는 개발 DB로는 차이가 없으니, `pnpm migration:run`으로만 만든 DB를 대상으로 해야 한다.
+- 생성된 파일은 반드시 읽어 본다. 컬럼 이름 변경은 삭제와 추가로 만들어지므로 `RENAME COLUMN`으로 직접 고친다.
+- 앱 시작 시 자동 실행(`migrationsRun`)은 하지 않는다. 인스턴스가 여러 개 뜰 때 서로 부딪히지 않도록 배포 단계에서 한 번만 실행한다.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
