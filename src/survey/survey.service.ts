@@ -8,7 +8,10 @@ import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
-import { SurveyResponseDto } from './dto/survey.response.dto.js';
+import {
+  SurveyResponseDto,
+  toSurveyResponse,
+} from './dto/survey.response.dto.js';
 import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -163,7 +166,7 @@ export class SurveyService {
 
     if (!survey) throw new SurveyNotFoundException();
 
-    return this.toResponse(survey);
+    return toSurveyResponse(survey);
   }
 
   /**
@@ -177,29 +180,5 @@ export class SurveyService {
       new DynamicSurveyEntity(),
       question satisfies DynamicSurveyFields,
     );
-  }
-
-  /**
-   * 엔티티를 응답 DTO로 변환한다. 엔티티를 그대로 내보내지 않는 이유는,
-   * 감사 컬럼(`createdAt`/`updatedAt`)이나 양방향 관계처럼 외부에 노출할 필요 없는 것들을
-   * 응답 계약에서 분리해두기 위해서다.
-   */
-  private toResponse(survey: SurveyEntity): SurveyResponseDto {
-    return {
-      id: survey.id,
-      expoId: survey.expoId,
-      title: survey.title,
-      informationText: survey.informationText,
-      participationType: survey.participationType,
-      totalAnswers: survey.totalAnswers,
-      dynamicSurveyResponseDto: survey.dynamicSurveys.map((question) => ({
-        id: question.id,
-        title: question.title,
-        formType: question.formType,
-        requiredStatus: question.requiredStatus,
-        jsonData: question.jsonData,
-        otherJson: question.otherJson,
-      })),
-    };
   }
 }

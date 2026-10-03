@@ -1,29 +1,36 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ParticipationClientModule } from '../participation-client/participation-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerController } from './survey-answer.controller.js';
 import { SurveyAnswerRelayService } from './survey-answer-relay.service.js';
 import { SurveyAnswerResultConsumer } from './survey-answer-result.consumer.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
+import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
+import { SurveyQrController } from './survey-qr.controller.js';
+import { SurveyQrService } from './survey-qr.service.js';
 import { SurveyController } from './survey.controller.js';
 import { SurveyService } from './survey.service.js';
 import { SurveyStore } from './survey.store.js';
 
-/** survey 도메인(설문 정의 + 문항 + 답변 제출) 모듈. */
+/** survey 도메인(설문 정의 + 문항 + 답변 제출 + 현장 QR 응답) 모듈. */
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       SurveyEntity,
       DynamicSurveyEntity,
       SurveyAnswerSubmissionEntity,
+      SurveyQrAnswerEntity,
     ]),
     UserClientModule,
+    ParticipationClientModule,
   ],
-  controllers: [SurveyController, SurveyAnswerController],
+  controllers: [SurveyController, SurveyAnswerController, SurveyQrController],
   providers: [
     SurveyService,
     SurveyStore,
@@ -31,6 +38,8 @@ import { SurveyStore } from './survey.store.js';
     SurveyAnswerSubmissionStore,
     SurveyAnswerRelayService,
     SurveyAnswerResultConsumer,
+    SurveyQrService,
+    SurveyQrAnswerStore,
   ],
 })
 export class SurveyModule {}
