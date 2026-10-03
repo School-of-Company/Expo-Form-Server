@@ -95,16 +95,6 @@ export class SurveyStore {
     });
   }
 
-  /**
-   * 누적 응답 수를 1 증가시킨다.
-   *
-   * 조회해온 값에 1을 더해 `save`하는 대신 DB의 `increment()`를 쓴다 — 동시에 여러 응답이
-   * 들어와도 각자 자기 증가분만 반영되고, 서로의 증가를 덮어쓰지 않는다.
-   */
-  async incrementTotalAnswers(id: string): Promise<void> {
-    await this.surveys.increment({ id }, 'totalAnswers', 1);
-  }
-
   /** 설문을 삭제한다. 딸린 문항은 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
     await this.surveys.delete({ id });

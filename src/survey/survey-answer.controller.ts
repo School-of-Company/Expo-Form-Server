@@ -18,10 +18,11 @@ export class SurveyAnswerController {
 
   /**
    * 일반 참가자 설문에 답변을 제출한다. 전화번호로 응답자를 확인하고, 문항 스펙으로
-   * 답변을 검증한 뒤 유저 서비스에 저장을 위임한다.
+   * 답변을 검증한 뒤 접수 기록을 남긴다. 실제 저장은 비동기로 처리되므로 202로 응답한다 —
+   * 이 시점엔 아직 유저 서비스에 저장되지 않았을 수 있다.
    */
   @Post('standard/:expoId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.ACCEPTED)
   submitStandard(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: SubmitSurveyAnswerRequestDto,
@@ -33,9 +34,9 @@ export class SurveyAnswerController {
     );
   }
 
-  /** 교원연수자 설문에 답변을 제출한다. 검증·위임 과정은 일반 참가자와 같다. */
+  /** 교원연수자 설문에 답변을 제출한다. 검증·접수 과정은 일반 참가자와 같다. */
   @Post('trainee/:expoId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.ACCEPTED)
   submitTrainee(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: SubmitSurveyAnswerRequestDto,
