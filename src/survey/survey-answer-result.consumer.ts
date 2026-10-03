@@ -10,7 +10,6 @@ import { Consumer, Kafka, type KafkaMessage } from 'kafkajs';
 import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
-import { SurveyStore } from './survey.store.js';
 
 interface SurveyAnswerResultEvent {
   eventId: string;
@@ -21,9 +20,9 @@ interface SurveyAnswerResultEvent {
 /**
  * 유저 서비스가 설문 답변을 처리한 결과(`STORED`/`REJECTED`)를 받아 접수 기록 상태를 갱신한다.
  *
- * 실제 상태 갱신은 {@link SurveyAnswerSubmissionStore.markFinal}이 `PUBLISHED`인 row만
- * 조건부로 갱신하므로, 늦게 도착했거나 중복으로 도착한 이벤트는 자동으로 무시된다 —
- * 이 클래스는 그 가드를 믿고 결과를 그대로 반영하기만 한다.
+ * 실제 상태 갱신은 {@link SurveyAnswerSubmissionStore.markFinal}이 종결되지 않은 row만
+ * 조건부로 갱신하고, `REJECTED`면 누적 응답 수 보정까지 같은 트랜잭션에서 처리한다 —
+ * 늦게·중복으로 도착한 이벤트는 자동으로 무시되므로, 이 클래스는 결과를 넘기기만 한다.
  */
 @Injectable()
 export class SurveyAnswerResultConsumer
@@ -36,7 +35,6 @@ export class SurveyAnswerResultConsumer
     @Inject(KAFKA_CLIENT) kafka: Kafka,
     private readonly config: ConfigService,
     private readonly submissionStore: SurveyAnswerSubmissionStore,
-    private readonly surveyStore: SurveyStore,
   ) {
     this.consumer = kafka.consumer({
       groupId: config.get<string>(
@@ -68,36 +66,20 @@ export class SurveyAnswerResultConsumer
       message.value.toString(),
     ) as SurveyAnswerResultEvent;
 
-    if (event.status === 'STORED') {
-      await this.submissionStore.markFinal(
-        event.eventId,
-        SurveyAnswerSubmissionStatus.STORED,
-        null,
+    if (event.status !== 'STORED' && event.status !== 'REJECTED') {
+      this.logger.warn(
+        `알 수 없는 결과 상태 무시: eventId=${event.eventId}, status=${String(event.status)}`,
       );
       return;
     }
 
-    if (event.status === 'REJECTED') {
-      const applied = await this.submissionStore.markFinal(
-        event.eventId,
-        SurveyAnswerSubmissionStatus.REJECTED,
-        event.reason ?? null,
-      );
-      // 접수 시점에 미리 늘려둔 누적 응답 수를 되돌린다. 이미 종결된 row였다면(늦게 도착한
-      // 중복 이벤트) markFinal이 false를 돌려주므로, 중복으로 깎지 않는다.
-      if (applied) {
-        const submission = await this.submissionStore.findByEventId(
-          event.eventId,
-        );
-        if (submission) {
-          await this.surveyStore.decrementTotalAnswers(submission.surveyId);
-        }
-      }
-      return;
-    }
-
-    this.logger.warn(
-      `알 수 없는 결과 상태 무시: eventId=${event.eventId}, status=${String(event.status)}`,
+    const applied = await this.submissionStore.markFinal(
+      event.eventId,
+      SurveyAnswerSubmissionStatus[event.status],
+      event.status === 'REJECTED' ? (event.reason ?? null) : null,
     );
+    if (!applied) {
+      this.logger.log(`이미 종결된 접수라 결과 무시: eventId=${event.eventId}`);
+    }
   }
 }

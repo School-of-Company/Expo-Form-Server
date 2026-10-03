@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { QueryFailedError } from 'typeorm';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
@@ -42,17 +43,14 @@ const submitDto = {
 } satisfies SubmitSurveyAnswerRequestDto;
 
 describe('SurveyAnswerService', () => {
-  let surveyStore: { findByExpoAndType: Mock; incrementTotalAnswers: Mock };
-  let submissionStore: { findActiveByKey: Mock; save: Mock };
+  let surveyStore: { findByExpoAndType: Mock };
+  let submissionStore: { findActiveByKey: Mock; createReceived: Mock };
   let userClient: { findByPhoneNumber: Mock };
   let service: SurveyAnswerService;
 
   beforeEach(() => {
-    surveyStore = {
-      findByExpoAndType: vi.fn(),
-      incrementTotalAnswers: vi.fn(),
-    };
-    submissionStore = { findActiveByKey: vi.fn(), save: vi.fn() };
+    surveyStore = { findByExpoAndType: vi.fn() };
+    submissionStore = { findActiveByKey: vi.fn(), createReceived: vi.fn() };
     userClient = { findByPhoneNumber: vi.fn() };
     submissionStore.findActiveByKey.mockResolvedValue(null);
     service = new SurveyAnswerService(
@@ -90,7 +88,7 @@ describe('SurveyAnswerService', () => {
     await expect(
       service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
     ).rejects.toThrow(ParticipantNotFoundException);
-    expect(submissionStore.save).not.toHaveBeenCalled();
+    expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
 
   it('참가자의 참여자군이 설문 대상과 다르면 예외를 던진다', async () => {
@@ -115,7 +113,7 @@ describe('SurveyAnswerService', () => {
         answers: {},
       }),
     ).rejects.toThrow(SurveyAnswerInvalidException);
-    expect(submissionStore.save).not.toHaveBeenCalled();
+    expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
 
   it('같은 응답자의 활성 제출 기록이 있으면 409로 변환한다', async () => {
@@ -128,17 +126,28 @@ describe('SurveyAnswerService', () => {
     await expect(
       service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
     ).rejects.toThrow(SurveyAnswerAlreadyExistsException);
-    expect(submissionStore.save).not.toHaveBeenCalled();
-    expect(surveyStore.incrementTotalAnswers).not.toHaveBeenCalled();
+    expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
 
-  it('검증을 통과하면 접수 기록을 RECEIVED로 저장하고 누적 응답 수를 늘린다', async () => {
+  it('동시 요청이 사전 조회를 함께 통과해 유니크 제약에 걸리면 409로 변환한다', async () => {
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
+    userClient.findByPhoneNumber.mockResolvedValue(participant);
+    submissionStore.createReceived.mockRejectedValue(
+      new QueryFailedError('INSERT', [], { code: '23505' } as never),
+    );
+
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(SurveyAnswerAlreadyExistsException);
+  });
+
+  it('검증을 통과하면 접수 기록을 RECEIVED로 저장한다', async () => {
     surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findByPhoneNumber.mockResolvedValue(participant);
 
     await service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto);
 
-    const saved = submissionStore.save.mock
+    const saved = submissionStore.createReceived.mock
       .calls[0][0] as SurveyAnswerSubmissionEntity;
     expect(saved.surveyId).toBe('survey-1');
     expect(saved.expoId).toBe(survey.expoId);
@@ -150,6 +159,5 @@ describe('SurveyAnswerService', () => {
       answers: { '1': '좋았습니다' },
       personalInformationStatus: true,
     });
-    expect(surveyStore.incrementTotalAnswers).toHaveBeenCalledWith('survey-1');
   });
 });

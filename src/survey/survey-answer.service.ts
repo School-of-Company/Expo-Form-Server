@@ -7,6 +7,7 @@ import {
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { normalizePhoneNumber } from '../common/phone-number.util.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
 import {
@@ -113,8 +114,16 @@ export class SurveyAnswerService {
       },
     } satisfies SubmissionFields);
 
-    await this.submissionStore.save(submission);
-    await this.surveyStore.incrementTotalAnswers(survey.id);
+    // 위 findActiveByKey와 이 저장 사이에 같은 응답자의 다른 요청이 끼어들면 둘 다 통과한다.
+    // 그럴 땐 활성 제출 유니크 제약이 한쪽을 막는데, 그 위반을 그대로 두면 409가 아니라 500이
+    // 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
+    try {
+      await this.submissionStore.createReceived(submission);
+    } catch (err) {
+      if (isUniqueViolation(err))
+        throw new SurveyAnswerAlreadyExistsException();
+      throw err;
+    }
     this.logger.log(
       `설문 답변 접수 완료: surveyId=${survey.id}, eventId=${submission.eventId}`,
     );
