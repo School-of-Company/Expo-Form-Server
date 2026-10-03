@@ -8,6 +8,7 @@ import {
 } from '../../json/field-spec.schema.js';
 import { ApplicationType } from '../entities/application-type.enum.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
+import { dateTimeResponseSchema } from '../../common/zod/date-time.schema.js';
 
 /**
  * 폼 조회 응답. 신청 페이지를 그리는 데 필요한 것(폼 메타 + 필드 목록 + 각 필드의 스펙)을 한 번에 담는다.
@@ -20,8 +21,8 @@ export const formResponseSchema = z.object({
   informationText: z.string(),
   participantType: z.enum(ParticipationType),
   applicationType: z.enum(ApplicationType),
-  startDate: z.date(),
-  endDate: z.date(),
+  startDate: dateTimeResponseSchema(),
+  endDate: dateTimeResponseSchema(),
   dynamicForm: z.array(
     z.object({
       id: z.number().int(),
