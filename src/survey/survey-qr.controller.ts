@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -34,6 +36,7 @@ export class SurveyQrController {
 
   /** QR 토큰으로 익명 답변을 제출한다. 토큰당 1회만 가능하다. */
   @Post('answer/qr/:token')
+  @HttpCode(HttpStatus.NO_CONTENT)
   submit(
     @Param('token') token: string,
     @Body() dto: SubmitSurveyQrAnswerRequestDto,
