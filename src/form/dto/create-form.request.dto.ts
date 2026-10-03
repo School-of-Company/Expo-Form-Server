@@ -8,6 +8,7 @@ import {
 } from '../../json/field-spec.schema.js';
 import { ApplicationType } from '../entities/application-type.enum.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
+import { dateTimeRequestSchema } from '../../common/zod/date-time.schema.js';
 
 /**
  * 폼에 들어갈 입력 필드 하나.
@@ -27,7 +28,7 @@ export const dynamicFormFieldSchema = z.object({
  *
  * `expoId`는 경로 파라미터로 받으므로 바디에는 없다 — 박람회 서비스 소유 값이라 컨트롤러에서
  * 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
- * 날짜는 JSON으로 문자열이 실려오므로 `z.coerce.date()`로 `Date`로 바꿔 받는다.
+ * 날짜는 JSON으로 문자열이 실려오므로 `Date`로 바꿔 받는다(`dateTimeRequestSchema`).
  *
  * 수정 요청도 이 구성을 재사용한다.
  *
@@ -39,8 +40,8 @@ export const createFormFieldsSchema = z.object({
   informationText: z.string().max(500),
   participantType: z.enum(ParticipationType),
   applicationType: z.enum(ApplicationType),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
+  startDate: dateTimeRequestSchema(),
+  endDate: dateTimeRequestSchema(),
   dynamicForm: z.array(dynamicFormFieldSchema),
 });
 
