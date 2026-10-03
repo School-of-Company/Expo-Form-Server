@@ -7,6 +7,8 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import { ZodValidationPipe } from 'nestjs-zod';
+import { qrTokenSchema } from './dto/qr-token.schema.js';
 import { SubmitSurveyQrAnswerRequestDto } from './dto/submit-survey-qr-answer.request.dto.js';
 import { SurveyResponseDto } from './dto/survey.response.dto.js';
 import { SurveyQrService } from './survey-qr.service.js';
@@ -18,7 +20,9 @@ export class SurveyQrController {
 
   /** QR로 들어온 응답자에게 보여 줄 설문을 조회한다. 이미 쓴 QR이면 409. */
   @Get('qr/:token')
-  findSurvey(@Param('token') token: string): Promise<SurveyResponseDto> {
+  findSurvey(
+    @Param('token', new ZodValidationPipe(qrTokenSchema)) token: string,
+  ): Promise<SurveyResponseDto> {
     return this.surveyQrService.findSurvey(token);
   }
 
@@ -26,7 +30,7 @@ export class SurveyQrController {
   @Post('answer/qr/:token')
   @HttpCode(HttpStatus.NO_CONTENT)
   submit(
-    @Param('token') token: string,
+    @Param('token', new ZodValidationPipe(qrTokenSchema)) token: string,
     @Body() dto: SubmitSurveyQrAnswerRequestDto,
   ): Promise<void> {
     return this.surveyQrService.submit(token, dto);

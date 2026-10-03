@@ -33,14 +33,14 @@ const answerDto = { answers: { '1': '좋았습니다' } };
 
 describe('SurveyQrService', () => {
   let surveyStore: { findByExpoAndType: Mock };
-  let qrAnswerStore: { existsByToken: Mock; create: Mock };
+  let qrAnswerStore: { existsByKey: Mock; create: Mock };
   let participationClient: { findEnteredToken: Mock };
   let service: SurveyQrService;
 
   beforeEach(() => {
     surveyStore = { findByExpoAndType: vi.fn().mockResolvedValue(survey) };
     qrAnswerStore = {
-      existsByToken: vi.fn().mockResolvedValue(false),
+      existsByKey: vi.fn().mockResolvedValue(false),
       create: vi.fn(),
     };
     participationClient = {
@@ -82,10 +82,14 @@ describe('SurveyQrService', () => {
     });
 
     it('이미 응답한 토큰이면 설문을 보여 주기 전에 409', async () => {
-      qrAnswerStore.existsByToken.mockResolvedValue(true);
+      qrAnswerStore.existsByKey.mockResolvedValue(true);
 
       await expect(service.findSurvey('qr-1')).rejects.toThrow(
         SurveyAnswerAlreadyExistsException,
+      );
+      expect(qrAnswerStore.existsByKey).toHaveBeenCalledWith(
+        'survey-1',
+        'qr-1',
       );
     });
   });
@@ -128,7 +132,7 @@ describe('SurveyQrService', () => {
     it('검증된 답변을 토큰 키로 저장한다', async () => {
       await service.submit('qr-1', answerDto);
 
-      expect(qrAnswerStore.create).toHaveBeenCalledWith('qr-1', 'survey-1', {
+      expect(qrAnswerStore.create).toHaveBeenCalledWith('survey-1', 'qr-1', {
         '1': '좋았습니다',
       });
     });

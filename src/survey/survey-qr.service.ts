@@ -47,7 +47,7 @@ export class SurveyQrService {
    */
   async findSurvey(token: string): Promise<SurveyResponseDto> {
     const survey = await this.findSurveyByEnteredToken(token);
-    if (await this.qrAnswerStore.existsByToken(token)) {
+    if (await this.qrAnswerStore.existsByKey(survey.id, token)) {
       throw new SurveyAnswerAlreadyExistsException();
     }
 
@@ -76,7 +76,7 @@ export class SurveyQrService {
     }
 
     try {
-      await this.qrAnswerStore.create(token, survey.id, result.data);
+      await this.qrAnswerStore.create(survey.id, token, result.data);
     } catch (err) {
       if (isUniqueViolation(err))
         throw new SurveyAnswerAlreadyExistsException();
