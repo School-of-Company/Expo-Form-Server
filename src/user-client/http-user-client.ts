@@ -51,6 +51,8 @@ export class HttpUserClient implements UserClient {
       '/internal/participants/resolve',
       input,
       participantLookupResponseSchema,
+      // 같은 번호가 다른 표기로 여러 번 저장돼 있어 응답자를 특정할 수 없다는 뜻이다. 재시도로는 풀리지 않는다.
+      { conflict: () => new ParticipantAmbiguousException() },
     );
   }
 
@@ -70,12 +72,14 @@ export class HttpUserClient implements UserClient {
 
   /**
    * 내부 API를 호출한다. 404는 null이고, 그 외 실패는 모두 서비스 장애로 바꿔 던진다 —
-   * 장애를 "없음"으로 돌려보내면 호출부가 잘못된 결론을 내린다.
+   * 장애를 "없음"으로 돌려보내면 호출부가 잘못된 결론을 내린다. 409에 따로 뜻이 있는 API는
+   * `conflict`로 던질 예외를 정한다.
    */
   private async post<T>(
     path: string,
     body: unknown,
     schema: z.ZodType<T>,
+    { conflict }: { conflict?: () => Error } = {},
   ): Promise<T | null> {
     const url = `${this.options.baseUrl}${path}`;
 
@@ -84,9 +88,12 @@ export class HttpUserClient implements UserClient {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
       });
     } catch (error) {
-      // 같은 번호가 다른 표기로 여러 번 저장돼 있어 응답자를 특정할 수 없다는 뜻이다. 재시도로는 풀리지 않는다.
-      if (error instanceof ExternalServiceError && error.status === 409) {
-        throw new ParticipantAmbiguousException();
+      if (
+        conflict !== undefined &&
+        error instanceof ExternalServiceError &&
+        error.status === 409
+      ) {
+        throw conflict();
       }
 
       // 전화번호와 토큰이 실려 있는 요청 내용은 남기지 않는다. URL과 원인만 기록한다.

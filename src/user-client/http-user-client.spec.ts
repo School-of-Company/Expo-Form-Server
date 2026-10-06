@@ -145,6 +145,14 @@ describe('HttpUserClient', () => {
       await expect(client.findSurveyAnswerResult(eventId)).resolves.toBeNull();
     });
 
+    it('409는 응답자 특정 불가가 아니라 서비스 장애로 던진다', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(409));
+
+      await expect(client.findSurveyAnswerResult(eventId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+    });
+
     it('알 수 없는 상태값은 서비스 장애로 던진다', async () => {
       fetchMock.mockResolvedValue(jsonResponse(200, { status: 'PENDING' }));
 
