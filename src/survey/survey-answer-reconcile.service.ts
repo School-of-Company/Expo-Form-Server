@@ -33,6 +33,8 @@ export type ReconcileSummary = {
   truncated: boolean;
   /** 이전 점검이 아직 끝나지 않아 이번 점검을 건너뛰었는지. */
   skipped: boolean;
+  /** 점검이 꺼져 있어(`SURVEY_ANSWER_RECONCILE_ENABLED`) 아무것도 하지 않았는지. */
+  disabled: boolean;
 };
 
 const emptySummary = (): ReconcileSummary => ({
@@ -42,6 +44,7 @@ const emptySummary = (): ReconcileSummary => ({
   interrupted: false,
   truncated: false,
   skipped: false,
+  disabled: false,
 });
 
 /**
@@ -57,11 +60,22 @@ const emptySummary = (): ReconcileSummary => ({
  *   판단한다(README의 복구 절차).
  * - 유저 서비스가 응답하지 않으면 그 자리에서 점검을 멈춘다. 장애 중에 건마다 타임아웃을 기다리면
  *   점검 하나가 다음 주기를 넘길 수 있다.
+ * - 한 번에 점검하는 상한에 걸리거나 장애로 멈추면, 다음 점검은 마지막으로 확인한 기록 다음부터
+ *   이어서 본다. 끝까지 훑으면 다음 점검은 처음부터 다시 본다. 이 위치는 인스턴스 메모리에만 있어서
+ *   재시작하면 처음부터이고, 인스턴스가 여러 개면 각자 따로 기억한다.
+ * - 알림이 필요한 결과는 Discord와 별개로 항상 오류 로그로도 남긴다. 웹훅이 설정되지 않으면 Dicoshot은
+ *   보내지 않고도 성공으로 돌아오기 때문이다.
+ *
+ * 유저 서비스의 처리 결과 조회 API(Expo-User-Server#11)가 배포되기 전에는 아직 없는 경로의 404가
+ * "처리한 적 없음"으로 읽혀 거짓 알림이 나간다. 그래서 `SURVEY_ANSWER_RECONCILE_ENABLED=true`일 때만
+ * 동작한다.
  */
 @Injectable()
 export class SurveyAnswerReconcileService {
   private readonly logger = new Logger(SurveyAnswerReconcileService.name);
   private running = false;
+  /** 다음 점검을 시작할 위치(이 id 다음부터). 끝까지 훑었으면 undefined라 처음부터 본다. */
+  private resumeAfterId: string | undefined;
 
   constructor(
     private readonly config: ConfigService,
@@ -73,6 +87,13 @@ export class SurveyAnswerReconcileService {
   /** 재발행 상한(기본 5회 × 5분)을 다 쓴 기록이 대상이라 매시간이면 충분하다. */
   @Cron(CronExpression.EVERY_HOUR)
   async reconcile(): Promise<ReconcileSummary> {
+    if (this.config.get<string>('SURVEY_ANSWER_RECONCILE_ENABLED') !== 'true') {
+      this.logger.debug(
+        '정합성 점검이 꺼져 있습니다(SURVEY_ANSWER_RECONCILE_ENABLED).',
+      );
+      return { ...emptySummary(), disabled: true };
+    }
+
     // 같은 인스턴스에서 이전 점검이 아직 돌고 있으면 겹쳐 돌지 않는다.
     if (this.running) {
       this.logger.warn(
@@ -90,6 +111,7 @@ export class SurveyAnswerReconcileService {
         summary.interrupted ||
         summary.truncated
       ) {
+        this.logAlert(summary);
         await this.alert(summary);
       }
 
@@ -105,7 +127,9 @@ export class SurveyAnswerReconcileService {
     const staleBefore = new Date(
       Date.now() - this.readNumber('SURVEY_ANSWER_STALE_MS', 5 * 60 * 1000),
     );
-    let afterId: string | undefined;
+    let afterId = this.resumeAfterId;
+    /** 이번 점검에서 결과까지 확인한 마지막 기록. 멈추면 다음 점검이 여기 다음부터 이어 본다. */
+    let lastCheckedId: string | undefined;
 
     while (summary.checked < MAX_CHECKS_PER_RUN) {
       const limit = Math.min(PAGE_SIZE, MAX_CHECKS_PER_RUN - summary.checked);
@@ -118,14 +142,18 @@ export class SurveyAnswerReconcileService {
         afterId,
       });
 
-      for (const { eventId } of page) {
+      for (const { id, eventId } of page) {
         // 유저 서비스에 한꺼번에 몰리지 않도록 한 건씩 묻고, 장애면 바로 멈춘다.
         // eslint-disable-next-line no-await-in-loop
         const result = await this.findResult(eventId);
         if (result === 'unavailable') {
           summary.interrupted = true;
+          // 이번에 하나도 못 봤으면 원래 위치를 그대로 둔다.
+          this.resumeAfterId = lastCheckedId ?? this.resumeAfterId;
           return summary;
         }
+
+        lastCheckedId = id;
 
         summary.checked++;
         if (result === null) {
@@ -140,6 +168,8 @@ export class SurveyAnswerReconcileService {
       }
 
       if (page.length < limit) {
+        // 끝까지 훑었다. 다음 점검은 처음부터 다시 본다.
+        this.resumeAfterId = undefined;
         return summary;
       }
 
@@ -147,6 +177,7 @@ export class SurveyAnswerReconcileService {
     }
 
     summary.truncated = true;
+    this.resumeAfterId = lastCheckedId;
     return summary;
   }
 
@@ -191,9 +222,50 @@ export class SurveyAnswerReconcileService {
     );
   }
 
-  private async alert(summary: ReconcileSummary): Promise<void> {
+  /**
+   * 알림이 필요한 결과를 오류 로그로 남긴다. Discord 전송 여부와 상관없이 항상 남겨서, 웹훅이 없거나
+   * 전송이 실패해도 결과가 사라지지 않게 한다.
+   */
+  private logAlert(summary: ReconcileSummary): void {
+    const { shown, hidden } = this.alertEventIds(summary);
+    const webhookConfigured = this.isWebhookConfigured();
+
+    this.logger.error(
+      [
+        `설문 답변 접수 확인 필요: 미처리 ${summary.unprocessedEventIds.length}건, 확인 ${summary.checked}건`,
+        shown.length > 0
+          ? `미처리 eventId: ${shown.join(', ')}${hidden > 0 ? ` 외 ${hidden}건` : ''}`
+          : undefined,
+        summary.interrupted ? '유저 서비스 응답 없음으로 중단' : undefined,
+        summary.truncated
+          ? `상한 ${MAX_CHECKS_PER_RUN}건 도달 — 다음 점검에서 이어서 확인`
+          : undefined,
+        webhookConfigured ? undefined : 'Discord 웹훅 미설정 — 로그로만 알림',
+      ]
+        .filter((part) => part !== undefined)
+        .join(' / '),
+    );
+  }
+
+  private alertEventIds(summary: ReconcileSummary): {
+    shown: string[];
+    hidden: number;
+  } {
     const shown = summary.unprocessedEventIds.slice(0, ALERT_EVENT_ID_LIMIT);
-    const hidden = summary.unprocessedEventIds.length - shown.length;
+    return { shown, hidden: summary.unprocessedEventIds.length - shown.length };
+  }
+
+  private isWebhookConfigured(): boolean {
+    return (this.config.get<string>('DISCORD_WEBHOOK_URL') ?? '') !== '';
+  }
+
+  private async alert(summary: ReconcileSummary): Promise<void> {
+    // 웹훅이 없으면 Dicoshot은 보내지 않고도 성공으로 돌아온다. 오류 로그로 이미 남겼으니 부르지 않는다.
+    if (!this.isWebhookConfigured()) {
+      return;
+    }
+
+    const { shown, hidden } = this.alertEventIds(summary);
     const notes = [
       summary.interrupted
         ? '유저 서비스가 응답하지 않아 점검을 중단했습니다. 장애가 풀리면 다음 점검에서 이어서 봅니다.'
@@ -203,7 +275,7 @@ export class SurveyAnswerReconcileService {
         : undefined,
     ].filter((note) => note !== undefined);
 
-    await this.dicoshot.sendCustom({
+    const delivered = await this.dicoshot.sendCustom({
       title: '설문 답변 접수 확인 필요',
       description: [
         '재발행 상한을 넘긴 설문 답변 접수 기록이 있습니다. 미처리 건은 README의 "설문 답변 접수 복구" 절차로 다시 보낼지 판단하세요.',
@@ -232,5 +304,10 @@ export class SurveyAnswerReconcileService {
           : []),
       ],
     });
+    if (!delivered) {
+      this.logger.error(
+        '설문 답변 접수 확인 알림을 Discord로 보내지 못했습니다. 위 오류 로그를 확인하세요.',
+      );
+    }
   }
 }
