@@ -60,7 +60,9 @@ export class SurveyAnswerResultConsumer
   }
 
   private async handle(message: KafkaMessage): Promise<void> {
-    if (!message.value) return;
+    if (!message.value) {
+      return;
+    }
 
     const event = JSON.parse(
       message.value.toString(),

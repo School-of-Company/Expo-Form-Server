@@ -49,7 +49,7 @@ describe('SurveyQrService', () => {
     service = new SurveyQrService(
       surveyStore as unknown as SurveyStore,
       qrAnswerStore as unknown as SurveyQrAnswerStore,
-      participationClient as never,
+      participationClient,
     );
   });
 

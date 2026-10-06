@@ -1,5 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   ParticipantNotFoundException,
@@ -69,7 +69,9 @@ export class SurveyAnswerService {
       expoId,
       participationType,
     );
-    if (!survey) throw new SurveyNotFoundException();
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
 
     const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
 
@@ -79,10 +81,7 @@ export class SurveyAnswerService {
     );
     // 등록되지 않은 경우와 참여자군이 안 맞는 경우를 같은 예외로 묶는다 — 둘을 구분해서
     // 알려주면 그 전화번호의 등록 여부 자체가 노출된다.
-    if (
-      !participant ||
-      participant.participationType !== survey.participationType
-    ) {
+    if (participant?.participationType !== survey.participationType) {
       throw new ParticipantNotFoundException();
     }
 
@@ -96,7 +95,9 @@ export class SurveyAnswerService {
       survey.id,
       phoneNumber,
     );
-    if (existing) throw new SurveyAnswerAlreadyExistsException();
+    if (existing) {
+      throw new SurveyAnswerAlreadyExistsException();
+    }
 
     const submission = Object.assign(new SurveyAnswerSubmissionEntity(), {
       surveyId: survey.id,
@@ -119,11 +120,14 @@ export class SurveyAnswerService {
     // 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
     try {
       await this.submissionStore.createReceived(submission);
-    } catch (err) {
-      if (isUniqueViolation(err))
+    } catch (error) {
+      if (isUniqueViolation(error)) {
         throw new SurveyAnswerAlreadyExistsException();
-      throw err;
+      }
+
+      throw error;
     }
+
     this.logger.log(
       `설문 답변 접수 완료: surveyId=${survey.id}, eventId=${submission.eventId}`,
     );

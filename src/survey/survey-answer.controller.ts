@@ -38,7 +38,7 @@ export class SurveyAnswerController {
   @ApiErrorResponse(409, '이미 제출한 응답자 (SURVEY_ANSWER_ALREADY_EXISTS)')
   @Post('standard/:expoId')
   @HttpCode(HttpStatus.ACCEPTED)
-  submitStandard(
+  async submitStandard(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {
@@ -63,7 +63,7 @@ export class SurveyAnswerController {
   @ApiErrorResponse(409, '이미 제출한 응답자 (SURVEY_ANSWER_ALREADY_EXISTS)')
   @Post('trainee/:expoId')
   @HttpCode(HttpStatus.ACCEPTED)
-  submitTrainee(
+  async submitTrainee(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {

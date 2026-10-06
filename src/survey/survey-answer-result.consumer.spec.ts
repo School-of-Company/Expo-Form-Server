@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { EachMessageHandler, KafkaMessage } from 'kafkajs';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';

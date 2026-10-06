@@ -77,24 +77,31 @@ export class SurveyQrService {
 
     try {
       await this.qrAnswerStore.create(survey.id, token, result.data);
-    } catch (err) {
-      if (isUniqueViolation(err))
+    } catch (error) {
+      if (isUniqueViolation(error)) {
         throw new SurveyAnswerAlreadyExistsException();
-      throw err;
+      }
+
+      throw error;
     }
+
     this.logger.log(`QR 설문 답변 저장 완료: surveyId=${survey.id}`);
   }
 
   /** 참여 서비스에서 입장이 확인된 토큰의 박람회로 일반 참가자 설문을 찾는다. */
   private async findSurveyByEnteredToken(token: string): Promise<SurveyEntity> {
     const entered = await this.participationClient.findEnteredToken(token);
-    if (!entered) throw new SurveyNotFoundException();
+    if (!entered) {
+      throw new SurveyNotFoundException();
+    }
 
     const survey = await this.surveyStore.findByExpoAndType(
       entered.expoId,
       ParticipationType.STANDARD,
     );
-    if (!survey) throw new SurveyNotFoundException();
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
 
     return survey;
   }

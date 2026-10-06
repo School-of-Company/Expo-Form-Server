@@ -65,6 +65,8 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     for (const submission of [...received, ...stalePublished]) {
+      // 한 건씩 순서대로 발행한다. 실패해도 다음 건을 계속 처리하고, Kafka에 한꺼번에 몰아넣지 않는다.
+      // eslint-disable-next-line no-await-in-loop
       await this.publishOne(submission);
     }
   }
@@ -101,13 +103,13 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
       });
 
       await this.store.markPublished(submission.id);
-    } catch (err) {
+    } catch (error) {
       // 발행 실패는 다음 주기에 그대로 재시도된다(RECEIVED는 publishedAt이 없어 계속
       // findReceived에 잡히고, PUBLISHED로 안 바뀌었으니 재시도 대상에서 빠지지 않는다) —
       // 여기서 던지면 같은 배치의 나머지 건 처리가 멈추니 로그만 남기고 다음 건으로 넘어간다.
       this.logger.error(
         `설문 답변 발행 실패: submissionId=${submission.id}`,
-        err,
+        error,
       );
     }
   }

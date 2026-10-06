@@ -67,7 +67,9 @@ export class SurveyService {
       dto.participationType,
     );
 
-    if (duplicated) throw new SurveyAlreadyExistsException();
+    if (duplicated) {
+      throw new SurveyAlreadyExistsException();
+    }
 
     // dynamicSurveyRequestDto만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라
     // 한 번에 옮긴다. `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면
@@ -90,10 +92,14 @@ export class SurveyService {
     let saved: SurveyEntity;
     try {
       saved = await this.surveyStore.save(survey);
-    } catch (err) {
-      if (isUniqueViolation(err)) throw new SurveyAlreadyExistsException();
-      throw err;
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new SurveyAlreadyExistsException();
+      }
+
+      throw error;
     }
+
     this.logger.log(`설문 생성 완료: surveyId=${saved.id}, expoId=${expoId}`);
 
     return { id: saved.id };
@@ -117,7 +123,9 @@ export class SurveyService {
       expoId,
       dto.participationType,
     );
-    if (!survey) throw new SurveyNotFoundException();
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
 
     const { dynamicSurveyRequestDto, ...meta } = dto;
     Object.assign(survey, meta satisfies UpdatableSurveyFields);
@@ -146,7 +154,9 @@ export class SurveyService {
       expoId,
       participationType,
     );
-    if (!survey) throw new SurveyNotFoundException();
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
 
     await this.surveyStore.deleteById(survey.id);
     this.logger.log(`설문 삭제 완료: surveyId=${survey.id}`);
@@ -164,7 +174,9 @@ export class SurveyService {
   ): Promise<SurveyResponseDto> {
     const survey = await this.surveyStore.findByExpoAndType(expoId, dto.type);
 
-    if (!survey) throw new SurveyNotFoundException();
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
 
     return toSurveyResponse(survey);
   }

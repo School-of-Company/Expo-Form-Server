@@ -43,7 +43,7 @@ export class SurveyController {
   @ApiCreatedResponse({ type: CreateSurveyResponseDto })
   @ApiErrorResponse(409, '같은 조합의 설문이 이미 있음 (SURVEY_ALREADY_EXISTS)')
   @Post(':expoId')
-  create(
+  async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: CreateSurveyRequestDto,
   ): Promise<CreateSurveyResponseDto> {
@@ -62,7 +62,7 @@ export class SurveyController {
   @ApiOkResponse({ type: SurveyResponseDto })
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
   @Get(':expoId')
-  findOne(
+  async findOne(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Query() dto: FindSurveyRequestDto,
   ): Promise<SurveyResponseDto> {
@@ -82,7 +82,7 @@ export class SurveyController {
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
   @Patch(':expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  update(
+  async update(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: UpdateSurveyRequestDto,
   ): Promise<void> {
@@ -101,7 +101,7 @@ export class SurveyController {
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
   @Delete(':expoId/:participationType')
   @HttpCode(HttpStatus.NO_CONTENT)
-  delete(
+  async delete(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Param('participationType', new ParseEnumPipe(ParticipationType))
     participationType: ParticipationType,

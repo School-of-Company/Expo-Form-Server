@@ -17,7 +17,7 @@ import { SurveyModule } from './survey/survey.module.js';
     // 앱 시작/종료·처리되지 않은 예외를 Discord 채널로 알림. webhookUrl 미설정 시 자동 비활성화.
     DicoshotModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (...args: unknown[]) => {
+      useFactory(...args: unknown[]) {
         const config = args[0] as ConfigService;
         return {
           webhookUrl: config.get<string>('DISCORD_WEBHOOK_URL'),

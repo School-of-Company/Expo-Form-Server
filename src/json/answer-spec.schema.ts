@@ -27,7 +27,7 @@ function oneOfJsonDataKeys(jsonData: JsonData): z.ZodString {
  * 실제 업로드 처리(파일 저장·CDN)는 이 서비스 범위 밖이다. 별도 업로드 흐름이 이미
  * 만들어낸 참조 값(URL 등)을 문자열로만 받는다고 가정한다.
  */
-const buildImageSchema = (): z.ZodTypeAny => z.string().min(1);
+const buildImageSchema = (): z.ZodType => z.string().min(1);
 
 /**
  * 문항 타입별 답변 값 스펙 조립기.
@@ -38,7 +38,7 @@ const buildImageSchema = (): z.ZodTypeAny => z.string().min(1);
  */
 const VALUE_SCHEMA_BUILDERS: Record<
   DynamicFormFieldType,
-  (question: QuestionSpec) => z.ZodTypeAny
+  (question: QuestionSpec) => z.ZodType
 > = {
   /** 빈 문자열이 아닌 텍스트. */
   [DynamicFormFieldType.SENTENCE]: () => z.string().min(1),
@@ -48,16 +48,19 @@ const VALUE_SCHEMA_BUILDERS: Record<
   [DynamicFormFieldType.DROPDOWN]: (question) =>
     oneOfJsonDataKeys(question.jsonData),
   /** `jsonData`의 키로 이루어진 배열. 있으면 `otherJson.maxSelection`까지만 허용한다. */
-  [DynamicFormFieldType.MULTIPLE]: (question) => {
+  [DynamicFormFieldType.MULTIPLE](question) {
     const maxSelection = question.otherJson?.maxSelection;
     let schema = z.array(oneOfJsonDataKeys(question.jsonData)).min(1);
-    if (maxSelection !== undefined) schema = schema.max(maxSelection);
+    if (maxSelection !== undefined) {
+      schema = schema.max(maxSelection);
+    }
+
     return schema;
   },
 };
 
 /** 문항 하나가 허용하는 답변 값의 형태를 문항 스펙에서 조립한다. */
-function buildValueSchema(question: QuestionSpec): z.ZodTypeAny {
+function buildValueSchema(question: QuestionSpec): z.ZodType {
   const base = VALUE_SCHEMA_BUILDERS[question.formType](question);
   return question.requiredStatus ? base : base.optional();
 }

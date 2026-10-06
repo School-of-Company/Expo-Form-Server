@@ -29,7 +29,7 @@ export class SurveyStore {
    * 설문을 유일하게 식별하는 (박람회, 참여자군) 조합으로 조회한다.
    * 응답 페이지는 surveyId를 모르고 이 두 값만 알기 때문에 이 경로가 따로 필요하다.
    */
-  findByExpoAndType(
+  async findByExpoAndType(
     expoId: string,
     participationType: ParticipationType,
   ): Promise<SurveyEntity | null> {
@@ -44,7 +44,7 @@ export class SurveyStore {
    * 같은 조합의 설문이 이미 있는지만 확인한다.
    * 중복 검사에는 엔티티 본문이 필요 없어서, 문항까지 끌고 오는 조회 대신 이쪽을 쓴다.
    */
-  existsByExpoAndType(
+  async existsByExpoAndType(
     expoId: string,
     participationType: ParticipationType,
   ): Promise<boolean> {
@@ -55,7 +55,7 @@ export class SurveyStore {
    * 설문과 문항을 함께 저장한다.
    * `dynamicSurveys` 관계에 cascade가 걸려 있어서, 자식 문항도 이 한 번의 호출로 같이 들어간다.
    */
-  save(survey: SurveyEntity): Promise<SurveyEntity> {
+  async save(survey: SurveyEntity): Promise<SurveyEntity> {
     return this.surveys.save(survey);
   }
 
@@ -87,9 +87,10 @@ export class SurveyStore {
         participationType: survey.participationType,
       });
 
-      questions.forEach((question) => {
+      for (const question of questions) {
         question.survey = survey;
-      });
+      }
+
       survey.dynamicSurveys = questions;
       await manager.save(DynamicSurveyEntity, questions);
     });
