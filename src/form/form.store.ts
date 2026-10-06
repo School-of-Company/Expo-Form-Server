@@ -30,7 +30,7 @@ export class FormStore {
    * 폼을 유일하게 식별하는 (박람회, 참여자군, 신청방식) 조합으로 조회한다.
    * 신청 페이지는 formId를 모르고 이 세 값만 알기 때문에 이 경로가 따로 필요하다.
    */
-  findByExpoAndTypes(
+  async findByExpoAndTypes(
     expoId: string,
     participationType: ParticipationType,
     applicationType: ApplicationType,
@@ -46,7 +46,7 @@ export class FormStore {
    * 같은 조합의 폼이 이미 있는지만 확인한다.
    * 중복 검사에는 엔티티 본문이 필요 없어서, 필드까지 끌고 오는 조회 대신 이쪽을 쓴다.
    */
-  existsByExpoAndTypes(
+  async existsByExpoAndTypes(
     expoId: string,
     participationType: ParticipationType,
     applicationType: ApplicationType,
@@ -58,7 +58,7 @@ export class FormStore {
    * 폼과 입력 필드를 함께 저장한다.
    * `dynamicForms` 관계에 cascade가 걸려 있어서, 자식 필드도 이 한 번의 호출로 같이 들어간다.
    */
-  save(form: FormEntity): Promise<FormEntity> {
+  async save(form: FormEntity): Promise<FormEntity> {
     return this.forms.save(form);
   }
 

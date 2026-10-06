@@ -44,7 +44,7 @@ export class FormController {
   @ApiCreatedResponse({ type: CreateFormResponseDto })
   @ApiErrorResponse(409, '같은 조합의 폼이 이미 있음 (FORM_ALREADY_EXISTS)')
   @Post(':expoId')
-  create(
+  async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: CreateFormRequestDto,
   ): Promise<CreateFormResponseDto> {
@@ -63,7 +63,7 @@ export class FormController {
   @ApiOkResponse({ type: FormResponseDto })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @Get(':expoId')
-  findOne(
+  async findOne(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Query() dto: FindFormRequestDto,
   ): Promise<FormResponseDto> {
@@ -83,7 +83,7 @@ export class FormController {
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @Patch(':expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  update(
+  async update(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: UpdateFormRequestDto,
   ): Promise<void> {
@@ -102,7 +102,7 @@ export class FormController {
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @Delete(':expoId/:participationType/:applicationType')
   @HttpCode(HttpStatus.NO_CONTENT)
-  delete(
+  async delete(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Param('participationType', new ParseEnumPipe(ParticipationType))
     participationType: ParticipationType,

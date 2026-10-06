@@ -14,7 +14,9 @@ async function bootstrap() {
 
   // API 표면이 그대로 드러나는 문서는 운영에서는 열지 않는다.
   const swaggerEnabled = config.get<string>('NODE_ENV') !== 'production';
-  if (swaggerEnabled) setupSwagger(app);
+  if (swaggerEnabled) {
+    setupSwagger(app);
+  }
 
   const port = config.get<string>('PORT') ?? 3000;
   await app.listen(port);
@@ -24,4 +26,5 @@ async function bootstrap() {
     );
   }
 }
+
 await bootstrap();

@@ -59,7 +59,9 @@ export class FormService {
       dto.applicationType,
     );
 
-    if (duplicated) throw new FormAlreadyExistsException();
+    if (duplicated) {
+      throw new FormAlreadyExistsException();
+    }
 
     // dynamicForm만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라 한 번에 옮긴다.
     // `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면 여기서 먼저 깨진다.
@@ -78,10 +80,14 @@ export class FormService {
     let saved: FormEntity;
     try {
       saved = await this.formStore.save(form);
-    } catch (err) {
-      if (isUniqueViolation(err)) throw new FormAlreadyExistsException();
-      throw err;
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new FormAlreadyExistsException();
+      }
+
+      throw error;
     }
+
     this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${expoId}`);
 
     return { id: saved.id };
@@ -106,7 +112,9 @@ export class FormService {
       dto.participantType,
       dto.applicationType,
     );
-    if (!form) throw new FormNotFoundException();
+    if (!form) {
+      throw new FormNotFoundException();
+    }
 
     const { dynamicForm, participantType, ...meta } = dto;
     Object.assign(form, {
@@ -138,7 +146,9 @@ export class FormService {
       participationType,
       applicationType,
     );
-    if (!form) throw new FormNotFoundException();
+    if (!form) {
+      throw new FormNotFoundException();
+    }
 
     await this.formStore.deleteById(form.id);
     this.logger.log(`폼 삭제 완료: formId=${form.id}`);
@@ -160,7 +170,9 @@ export class FormService {
       dto.applicationType,
     );
 
-    if (!form) throw new FormNotFoundException();
+    if (!form) {
+      throw new FormNotFoundException();
+    }
 
     return this.toResponse(form);
   }

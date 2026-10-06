@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { DataSource } from 'typeorm';
 import {
   ENTITIES_GLOB,
@@ -12,9 +13,11 @@ import {
  * `--env-file`로 환경 변수를 넣어 준다.
  */
 const url = process.env.DATABASE_URL;
-if (!url) throw new Error('DATABASE_URL is required to run migrations.');
+if (url === undefined || url === '') {
+  throw new Error('DATABASE_URL is required to run migrations.');
+}
 
-export default new DataSource({
+const dataSource = new DataSource({
   type: 'postgres',
   url,
   entities: [ENTITIES_GLOB],
@@ -25,3 +28,5 @@ export default new DataSource({
     process.env.DATABASE_SSL_REJECT_UNAUTHORIZED,
   ),
 });
+
+export default dataSource;

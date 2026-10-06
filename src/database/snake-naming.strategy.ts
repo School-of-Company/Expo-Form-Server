@@ -1,7 +1,7 @@
 import { DefaultNamingStrategy, type NamingStrategyInterface } from 'typeorm';
 
 function toSnakeCase(value: string): string {
-  return value.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  return value.replaceAll(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`);
 }
 
 export class SnakeNamingStrategy

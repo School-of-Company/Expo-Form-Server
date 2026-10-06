@@ -28,7 +28,7 @@ export class SurveyAnswerSubmissionStore {
   ) {}
 
   /** `(surveyId, phoneNumber)` 조합의 활성(= `REJECTED`가 아닌) 제출 기록이 있는지 확인한다. */
-  findActiveByKey(
+  async findActiveByKey(
     surveyId: string,
     phoneNumber: string,
   ): Promise<SurveyAnswerSubmissionEntity | null> {
@@ -62,7 +62,7 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /** 한 번도 발행되지 않은(`RECEIVED`) 기록을 오래된 순으로 가져온다. */
-  findReceived(limit: number): Promise<SurveyAnswerSubmissionEntity[]> {
+  async findReceived(limit: number): Promise<SurveyAnswerSubmissionEntity[]> {
     return this.submissions.find({
       where: { status: SurveyAnswerSubmissionStatus.RECEIVED },
       order: { createdAt: 'ASC' },
@@ -75,7 +75,7 @@ export class SurveyAnswerSubmissionStore {
    * 가져온다. `retryCount`가 `maxRetryCount` 미만인 것만 — 그 이상은 재발행을 포기하고 사람이
    * 봐야 할 대상으로 남겨둔다(무한 재발행으로 부하를 키우지 않기 위해).
    */
-  findStalePublished(
+  async findStalePublished(
     staleBefore: Date,
     maxRetryCount: number,
     limit: number,
@@ -121,7 +121,7 @@ export class SurveyAnswerSubmissionStore {
    *
    * @returns 실제로 갱신됐으면 true, 이미 종결 상태라 무시됐으면 false
    */
-  markFinal(
+  async markFinal(
     eventId: string,
     status:
       | SurveyAnswerSubmissionStatus.STORED
@@ -134,7 +134,9 @@ export class SurveyAnswerSubmissionStore {
         { eventId, status: In(IN_FLIGHT_STATUSES) },
         { status, rejectReason },
       );
-      if (!result.affected) return false;
+      if ((result.affected ?? 0) === 0) {
+        return false;
+      }
 
       if (status === SurveyAnswerSubmissionStatus.REJECTED) {
         const { surveyId } = await manager.findOneByOrFail(
@@ -148,6 +150,7 @@ export class SurveyAnswerSubmissionStore {
           1,
         );
       }
+
       return true;
     });
   }

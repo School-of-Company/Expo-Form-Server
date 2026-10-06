@@ -135,7 +135,10 @@ describe('FormService', () => {
 
       await service.update(expoId, createDto);
 
-      const [, fields] = formStore.updateWithFields.mock.calls[0];
+      const [, fields] = formStore.updateWithFields.mock.calls[0] as [
+        unknown,
+        Array<{ title: string }>,
+      ];
       expect(fields).toHaveLength(1);
       expect(fields[0].title).toBe('참여 형태');
     });

@@ -141,7 +141,10 @@ describe('SurveyService', () => {
 
       await service.update(expoId, createDto);
 
-      const [, questions] = surveyStore.updateWithQuestions.mock.calls[0];
+      const [, questions] = surveyStore.updateWithQuestions.mock.calls[0] as [
+        unknown,
+        Array<{ title: string }>,
+      ];
       expect(questions).toHaveLength(1);
       expect(questions[0].title).toBe('만족도');
     });
@@ -151,7 +154,9 @@ describe('SurveyService', () => {
 
       await service.update(expoId, createDto);
 
-      const [updated] = surveyStore.updateWithQuestions.mock.calls[0];
+      const [updated] = surveyStore.updateWithQuestions.mock.calls[0] as [
+        { totalAnswers: number },
+      ];
       expect(updated.totalAnswers).toBe(7);
     });
   });

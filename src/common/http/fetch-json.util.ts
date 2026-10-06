@@ -15,8 +15,13 @@ export async function fetchJson<T>(
 ): Promise<T | null> {
   const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
-  if (response.status === 404) return null;
-  if (!response.ok) throw new ExternalServiceError(url, response.status);
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new ExternalServiceError(url, response.status);
+  }
 
   return schema.parse(await response.json());
 }

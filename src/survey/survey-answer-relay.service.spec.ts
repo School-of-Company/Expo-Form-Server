@@ -81,9 +81,10 @@ describe('SurveyAnswerRelayService', () => {
     await service.relay();
 
     const sent = producer.send.mock.calls[0][0] as {
-      messages: { value: string }[];
+      messages: Array<{ value: string }>;
     };
-    expect(JSON.parse(sent.messages[0].value).eventId).toBe('event-1');
+    const payload = JSON.parse(sent.messages[0].value) as { eventId: string };
+    expect(payload.eventId).toBe('event-1');
   });
 
   it('발행 실패는 로그만 남기고 markPublished를 호출하지 않는다', async () => {

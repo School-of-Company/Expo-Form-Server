@@ -14,7 +14,7 @@ export class SurveyQrAnswerStore {
   ) {}
 
   /** 이 설문에서 이 토큰으로 이미 응답했는지만 확인한다. */
-  existsByKey(surveyId: string, token: string): Promise<boolean> {
+  async existsByKey(surveyId: string, token: string): Promise<boolean> {
     return this.qrAnswers.existsBy({ surveyId, token });
   }
 

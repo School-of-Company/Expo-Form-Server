@@ -39,7 +39,7 @@ export class SurveyQrController {
   )
   @ApiErrorResponse(409, '이미 응답한 토큰 (SURVEY_ANSWER_ALREADY_EXISTS)')
   @Get('qr/:token')
-  findSurvey(
+  async findSurvey(
     @Param('token', new ZodValidationPipe(qrTokenSchema)) token: string,
   ): Promise<SurveyResponseDto> {
     return this.surveyQrService.findSurvey(token);
@@ -60,7 +60,7 @@ export class SurveyQrController {
   @ApiErrorResponse(409, '이미 응답한 토큰 (SURVEY_ANSWER_ALREADY_EXISTS)')
   @Post('answer/qr/:token')
   @HttpCode(HttpStatus.NO_CONTENT)
-  submit(
+  async submit(
     @Param('token', new ZodValidationPipe(qrTokenSchema)) token: string,
     @Body() dto: SubmitSurveyQrAnswerRequestDto,
   ): Promise<void> {

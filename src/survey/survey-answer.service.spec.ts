@@ -56,7 +56,7 @@ describe('SurveyAnswerService', () => {
     service = new SurveyAnswerService(
       surveyStore as unknown as SurveyStore,
       submissionStore as unknown as SurveyAnswerSubmissionStore,
-      userClient as never,
+      userClient,
     );
   });
 
