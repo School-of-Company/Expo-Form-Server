@@ -76,7 +76,12 @@ export class SurveyQrService {
     }
 
     try {
-      await this.qrAnswerStore.create(survey.id, token, result.data);
+      await this.qrAnswerStore.create(
+        survey.id,
+        token,
+        result.data,
+        dto.occupation,
+      );
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new SurveyAnswerAlreadyExistsException();

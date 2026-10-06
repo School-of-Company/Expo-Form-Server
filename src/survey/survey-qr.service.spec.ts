@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { QueryFailedError } from 'typeorm';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
+import { Occupation } from '../common/enums/occupation.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   SurveyAnswerAlreadyExistsException,
@@ -29,7 +30,10 @@ const survey = {
   ],
 } as unknown as SurveyEntity;
 
-const answerDto = { answers: { '1': '좋았습니다' } };
+const answerDto = {
+  answers: { '1': '좋았습니다' },
+  occupation: Occupation.ELEMENTARY_STUDENT,
+};
 
 describe('SurveyQrService', () => {
   let surveyStore: { findByExpoAndType: Mock };
@@ -105,9 +109,9 @@ describe('SurveyQrService', () => {
     });
 
     it('문항 스펙과 맞지 않으면 저장하지 않는다', async () => {
-      await expect(service.submit('qr-1', { answers: {} })).rejects.toThrow(
-        SurveyAnswerInvalidException,
-      );
+      await expect(
+        service.submit('qr-1', { ...answerDto, answers: {} }),
+      ).rejects.toThrow(SurveyAnswerInvalidException);
       expect(qrAnswerStore.create).not.toHaveBeenCalled();
     });
 
@@ -129,12 +133,15 @@ describe('SurveyQrService', () => {
       );
     });
 
-    it('검증된 답변을 토큰 키로 저장한다', async () => {
+    it('검증된 답변을 직업과 함께 토큰 키로 저장한다', async () => {
       await service.submit('qr-1', answerDto);
 
-      expect(qrAnswerStore.create).toHaveBeenCalledWith('survey-1', 'qr-1', {
-        '1': '좋았습니다',
-      });
+      expect(qrAnswerStore.create).toHaveBeenCalledWith(
+        'survey-1',
+        'qr-1',
+        { '1': '좋았습니다' },
+        Occupation.ELEMENTARY_STUDENT,
+      );
     });
   });
 });
