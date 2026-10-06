@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { jsonDataSchema, otherJsonSchema } from './field-spec.schema.js';
+import {
+  jsonDataSchema,
+  otherJsonSchema,
+  triggerValuesOf,
+} from './field-spec.schema.js';
 
 describe('jsonDataSchema', () => {
   it('문자열 선택지와 옵션 객체 선택지를 섞어서 받는다', () => {
@@ -34,5 +38,42 @@ describe('otherJsonSchema', () => {
     expect(() =>
       otherJsonSchema.parse({ hasEtc: true, maxSelection: 0 }),
     ).toThrow();
+  });
+
+  it('여러 값에 반응하는 조건(triggerValues)을 받는다', () => {
+    const parsed = otherJsonSchema.parse({
+      hasEtc: false,
+      conditional: {
+        parentIndex: 0,
+        triggerValues: ['TEACHER', 'SCHOOL_STAFF'],
+      },
+    });
+
+    expect(parsed.conditional?.triggerValues).toEqual([
+      'TEACHER',
+      'SCHOOL_STAFF',
+    ]);
+  });
+
+  it.each([
+    ['둘 다 있으면', { triggerValue: 'A', triggerValues: ['B'] }],
+    ['둘 다 없으면', {}],
+    ['triggerValues가 비어 있으면', { triggerValues: [] }],
+  ])('조건의 반응 값이 %s 거부한다', (_label, trigger) => {
+    expect(
+      otherJsonSchema.safeParse({
+        hasEtc: false,
+        conditional: { parentIndex: 0, ...trigger },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('triggerValuesOf는 하나든 여럿이든 같은 모양으로 꺼낸다', () => {
+    expect(triggerValuesOf({ parentIndex: 0, triggerValue: 'A' })).toEqual([
+      'A',
+    ]);
+    expect(
+      triggerValuesOf({ parentIndex: 0, triggerValues: ['A', 'B'] }),
+    ).toEqual(['A', 'B']);
   });
 });
