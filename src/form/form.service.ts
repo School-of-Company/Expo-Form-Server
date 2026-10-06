@@ -8,6 +8,7 @@ import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
 import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
+import { FormSummaryDto } from './dto/form-summary.response.dto.js';
 import { FormResponseDto } from './dto/form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
@@ -152,6 +153,22 @@ export class FormService {
 
     await this.formStore.deleteById(form.id);
     this.logger.log(`폼 삭제 완료: formId=${form.id}`);
+  }
+
+  /** 여러 박람회에 어떤 폼이 만들어져 있는지 돌려준다. 폼이 없는 박람회는 결과에 나오지 않는다. */
+  async summarize(expoIds: string[]): Promise<FormSummaryDto[]> {
+    const forms = await this.formStore.findSummariesByExpoIds(expoIds);
+    return forms.map(({ expoId, participationType, applicationType }) => ({
+      expoId,
+      participationType,
+      applicationType,
+    }));
+  }
+
+  /** 박람회가 지워질 때 그 박람회의 폼을 모두 삭제한다. 폼이 없어도 성공한다(다시 불러도 안전). */
+  async deleteAllByExpo(expoId: string): Promise<void> {
+    const deleted = await this.formStore.deleteByExpoId(expoId);
+    this.logger.log(`박람회 폼 일괄 삭제: expoId=${expoId}, ${deleted}개`);
   }
 
   /**

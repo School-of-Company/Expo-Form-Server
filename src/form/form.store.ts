@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { ApplicationType } from './entities/application-type.enum.js';
@@ -88,5 +88,23 @@ export class FormStore {
   /** 폼을 삭제한다. 딸린 입력 필드는 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
     await this.forms.delete({ id });
+  }
+
+  /** 여러 박람회의 폼을 식별 값만 골라 조회한다. 입력 필드는 끌고 오지 않는다. */
+  async findSummariesByExpoIds(
+    expoIds: string[],
+  ): Promise<
+    Array<Pick<FormEntity, 'expoId' | 'participationType' | 'applicationType'>>
+  > {
+    return this.forms.find({
+      select: { expoId: true, participationType: true, applicationType: true },
+      where: { expoId: In(expoIds) },
+    });
+  }
+
+  /** 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 FK CASCADE로 함께 지워진다. */
+  async deleteByExpoId(expoId: string): Promise<number> {
+    const result = await this.forms.delete({ expoId });
+    return result.affected ?? 0;
   }
 }
