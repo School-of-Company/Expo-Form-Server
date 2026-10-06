@@ -42,22 +42,33 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
-   * 접수 기록을 저장하고 설문의 누적 응답 수를 늘린다.
+   * 설문의 누적 응답 수를 늘리고 접수 기록을 저장한다.
    *
    * 동시 요청이 둘 다 {@link findActiveByKey}를 통과하면 활성 제출 유니크 제약이 한쪽을
    * 막는다 — 그 위반은 그대로 던지므로 호출부가 409로 변환해야 한다.
+   *
+   * 카운트를 먼저 올리는 건 박람회 일괄 삭제(`SurveyStore.deleteByExpoId`)와 순서를 맞추기
+   * 위해서다. 이 UPDATE가 설문 row를 잠그므로, 삭제가 먼저면 0행이 갱신돼 기록을 남기지 않고,
+   * 이쪽이 먼저면 삭제가 커밋을 기다렸다가 방금 남긴 기록까지 지운다.
+   *
+   * @returns 기록했으면 true, 그 사이 설문이 지워져 기록하지 않았으면 false
    */
   async createReceived(
     submission: SurveyAnswerSubmissionEntity,
-  ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
-      await manager.save(SurveyAnswerSubmissionEntity, submission);
-      await manager.increment(
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      const { affected } = await manager.increment(
         SurveyEntity,
         { id: submission.surveyId },
         'totalAnswers',
         1,
       );
+      if ((affected ?? 0) === 0) {
+        return false;
+      }
+
+      await manager.save(SurveyAnswerSubmissionEntity, submission);
+      return true;
     });
   }
 

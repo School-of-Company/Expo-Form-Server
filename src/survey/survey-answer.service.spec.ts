@@ -51,7 +51,10 @@ describe('SurveyAnswerService', () => {
 
   beforeEach(() => {
     surveyStore = { findByExpoAndType: vi.fn() };
-    submissionStore = { findActiveByKey: vi.fn(), createReceived: vi.fn() };
+    submissionStore = {
+      findActiveByKey: vi.fn(),
+      createReceived: vi.fn().mockResolvedValue(true),
+    };
     userClient = { findParticipant: vi.fn(), findSurveyAnswerResult: vi.fn() };
     submissionStore.findActiveByKey.mockResolvedValue(null);
     service = new SurveyAnswerService(
@@ -154,6 +157,16 @@ describe('SurveyAnswerService', () => {
     await expect(
       service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
     ).rejects.toThrow(SurveyAnswerAlreadyExistsException);
+  });
+
+  it('접수 직전에 박람회 설문이 지워져 기록하지 못하면 404', async () => {
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
+    userClient.findParticipant.mockResolvedValue(participant);
+    submissionStore.createReceived.mockResolvedValue(false);
+
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(SurveyNotFoundException);
   });
 
   it('검증을 통과하면 접수 기록을 RECEIVED로 저장한다', async () => {

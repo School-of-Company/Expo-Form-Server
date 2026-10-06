@@ -123,14 +123,20 @@ export class SurveyAnswerService {
     // 위 findActiveByKey와 이 저장 사이에 같은 응답자의 다른 요청이 끼어들면 둘 다 통과한다.
     // 그럴 땐 활성 제출 유니크 제약이 한쪽을 막는데, 그 위반을 그대로 두면 409가 아니라 500이
     // 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
+    let created: boolean;
     try {
-      await this.submissionStore.createReceived(submission);
+      created = await this.submissionStore.createReceived(submission);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new SurveyAnswerAlreadyExistsException();
       }
 
       throw error;
+    }
+
+    // 위에서 설문을 찾은 뒤 박람회 일괄 삭제가 끼어들면 기록 없이 돌아온다.
+    if (!created) {
+      throw new SurveyNotFoundException();
     }
 
     this.logger.log(
