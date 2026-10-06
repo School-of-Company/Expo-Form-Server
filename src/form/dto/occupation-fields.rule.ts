@@ -1,7 +1,11 @@
 import type { z } from 'zod';
 import { DynamicFormFieldType } from '../../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../../common/enums/participation-type.enum.js';
-import type { JsonData, OtherJson } from '../../json/field-spec.schema.js';
+import {
+  type JsonData,
+  type OtherJson,
+  triggerValuesOf,
+} from '../../json/field-spec.schema.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
 import { Occupation } from '../entities/occupation.enum.js';
 
@@ -19,8 +23,11 @@ type FormLike = {
 
 const occupationValues = Object.values(Occupation) as string[];
 
-/** 소속 학교 필드를 보여 줄 직업 값. 조건의 `triggerValue`(문자열)와 비교한다. */
-const teacher: string = Occupation.TEACHER;
+/** 소속 학교 필드를 보여 줄 직업 값. 학교에 소속된 교사·교직원이다. */
+const schoolOccupations: string[] = [
+  Occupation.TEACHER,
+  Occupation.SCHOOL_STAFF,
+];
 
 /**
  * 직업(`OCCUPATION`)·소속 학교(`SCHOOL`) 필드가 신청 처리 쪽이 읽을 수 있는 모양인지 검증한다.
@@ -28,8 +35,8 @@ const teacher: string = Occupation.TEACHER;
  * - 일반 참가자 폼에서만, 각각 최대 하나
  * - 직업은 드롭다운이고 선택지 키가 {@link Occupation} 값과 정확히 같다 — 키가 고정돼야 답변 값으로
  *   교사를 알아본다
- * - 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 `TEACHER`일 때만 보이는 조건부 필드다
- *   (`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
+ * - 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 `TEACHER`·`SCHOOL_STAFF`일 때만 보이는
+ *   조건부 필드다(`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
  */
 export function checkOccupationFields(
   form: FormLike,
@@ -85,14 +92,16 @@ export function checkOccupationFields(
 
   const school = form.dynamicForm[schoolIndex];
   const conditional = school.otherJson?.conditional;
+  const triggers =
+    conditional === undefined ? [] : triggerValuesOf(conditional).toSorted();
   if (
     occupationIndex === undefined ||
     school.formType !== DynamicFormFieldType.SENTENCE ||
     conditional?.parentIndex !== occupationIndex ||
-    conditional.triggerValue !== teacher
+    triggers.join(',') !== schoolOccupations.toSorted().join(',')
   ) {
     issue(
-      '소속 학교 필드는 직업 필드가 TEACHER일 때만 보이는 문장형 필드여야 합니다.',
+      `소속 학교 필드는 직업 필드가 ${schoolOccupations.join(' 또는 ')}일 때만 보이는 문장형 필드여야 합니다.`,
       schoolIndex,
     );
   }

@@ -9,7 +9,7 @@ export enum DynamicFormType {
   TRAINING_ID = 'TRAINING_ID',
   /** 일반 참가자의 직업. 선택지 키가 {@link Occupation} 값이어야 하는 드롭다운이다. */
   OCCUPATION = 'OCCUPATION',
-  /** 소속 학교. 직업이 교사일 때만 보이는 조건부 문장형 필드다. */
+  /** 소속 학교. 직업이 교사·교직원일 때만 보이는 조건부 문장형 필드다. */
   SCHOOL = 'SCHOOL',
   DEFAULT = 'DEFAULT',
 }

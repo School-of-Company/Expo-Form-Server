@@ -9,7 +9,7 @@ export enum Occupation {
   MIDDLE_SCHOOL_STUDENT = 'MIDDLE_SCHOOL_STUDENT',
   /** 고등학생 */
   HIGH_SCHOOL_STUDENT = 'HIGH_SCHOOL_STUDENT',
-  /** 교직원 */
+  /** 교직원 — 교사와 함께 소속 학교 필드가 보인다. */
   SCHOOL_STAFF = 'SCHOOL_STAFF',
   /** 예비교사 */
   PRE_SERVICE_TEACHER = 'PRE_SERVICE_TEACHER',
@@ -17,6 +17,6 @@ export enum Occupation {
   PARENT = 'PARENT',
   /** 일반인 */
   GENERAL = 'GENERAL',
-  /** 교사 — 이 값일 때만 소속 학교 필드가 보인다. */
+  /** 교사 — 교직원과 함께 소속 학교 필드가 보인다. */
   TEACHER = 'TEACHER',
 }
