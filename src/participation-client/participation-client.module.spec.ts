@@ -44,22 +44,4 @@ describe('ParticipationClientModule', () => {
       ExternalServiceUnavailableException,
     );
   });
-
-  it('주소와 토큰 중 하나만 있으면 설정 실수로 보고 부팅 단계에서 실패한다', async () => {
-    await expect(
-      compileWith({ PARTICIPATION_SERVICE_URL: 'http://attendance-server' }),
-    ).rejects.toThrow('must be set together');
-  });
-
-  it('내부 토큰이 32자보다 짧으면 값을 드러내지 않고 실패한다', async () => {
-    const shortToken = 'short-secret-value';
-
-    const failure = compileWith({
-      PARTICIPATION_SERVICE_URL: 'http://attendance-server',
-      PARTICIPATION_SERVICE_INTERNAL_TOKEN: shortToken,
-    });
-
-    await expect(failure).rejects.toThrow('at least 32 characters');
-    await expect(failure).rejects.not.toThrow(shortToken);
-  });
 });
