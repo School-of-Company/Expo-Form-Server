@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -99,5 +99,24 @@ export class SurveyStore {
   /** 설문을 삭제한다. 딸린 문항은 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
     await this.surveys.delete({ id });
+  }
+
+  /** 여러 박람회의 설문을 식별 값만 골라 조회한다. 문항은 끌고 오지 않는다. */
+  async findSummariesByExpoIds(
+    expoIds: string[],
+  ): Promise<Array<Pick<SurveyEntity, 'expoId' | 'participationType'>>> {
+    return this.surveys.find({
+      select: { expoId: true, participationType: true },
+      where: { expoId: In(expoIds) },
+    });
+  }
+
+  /**
+   * 박람회의 설문을 모두 삭제하고 지운 개수를 돌려준다. 문항과 종이 QR 답변은 FK CASCADE로 함께
+   * 지워진다.
+   */
+  async deleteByExpoId(expoId: string): Promise<number> {
+    const result = await this.surveys.delete({ expoId });
+    return result.affected ?? 0;
   }
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ParticipationClientModule } from '../participation-client/participation-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
+import { InternalSurveyController } from './internal-survey.controller.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
@@ -31,7 +32,12 @@ import { SurveyStore } from './survey.store.js';
     UserClientModule,
     ParticipationClientModule,
   ],
-  controllers: [SurveyController, SurveyAnswerController, SurveyQrController],
+  controllers: [
+    SurveyController,
+    SurveyAnswerController,
+    SurveyQrController,
+    InternalSurveyController,
+  ],
   providers: [
     SurveyService,
     SurveyStore,
