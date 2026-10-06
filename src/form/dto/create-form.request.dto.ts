@@ -9,6 +9,7 @@ import {
 import { ApplicationType } from '../entities/application-type.enum.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
 import { dateTimeRequestSchema } from '../../common/zod/date-time.schema.js';
+import { checkOccupationFields } from './occupation-fields.rule.js';
 
 /**
  * 폼에 들어갈 입력 필드 하나.
@@ -55,9 +56,8 @@ export const PERIOD_ERROR = {
   path: ['endDate'],
 };
 
-export const createFormSchema = createFormFieldsSchema.refine(
-  withValidPeriod,
-  PERIOD_ERROR,
-);
+export const createFormSchema = createFormFieldsSchema
+  .refine(withValidPeriod, PERIOD_ERROR)
+  .superRefine(checkOccupationFields);
 
 export class CreateFormRequestDto extends createZodDto(createFormSchema) {}
