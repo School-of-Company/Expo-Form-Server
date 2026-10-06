@@ -34,6 +34,7 @@ export interface UserClient {
    *
    * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때 —
    *   "없음"으로 돌려보내면 정상 응답자가 거절되므로 구분한다
+   * @throws {ParticipantAmbiguousException} 같은 번호가 여러 표기로 저장돼 응답자를 특정할 수 없을 때(409)
    */
   findParticipant(
     input: ParticipantLookupInput,

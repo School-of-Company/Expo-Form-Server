@@ -1,7 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
-import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
+import {
+  ExternalServiceUnavailableException,
+  ParticipantAmbiguousException,
+} from '../common/exceptions/domain.exception.js';
+import { ExternalServiceError } from '../common/http/external-service.error.js';
 import { postJson } from '../common/http/fetch-json.util.js';
 import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
@@ -39,6 +43,11 @@ export class HttpUserClient implements UserClient {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
       });
     } catch (error) {
+      // 같은 번호가 다른 표기로 여러 번 저장돼 있어 응답자를 특정할 수 없다는 뜻이다. 재시도로는 풀리지 않는다.
+      if (error instanceof ExternalServiceError && error.status === 409) {
+        throw new ParticipantAmbiguousException();
+      }
+
       // 전화번호와 토큰이 실려 있는 요청 내용은 남기지 않는다. URL과 원인만 기록한다.
       this.logger.error(`유저 서비스 응답자 조회 실패: ${url}`, error);
       throw new ExternalServiceUnavailableException();
