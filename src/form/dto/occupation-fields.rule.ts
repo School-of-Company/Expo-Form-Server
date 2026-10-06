@@ -23,10 +23,16 @@ type FormLike = {
 
 const occupationValues = Object.values(Occupation) as string[];
 
-/** 소속 학교 필드를 보여 줄 직업 값. 학교에 소속된 교사·교직원이다. */
+/**
+ * 소속 학교 필드를 보여 줄 직업 값. 학교에 다니는 학생과 학교에 소속된 교직원·교사다. 예비교사는
+ * 아직 학교에 소속되지 않아 뺀다.
+ */
 const schoolOccupations: string[] = [
-  Occupation.TEACHER,
+  Occupation.ELEMENTARY_STUDENT,
+  Occupation.MIDDLE_SCHOOL_STUDENT,
+  Occupation.HIGH_SCHOOL_STUDENT,
   Occupation.SCHOOL_STAFF,
+  Occupation.TEACHER,
 ];
 
 /**
@@ -34,8 +40,8 @@ const schoolOccupations: string[] = [
  *
  * - 일반 참가자 폼에서만, 각각 최대 하나
  * - 직업은 드롭다운이고 선택지 키가 {@link Occupation} 값과 정확히 같다 — 키가 고정돼야 답변 값으로
- *   교사를 알아본다
- * - 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 `TEACHER`·`SCHOOL_STAFF`일 때만 보이는
+ *   학생·교사를 알아본다
+ * - 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 학생(초·중·고)·교직원·교사일 때만 보이는
  *   조건부 필드다(`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
  */
 export function checkOccupationFields(
@@ -101,7 +107,7 @@ export function checkOccupationFields(
     triggers.join(',') !== schoolOccupations.toSorted().join(',')
   ) {
     issue(
-      `소속 학교 필드는 직업 필드가 ${schoolOccupations.join(' 또는 ')}일 때만 보이는 문장형 필드여야 합니다.`,
+      `소속 학교 필드는 직업 필드가 ${schoolOccupations.join(', ')} 중 하나일 때만 보이는 문장형 필드여야 합니다.`,
       schoolIndex,
     );
   }

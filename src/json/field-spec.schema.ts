@@ -16,7 +16,7 @@ export const jsonDataSchema = z.record(
 /**
  * 조건부 표시 규칙. "parentIndex번째 필드의 값이 triggerValue(또는 triggerValues 중 하나)일 때만 이
  * 필드를 보여준다"는 뜻이다. 값 하나에 반응할 때는 v1과 같은 `triggerValue`를, 여러 값에 반응해야
- * 할 때(예: 교사·교직원일 때 소속 학교)는 `triggerValues`를 쓰고 둘 중 하나만 둔다.
+ * 할 때(예: 학생·교사일 때 소속 학교)는 `triggerValues`를 쓰고 둘 중 하나만 둔다.
  */
 export const conditionalSchema = z
   .object({
