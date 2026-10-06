@@ -100,6 +100,23 @@ $ pnpm migration:generate src/database/migrations/<이름>
 - 생성된 파일은 반드시 읽어 본다. 컬럼 이름 변경은 삭제와 추가로 만들어지므로 `RENAME COLUMN`으로 직접 고친다.
 - 앱 시작 시 자동 실행(`migrationsRun`)은 하지 않는다. 인스턴스가 여러 개 뜰 때 서로 부딪히지 않도록 배포 단계에서 한 번만 실행한다.
 
+## Survey answer submission recovery
+
+사전 신청자의 설문 답변은 접수 기록(`survey_answer_submission`)으로 남은 뒤 Kafka로 유저 서비스에 전달된다.
+
+- **릴레이(30초마다)**: `RECEIVED`를 발행하고, 결과를 받지 못한 `PUBLISHED`는 `SURVEY_ANSWER_STALE_MS`(기본 5분)가 지나면 같은 `eventId`로 다시 보낸다. 최대 `SURVEY_ANSWER_MAX_RETRY_COUNT`(기본 5회)까지만 보낸다.
+- **정합성 점검(매시간)**: 재발행 상한을 다 쓴 `PUBLISHED` 기록마다 유저 서비스에 처리 결과를 묻는다. 결과가 있으면(결과 이벤트만 유실된 경우) `STORED`/`REJECTED`로 반영하고, 처리한 적 없거나 유저 서비스가 응답하지 않으면 상태를 그대로 두고 Discord로 알린다.
+
+알림의 "유저 서비스 미처리" 건을 다시 보내려면, 유저 서비스가 정상인지 먼저 확인한 뒤 해당 기록을 처음 상태로 되돌린다. 릴레이가 다음 주기에 같은 `eventId`로 발행하므로, 유저 서비스는 이미 처리한 건이면 중복 저장하지 않는다.
+
+```sql
+UPDATE survey_answer_submission
+SET status = 'RECEIVED', retry_count = 0
+WHERE event_id = '<알림의 eventId>' AND status = 'PUBLISHED';
+```
+
+"확인 불가"는 유저 서비스가 응답하지 않은 경우라, 장애가 풀리면 다음 점검에서 다시 판단한다. 되돌릴 필요가 없다.
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
