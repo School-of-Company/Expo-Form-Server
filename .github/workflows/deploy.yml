@@ -31,9 +31,15 @@ jobs:
           node-version: '26'
           cache: pnpm
 
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # 테스트가 실패하면 업로드 전에 멈춘다.
+      - name: Test
+        run: pnpm run test
+
       - name: Build
         run: |
-          pnpm install --frozen-lockfile
           pnpm run build
           pnpm prune --prod
 
