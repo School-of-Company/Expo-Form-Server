@@ -3,6 +3,9 @@ import { QueryFailedError } from 'typeorm';
 /** PostgreSQL의 유니크 제약 위반 에러 코드(SQLSTATE). */
 const POSTGRES_UNIQUE_VIOLATION_CODE = '23505';
 
+/** PostgreSQL의 외래 키 제약 위반 에러 코드(SQLSTATE). */
+const POSTGRES_FOREIGN_KEY_VIOLATION_CODE = '23503';
+
 /**
  * store가 던진 에러가 PostgreSQL 유니크 제약 위반인지 확인한다.
  *
@@ -20,5 +23,17 @@ export function isUniqueViolation(err: unknown): boolean {
     err instanceof QueryFailedError &&
     (err.driverError as { code?: string })?.code ===
       POSTGRES_UNIQUE_VIOLATION_CODE
+  );
+}
+
+/**
+ * store가 던진 에러가 PostgreSQL 외래 키 제약 위반인지 확인한다. 부모 row(설문)를 확인한 뒤 자식 row(응답)를
+ * 저장하는 사이에 부모가 삭제되면 이 위반이 나므로, 호출부는 500 대신 "부모가 없다"로 바꿔 응답한다.
+ */
+export function isForeignKeyViolation(err: unknown): boolean {
+  return (
+    err instanceof QueryFailedError &&
+    (err.driverError as { code?: string })?.code ===
+      POSTGRES_FOREIGN_KEY_VIOLATION_CODE
   );
 }

@@ -165,12 +165,6 @@ export class FormService {
     }));
   }
 
-  /** 박람회가 지워질 때 그 박람회의 폼을 모두 삭제한다. 폼이 없어도 성공한다(다시 불러도 안전). */
-  async deleteAllByExpo(expoId: string): Promise<void> {
-    const deleted = await this.formStore.deleteByExpoId(expoId);
-    this.logger.log(`박람회 폼 일괄 삭제: expoId=${expoId}, ${deleted}개`);
-  }
-
   /**
    * (박람회, 참여자군, 신청방식) 조합으로 폼 하나를 조회한다.
    * 신청 페이지를 그릴 때 쓰는 경로라, 입력 필드와 그 스펙까지 한 번에 담아서 돌려준다.

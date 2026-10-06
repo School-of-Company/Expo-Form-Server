@@ -44,7 +44,6 @@ describe('SurveyService', () => {
     updateWithQuestions: Mock;
     deleteById: Mock;
     findSummariesByExpoIds: Mock;
-    deleteByExpoId: Mock;
   };
   let service: SurveyService;
 
@@ -56,7 +55,6 @@ describe('SurveyService', () => {
       updateWithQuestions: vi.fn(),
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
-      deleteByExpoId: vi.fn(),
     };
     service = new SurveyService(surveyStore as unknown as SurveyStore);
   });
@@ -231,15 +229,6 @@ describe('SurveyService', () => {
         { expoId, participationType: ParticipationType.TRAINEE },
       ]);
       expect(surveyStore.findSummariesByExpoIds).toHaveBeenCalledWith([expoId]);
-    });
-  });
-
-  describe('deleteAllByExpo', () => {
-    it('지울 설문이 없어도 실패하지 않는다', async () => {
-      surveyStore.deleteByExpoId.mockResolvedValue(0);
-
-      await expect(service.deleteAllByExpo(expoId)).resolves.toBeUndefined();
-      expect(surveyStore.deleteByExpoId).toHaveBeenCalledWith(expoId);
     });
   });
 });

@@ -6,11 +6,11 @@ import { FormService } from './form.service.js';
 import { InternalFormController } from './internal-form.controller.js';
 
 describe('InternalFormController', () => {
-  let formService: { summarize: Mock; deleteAllByExpo: Mock };
+  let formService: { summarize: Mock };
   let controller: InternalFormController;
 
   beforeEach(() => {
-    formService = { summarize: vi.fn(), deleteAllByExpo: vi.fn() };
+    formService = { summarize: vi.fn() };
     controller = new InternalFormController(
       formService as unknown as FormService,
     );
@@ -26,11 +26,5 @@ describe('InternalFormController', () => {
     await controller.summarize({ expoIds: ['expo-1', 'expo-2'] });
 
     expect(formService.summarize).toHaveBeenCalledWith(['expo-1', 'expo-2']);
-  });
-
-  it('일괄 삭제 요청에 경로의 expoId를 넘긴다', async () => {
-    await controller.deleteAll('expo-1');
-
-    expect(formService.deleteAllByExpo).toHaveBeenCalledWith('expo-1');
   });
 });

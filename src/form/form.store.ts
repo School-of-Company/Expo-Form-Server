@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
+import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { FormEntity } from './entities/form.entity.js';
@@ -24,6 +25,7 @@ export class FormStore {
     @InjectRepository(FormEntity)
     private readonly forms: Repository<FormEntity>,
     private readonly dataSource: DataSource,
+    private readonly deletedExpos: DeletedExpoStore,
   ) {}
 
   /**
@@ -57,9 +59,18 @@ export class FormStore {
   /**
    * 폼과 입력 필드를 함께 저장한다.
    * `dynamicForms` 관계에 cascade가 걸려 있어서, 자식 필드도 이 한 번의 호출로 같이 들어간다.
+   *
+   * 삭제된 박람회에는 저장하지 않는다. 박람회 삭제와 같은 잠금 안에서 확인하고 저장하므로, 삭제가
+   * 끝나는 순간 폼이 새로 생기는 일이 없다.
+   *
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async save(form: FormEntity): Promise<FormEntity> {
-    return this.forms.save(form);
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
+
+      return manager.save(FormEntity, form);
+    });
   }
 
   /**
@@ -102,9 +113,15 @@ export class FormStore {
     });
   }
 
-  /** 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 FK CASCADE로 함께 지워진다. */
-  async deleteByExpoId(expoId: string): Promise<number> {
-    const result = await this.forms.delete({ expoId });
+  /**
+   * 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 FK CASCADE로 함께 지워진다.
+   * 박람회 삭제 트랜잭션(`ExpoPurgeService`) 안에서 부르므로 그 트랜잭션의 `manager`로 지운다.
+   */
+  async deleteByExpoId(
+    expoId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    const result = await manager.delete(FormEntity, { expoId });
     return result.affected ?? 0;
   }
 }

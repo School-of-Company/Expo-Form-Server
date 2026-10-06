@@ -13,6 +13,7 @@ import {
   buildEurekaOptions,
   EUREKA_SERVICE_URL_ENV,
 } from './eureka/eureka-options.js';
+import { ExpoModule } from './expo/expo.module.js';
 import { FormModule } from './form/form.module.js';
 import { KafkaModule } from './kafka/kafka.module.js';
 import { SurveyModule } from './survey/survey.module.js';
@@ -56,6 +57,7 @@ import { SurveyModule } from './survey/survey.module.js';
     DatabaseModule,
     FormModule,
     SurveyModule,
+    ExpoModule,
   ],
   controllers: [AppController],
   providers: [

@@ -6,11 +6,11 @@ import { SurveyService } from './survey.service.js';
 import { InternalSurveyController } from './internal-survey.controller.js';
 
 describe('InternalSurveyController', () => {
-  let surveyService: { summarize: Mock; deleteAllByExpo: Mock };
+  let surveyService: { summarize: Mock };
   let controller: InternalSurveyController;
 
   beforeEach(() => {
-    surveyService = { summarize: vi.fn(), deleteAllByExpo: vi.fn() };
+    surveyService = { summarize: vi.fn() };
     controller = new InternalSurveyController(
       surveyService as unknown as SurveyService,
     );
@@ -26,11 +26,5 @@ describe('InternalSurveyController', () => {
     await controller.summarize({ expoIds: ['expo-1', 'expo-2'] });
 
     expect(surveyService.summarize).toHaveBeenCalledWith(['expo-1', 'expo-2']);
-  });
-
-  it('일괄 삭제 요청에 경로의 expoId를 넘긴다', async () => {
-    await controller.deleteAll('expo-1');
-
-    expect(surveyService.deleteAllByExpo).toHaveBeenCalledWith('expo-1');
   });
 });

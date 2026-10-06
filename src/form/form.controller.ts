@@ -43,6 +43,7 @@ export class FormController {
   })
   @ApiCreatedResponse({ type: CreateFormResponseDto })
   @ApiErrorResponse(409, '같은 조합의 폼이 이미 있음 (FORM_ALREADY_EXISTS)')
+  @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @Post(':expoId')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
