@@ -60,6 +60,25 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Lint
+
+[XO](https://github.com/xojs/xo)(ESLint 기반, 타입 정보 사용)로 JS/TS 코드를 검사한다. 포매팅은 Prettier가 맡고 XO는 코드 품질 규칙을 본다(`prettier: 'compat'`).
+
+```bash
+# 검사 (CI의 `lint` 잡과 같다)
+$ pnpm run lint
+
+# 자동 수정 가능한 것만 고친다
+$ pnpm run lint:fix
+
+# 포매팅
+$ pnpm run format
+```
+
+- `develop`으로 가는 PR은 CI의 `lint` 잡이 통과해야 머지할 수 있다(브랜치 보호의 필수 체크).
+- 규칙은 `xo.config.ts`에서 끈 것만 예외다. 끄는 경우는 NestJS 런타임과 충돌하거나, API 계약·DB 스키마를 바꿔야 하거나, 프로젝트 컨벤션과 충돌할 때뿐이고 이유를 설정 파일에 같이 적는다. 코드 한 줄만 예외로 둘 때는 `// eslint-disable-next-line <rule>`에 이유를 남긴다.
+- 검사 대상은 JS/TS 코드다. TypeORM이 생성하는 `src/database/migrations`와 `.claude`, `.agents`는 제외한다.
+
 ## Database migrations
 
 개발에서는 엔티티를 보고 스키마를 자동으로 맞추지만(`synchronize`), **운영에서는 끄고** `src/database/migrations`의 마이그레이션으로만 바꾼다. 컬럼 이름을 바꾸면 TypeORM이 "삭제 후 추가"로 처리해서 운영 데이터가 사라질 수 있기 때문이다.
