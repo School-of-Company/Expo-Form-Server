@@ -93,6 +93,19 @@ describe('SurveyAnswerService', () => {
     expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
 
+  it('유저 서비스가 다른 참여자군의 응답자를 돌려주면 없음과 같이 거부한다', async () => {
+    surveyStore.findByExpoAndType.mockResolvedValue(survey);
+    userClient.findParticipant.mockResolvedValue({
+      participantId: 42,
+      participationType: ParticipationType.STANDARD,
+    });
+
+    await expect(
+      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+    ).rejects.toThrow(ParticipantNotFoundException);
+    expect(submissionStore.createReceived).not.toHaveBeenCalled();
+  });
+
   it('유저 서비스 장애는 응답자 없음으로 바꾸지 않고 그대로 전파한다', async () => {
     surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findParticipant.mockRejectedValue(
