@@ -93,6 +93,26 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
+   * 재발행 상한(`maxRetryCount`)까지 다 쓰고도 결과를 받지 못한 `PUBLISHED` 기록을 가져온다.
+   * 릴레이는 이 기록을 더 이상 재발행하지 않으므로, 정합성 점검(`SurveyAnswerReconcileService`)이
+   * 유저 서비스에 처리 결과를 직접 물어 맞추거나 사람이 볼 수 있게 알린다.
+   */
+  async findExhausted(
+    maxRetryCount: number,
+    limit: number,
+  ): Promise<SurveyAnswerSubmissionEntity[]> {
+    return this.submissions
+      .createQueryBuilder('submission')
+      .where('submission.status = :status', {
+        status: SurveyAnswerSubmissionStatus.PUBLISHED,
+      })
+      .andWhere('submission.retryCount >= :maxRetryCount', { maxRetryCount })
+      .orderBy('submission.publishedAt', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  /**
    * 발행(또는 재발행) 완료를 기록한다. `eventId`는 건드리지 않는다 — 재발행이어도 최초 발행 때
    * 발급된 값을 그대로 유지해야 유저 서비스가 멱등키로 쓸 수 있다.
    *

@@ -99,4 +99,47 @@ describe('HttpUserClient', () => {
       ExternalServiceUnavailableException,
     );
   });
+
+  describe('findSurveyAnswerResult', () => {
+    const eventId = '3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c';
+
+    it('eventId를 바디로 보내고 처리 결과를 돌려준다(사유가 없으면 null)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(200, { status: 'STORED' }));
+
+      await expect(client.findSurveyAnswerResult(eventId)).resolves.toEqual({
+        status: 'STORED',
+        reason: null,
+      });
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(
+        'http://user-server/internal/survey-answer-events/resolve',
+      );
+      expect(JSON.parse(init.body as string)).toEqual({ eventId });
+    });
+
+    it('거절 사유를 그대로 돌려준다', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, { status: 'REJECTED', reason: '응답자 없음' }),
+      );
+
+      await expect(client.findSurveyAnswerResult(eventId)).resolves.toEqual({
+        status: 'REJECTED',
+        reason: '응답자 없음',
+      });
+    });
+
+    it('404(처리한 적 없음)는 null이다', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(404));
+
+      await expect(client.findSurveyAnswerResult(eventId)).resolves.toBeNull();
+    });
+
+    it('알 수 없는 상태값은 서비스 장애로 던진다', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(200, { status: 'PENDING' }));
+
+      await expect(client.findSurveyAnswerResult(eventId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+    });
+  });
 });

@@ -46,13 +46,13 @@ const submitDto = {
 describe('SurveyAnswerService', () => {
   let surveyStore: { findByExpoAndType: Mock };
   let submissionStore: { findActiveByKey: Mock; createReceived: Mock };
-  let userClient: { findParticipant: Mock };
+  let userClient: { findParticipant: Mock; findSurveyAnswerResult: Mock };
   let service: SurveyAnswerService;
 
   beforeEach(() => {
     surveyStore = { findByExpoAndType: vi.fn() };
     submissionStore = { findActiveByKey: vi.fn(), createReceived: vi.fn() };
-    userClient = { findParticipant: vi.fn() };
+    userClient = { findParticipant: vi.fn(), findSurveyAnswerResult: vi.fn() };
     submissionStore.findActiveByKey.mockResolvedValue(null);
     service = new SurveyAnswerService(
       surveyStore as unknown as SurveyStore,

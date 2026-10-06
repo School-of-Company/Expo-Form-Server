@@ -22,6 +22,16 @@ export type ParticipantLookupResult = {
 };
 
 /**
+ * 유저 서비스가 설문 답변 접수 이벤트를 처리한 결과. Kafka 결과 이벤트(`STORED`/`REJECTED`)와
+ * 같은 값이다 — 결과 이벤트가 유실됐을 때 같은 결과를 조회로 다시 받기 위한 것이다.
+ */
+export type SurveyAnswerEventResult = {
+  status: 'STORED' | 'REJECTED';
+  /** 거절 사유. `REJECTED`가 아니거나 사유가 없으면 null. */
+  reason: string | null;
+};
+
+/**
  * 유저(교육생/일반 참가자) 서비스에 대한 게이트웨이.
  *
  * 설문 답변 저장(`submitSurveyAnswer`)은 더 이상 이 게이트웨이를 거치지 않는다(#29) —
@@ -38,4 +48,14 @@ export interface UserClient {
   findParticipant(
     input: ParticipantLookupInput,
   ): Promise<ParticipantLookupResult | null>;
+
+  /**
+   * 설문 답변 접수 이벤트(`eventId`)를 유저 서비스가 처리했는지 조회한다. 처리한 적이 없으면 null.
+   * 결과 이벤트를 받지 못한 접수 기록의 정합성을 맞출 때 쓴다(#38).
+   *
+   * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때
+   */
+  findSurveyAnswerResult(
+    eventId: string,
+  ): Promise<SurveyAnswerEventResult | null>;
 }
