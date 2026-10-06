@@ -38,6 +38,10 @@ export class SurveyQrController {
     '없거나 입장하지 않은 토큰이거나 설문이 없음 (SURVEY_NOT_FOUND)',
   )
   @ApiErrorResponse(409, '이미 응답한 토큰 (SURVEY_ANSWER_ALREADY_EXISTS)')
+  @ApiErrorResponse(
+    503,
+    '참여 서비스에서 토큰의 입장 여부를 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
   @Get('qr/:token')
   async findSurvey(
     @Param('token', new ZodValidationPipe(qrTokenSchema)) token: string,
@@ -58,6 +62,10 @@ export class SurveyQrController {
     '없거나 입장하지 않은 토큰이거나 설문이 없음 (SURVEY_NOT_FOUND)',
   )
   @ApiErrorResponse(409, '이미 응답한 토큰 (SURVEY_ANSWER_ALREADY_EXISTS)')
+  @ApiErrorResponse(
+    503,
+    '참여 서비스에서 토큰의 입장 여부를 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
   @Post('answer/qr/:token')
   @HttpCode(HttpStatus.NO_CONTENT)
   async submit(

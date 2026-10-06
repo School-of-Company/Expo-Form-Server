@@ -16,6 +16,9 @@ export interface ParticipationClient {
   /**
    * 입장이 확인된 토큰이면 그 정보를, 없는 토큰이거나 아직 입장하지 않은 토큰이면 null을
    * 돌려준다. 둘을 구분해서 알려주면 토큰의 존재 여부가 노출되므로 호출부는 같은 404로 다룬다.
+   *
+   * @throws {ExternalServiceUnavailableException} 참여 서비스에서 응답을 받지 못했거나 연동
+   *   설정이 없을 때 — "없음"으로 돌려보내면 정상 응답자가 거절되므로 구분한다
    */
   findEnteredToken(token: string): Promise<EnteredTokenResult | null>;
 }
