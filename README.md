@@ -106,6 +106,9 @@ $ pnpm migration:generate src/database/migrations/<이름>
 
 - **릴레이(30초마다)**: `RECEIVED`를 발행하고, 결과를 받지 못한 `PUBLISHED`는 `SURVEY_ANSWER_STALE_MS`(기본 5분)가 지나면 같은 `eventId`로 다시 보낸다. 최대 `SURVEY_ANSWER_MAX_RETRY_COUNT`(기본 5회)까지만 보낸다.
 - **정합성 점검(매시간)**: 재발행 상한을 다 썼고 마지막 발행 후 `SURVEY_ANSWER_STALE_MS`가 지난 `PUBLISHED` 기록마다 유저 서비스에 처리 결과를 묻는다(한 번에 최대 1000건). 결과가 있으면(결과 이벤트만 유실된 경우) `STORED`/`REJECTED`로 반영하고, 처리한 적 없으면 상태를 그대로 두고 Discord로 알린다. 유저 서비스가 응답하지 않으면 그 자리에서 점검을 멈추고 알린다.
+  - `SURVEY_ANSWER_RECONCILE_ENABLED=true`일 때만 돈다(기본 꺼짐). 유저 서비스의 처리 결과 조회 API(Expo-User-Server#11)가 배포된 뒤에 켠다.
+  - 상한이나 장애로 멈추면 다음 점검은 마지막으로 확인한 기록 다음부터 이어 본다. 이 위치는 인스턴스 메모리에만 있어서, 재시작하면 처음부터 다시 본다.
+  - 알릴 결과는 Discord와 별개로 항상 오류 로그에 남긴다. `DISCORD_WEBHOOK_URL`이 비어 있으면 로그에 "웹훅 미설정"이 함께 찍히고, Discord 전송이 실패해도 오류 로그를 남긴다.
 
 알림의 "유저 서비스 미처리" 건을 다시 보내려면, 유저 서비스가 정상인지 먼저 확인한 뒤 해당 기록을 처음 상태로 되돌린다. 릴레이가 다음 주기에 같은 `eventId`로 발행하므로, 유저 서비스는 이미 처리한 건이면 중복 저장하지 않는다.
 
