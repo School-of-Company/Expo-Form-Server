@@ -52,12 +52,26 @@ async function parseJsonResponse<T>(
   schema: z.ZodType<T>,
 ): Promise<T | null> {
   if (response.status === 404) {
+    await discardBody(response);
     return null;
   }
 
   if (!response.ok) {
+    await discardBody(response);
     throw new ExternalServiceError(url, response.status);
   }
 
   return schema.parse(await response.json());
+}
+
+/**
+ * 읽지 않을 응답 바디를 버린다. Node의 `fetch`(undici)는 바디를 끝까지 읽거나 취소해야 연결을
+ * 풀에 돌려준다 — 404·오류 응답을 그냥 두면 연결이 반환되지 않고 쌓인다.
+ */
+async function discardBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // 이미 닫힌 스트림이면 버릴 것이 없다.
+  }
 }

@@ -84,7 +84,9 @@ export class SurveyAnswerService {
       phoneNumber,
       participationType: survey.participationType,
     });
-    if (!participant) {
+    // 요청한 참여자군과 다른 응답은 계약 위반이지만, 다른 참여자군의 응답자가 답변하게 두지 않도록
+    // 여기서도 한 번 더 막는다. 없는 경우와 같은 예외로 묶어 등록 여부를 드러내지 않는다.
+    if (participant?.participationType !== survey.participationType) {
       throw new ParticipantNotFoundException();
     }
 
