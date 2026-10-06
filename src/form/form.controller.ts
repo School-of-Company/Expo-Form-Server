@@ -82,6 +82,7 @@ export class FormController {
   })
   @ApiNoContentResponse({ description: '수정 완료' })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
+  @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @Patch(':expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async update(

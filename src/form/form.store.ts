@@ -79,20 +79,38 @@ export class FormStore {
    * 삭제와 재삽입 사이에 다른 요청이 폼을 조회하면 필드가 하나도 없는 상태를 보게 되므로,
    * 두 작업을 한 트랜잭션으로 묶는다.
    *
+   * 폼을 읽은 뒤 그 폼이 삭제됐다면 아래 `save`가 지워진 폼을 다시 INSERT해 버린다. 그래서 박람회
+   * 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 폼 row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
+   *
    * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
    * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
+   * @returns 갱신했으면 true, 그 사이 폼이 삭제돼 아무것도 바꾸지 않았으면 false
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithFields(
     form: FormEntity,
     fields: DynamicFormEntity[],
-  ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
+
+      const locked = await manager.findOne(FormEntity, {
+        where: { id: form.id },
+        select: { id: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) {
+        return false;
+      }
+
       await manager.delete(DynamicFormEntity, { form: { id: form.id } });
 
       // 조회해온 form에는 방금 지운 옛 필드들이 매달려 있다. 새 필드로 바꿔놓지 않으면
       // dynamicForms의 cascade가 옛 필드를 그대로 되살려버린다.
       form.dynamicForms = fields;
       await manager.save(FormEntity, form);
+
+      return true;
     });
   }
 

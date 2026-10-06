@@ -56,7 +56,7 @@ describe('FormService', () => {
       findByExpoAndTypes: vi.fn(),
       existsByExpoAndTypes: vi.fn(),
       save: vi.fn(),
-      updateWithFields: vi.fn(),
+      updateWithFields: vi.fn().mockResolvedValue(true),
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
     };
@@ -130,6 +130,15 @@ describe('FormService', () => {
         FormNotFoundException,
       );
       expect(formStore.updateWithFields).not.toHaveBeenCalled();
+    });
+
+    it('수정하는 사이 폼이 삭제됐으면 예외를 던진다', async () => {
+      formStore.findByExpoAndTypes.mockResolvedValue(existingForm);
+      formStore.updateWithFields.mockResolvedValue(false);
+
+      await expect(service.update(expoId, createDto)).rejects.toThrow(
+        FormNotFoundException,
+      );
     });
 
     it('기존 필드를 새 필드로 통째로 교체한다', async () => {

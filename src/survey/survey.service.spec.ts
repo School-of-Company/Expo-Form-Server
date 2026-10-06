@@ -52,7 +52,7 @@ describe('SurveyService', () => {
       findByExpoAndType: vi.fn(),
       existsByExpoAndType: vi.fn(),
       save: vi.fn(),
-      updateWithQuestions: vi.fn(),
+      updateWithQuestions: vi.fn().mockResolvedValue(true),
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
     };
@@ -136,6 +136,15 @@ describe('SurveyService', () => {
         SurveyNotFoundException,
       );
       expect(surveyStore.updateWithQuestions).not.toHaveBeenCalled();
+    });
+
+    it('수정하는 사이 설문이 삭제됐으면 예외를 던진다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+      surveyStore.updateWithQuestions.mockResolvedValue(false);
+
+      await expect(service.update(expoId, createDto)).rejects.toThrow(
+        SurveyNotFoundException,
+      );
     });
 
     it('기존 문항을 새 문항으로 통째로 교체한다', async () => {

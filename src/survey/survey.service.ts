@@ -117,7 +117,8 @@ export class SurveyService {
    * 그래서 기존 문항의 id는 보존되지 않는다 — 이미 제출된 응답이 옛 문항을 가리키고 있다면
    * 연결이 끊긴다. 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
    *
-   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
+   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때(수정하는 사이 삭제된 경우 포함)
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async update(expoId: string, dto: UpdateSurveyRequestDto): Promise<void> {
     const survey = await this.surveyStore.findByExpoAndType(
@@ -135,7 +136,15 @@ export class SurveyService {
       this.toQuestionEntity(question),
     );
 
-    await this.surveyStore.updateWithQuestions(survey, questions);
+    // 설문을 읽은 뒤 그 설문이 삭제됐다면 아무것도 바꾸지 않고 false가 온다.
+    const updated = await this.surveyStore.updateWithQuestions(
+      survey,
+      questions,
+    );
+    if (!updated) {
+      throw new SurveyNotFoundException();
+    }
+
     this.logger.log(
       `설문 수정 완료: surveyId=${survey.id}, 문항 ${questions.length}개로 교체`,
     );

@@ -41,7 +41,7 @@ describe('DeletedExpoStore', () => {
       ).resolves.toBeUndefined();
 
       expect(manager.query).toHaveBeenCalledWith(
-        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        'SELECT pg_advisory_xact_lock(hashtext($1::uuid::text))',
         [expoId],
       );
       expect(manager.query.mock.invocationCallOrder[0]).toBeLessThan(

@@ -83,14 +83,31 @@ export class SurveyStore {
    * 문항은 더 이상 부모 저장에 얹혀가는 cascade로 들어가지 않으므로, 여기서 직접 관계를
    * 채워 저장한다.
    *
+   * 설문을 읽은 뒤 그 설문이 삭제됐다면 아래 UPDATE는 0행이 바뀌고 문항 저장이 외래 키 위반(500)이
+   * 되거나 빈 문항으로 조용히 끝난다. 그래서 박람회 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 설문
+   * row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
+   *
    * @param survey 조회해온 설문 엔티티(메타데이터는 이미 갱신된 상태)
    * @param questions 이 설문의 문항을 전부 대체할 새 문항들
+   * @returns 갱신했으면 true, 그 사이 설문이 삭제돼 아무것도 바꾸지 않았으면 false
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithQuestions(
     survey: SurveyEntity,
     questions: DynamicSurveyEntity[],
-  ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, survey.expoId);
+
+      const locked = await manager.findOne(SurveyEntity, {
+        where: { id: survey.id },
+        select: { id: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) {
+        return false;
+      }
+
       await manager.delete(DynamicSurveyEntity, { survey: { id: survey.id } });
 
       await manager.update(SurveyEntity, survey.id, {
@@ -105,6 +122,8 @@ export class SurveyStore {
 
       survey.dynamicSurveys = questions;
       await manager.save(DynamicSurveyEntity, questions);
+
+      return true;
     });
   }
 

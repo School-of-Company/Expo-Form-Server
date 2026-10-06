@@ -42,8 +42,17 @@ export class DeletedExpoStore {
       .execute();
   }
 
-  /** 해시가 같은 다른 박람회와 잠금을 나눌 수 있지만, 그 경우에도 잠깐 기다릴 뿐 동작은 같다. */
+  /**
+   * 해시가 같은 다른 박람회와 잠금을 나눌 수 있지만, 그 경우에도 잠깐 기다릴 뿐 동작은 같다.
+   *
+   * 키는 요청 문자열이 아니라 DB가 정규화한 UUID 문자열로 만든다. `ParseUUIDPipe`는 대문자 UUID도
+   * 받는데, 같은 박람회를 대문자와 소문자로 부르면 `uuid` 컬럼은 같은 값으로 비교하면서 잠금 키만
+   * 달라져 삭제와 생성이 서로 기다리지 않게 되기 때문이다.
+   */
   private async lock(manager: EntityManager, expoId: string): Promise<void> {
-    await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [expoId]);
+    await manager.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1::uuid::text))',
+      [expoId],
+    );
   }
 }
