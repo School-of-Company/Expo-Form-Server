@@ -3,6 +3,12 @@ import { ExternalServiceError } from './external-service.error.js';
 
 const DEFAULT_TIMEOUT_MS = 3000;
 
+/** {@link postJson} 호출 옵션. */
+export type PostJsonOptions = {
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+};
+
 /**
  * 외부 서비스에 GET 요청을 보내고 JSON으로 파싱한다.
  * 응답 모양은 `schema`로 실제 검증한다 — 외부 서비스도 경계이므로 캐스팅으로 믿지 않는다.
@@ -15,6 +21,36 @@ export async function fetchJson<T>(
 ): Promise<T | null> {
   const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
 
+  return parseJsonResponse(url, response, schema);
+}
+
+/**
+ * 외부 서비스에 JSON 바디로 POST 요청을 보내고 응답을 파싱한다. 응답 처리 규칙은
+ * {@link fetchJson}과 같다(404는 없음, 그 외 비정상 응답은 {@link ExternalServiceError}).
+ *
+ * 전화번호처럼 URL·접근 로그에 남으면 안 되는 값을 바디로 보낼 때 쓴다.
+ */
+export async function postJson<T>(
+  url: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: PostJsonOptions = {},
+): Promise<T | null> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  return parseJsonResponse(url, response, schema);
+}
+
+async function parseJsonResponse<T>(
+  url: string,
+  response: Response,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
   if (response.status === 404) {
     return null;
   }

@@ -111,3 +111,20 @@ export class ParticipantNotFoundException extends DomainException {
     );
   }
 }
+
+/**
+ * 다른 서비스(유저·참여 서비스)를 호출했는데 응답을 받지 못했을 때. 비정상 응답, 타임아웃,
+ * 연결 실패, 계약과 다른 응답 모양을 모두 포함한다.
+ *
+ * "찾을 수 없음"(404)과 구분하는 이유: 장애를 "없음"으로 돌려보내면 정상 응답자가 거절된다.
+ * 클라이언트는 이 코드를 받으면 잠시 후 다시 시도하면 된다.
+ */
+export class ExternalServiceUnavailableException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE,
+      '잠시 후 다시 시도해 주세요.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+}
