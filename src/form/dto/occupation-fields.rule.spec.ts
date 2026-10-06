@@ -3,7 +3,7 @@ import { DynamicFormFieldType } from '../../common/enums/dynamic-form-field-type
 import { ParticipationType } from '../../common/enums/participation-type.enum.js';
 import { ApplicationType } from '../entities/application-type.enum.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
-import { Occupation } from '../entities/occupation.enum.js';
+import { Occupation } from '../../common/enums/occupation.enum.js';
 import { createFormSchema } from './create-form.request.dto.js';
 import { updateFormSchema } from './update-form.request.dto.js';
 
