@@ -120,6 +120,17 @@ WHERE event_id = '<알림의 eventId>' AND status = 'PUBLISHED';
 
 "확인 불가"는 유저 서비스가 응답하지 않은 경우라, 장애가 풀리면 다음 점검에서 다시 판단한다. 되돌릴 필요가 없다.
 
+## Internal API
+
+다른 서비스가 Gateway를 거치지 않고 부르는 `/internal` 경로다. `X-Internal-Token` 헤더가 `INTERNAL_TOKEN`(필수, 32자 이상)과 같아야 하고, 아니면 401이다. Gateway 라우팅 표에 `/internal` prefix를 넣지 않는다.
+
+| 메서드·경로                                                                                    | 쓰는 곳                                         |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `GET /internal/forms/{expoId}?type=&applicationType=`                                          | 신청 서비스 — 제출된 신청서를 폼 스펙으로 검증  |
+| `GET /internal/surveys/{expoId}?type=`                                                         | 리포트 서비스 등 — 설문 문항 스펙               |
+| `POST /internal/forms/summaries`, `POST /internal/surveys/summaries` (`{expoIds}`, 최대 100개) | 박람회 서비스 — 박람회별 폼·설문 생성 현황      |
+| `DELETE /internal/forms/{expoId}`, `DELETE /internal/surveys/{expoId}`                         | 박람회 서비스 — 박람회 삭제 시 정리(없어도 204) |
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
