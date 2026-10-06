@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
 import { postJson } from '../common/http/fetch-json.util.js';
+import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
 import type {
   EnteredTokenResult,
@@ -15,14 +16,6 @@ const enteredTokenResponseSchema = z.object({
   expoId: z.guid(),
 });
 
-/** {@link HttpParticipationClient} 설정. 값은 `ParticipationClientModule`이 환경 변수에서 읽어 넘긴다. */
-export type HttpParticipationClientOptions = {
-  /** 참여 서비스 주소. 끝의 `/`는 붙이지 않는다. */
-  baseUrl: string;
-  /** 참여 서비스가 `/internal` 경로를 보호하는 공유 시크릿의 사본. */
-  internalToken: string;
-};
-
 /**
  * 참여 서비스의 내부 API를 HTTP로 호출하는 {@link ParticipationClient} 구현.
  *
@@ -34,7 +27,7 @@ export type HttpParticipationClientOptions = {
 export class HttpParticipationClient implements ParticipationClient {
   private readonly logger = new Logger(HttpParticipationClient.name);
 
-  constructor(private readonly options: HttpParticipationClientOptions) {}
+  constructor(private readonly options: InternalServiceOptions) {}
 
   async findEnteredToken(token: string): Promise<EnteredTokenResult | null> {
     const url = `${this.options.baseUrl}/internal/qr-tokens/resolve`;

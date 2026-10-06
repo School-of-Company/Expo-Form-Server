@@ -42,9 +42,14 @@ describe('SurveyAnswerReconcileService', () => {
   });
 
   it('재발행 상한을 다 썼고 마지막 발행이 충분히 지난 기록만 찾는다', async () => {
-    const before = Date.now();
-
-    await service.reconcile();
+    const now = new Date('2026-10-06T12:00:00.000Z');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+    try {
+      await service.reconcile();
+    } finally {
+      vi.useRealTimers();
+    }
 
     const [query] = store.findExhausted.mock.calls[0] as [
       { maxRetryCount: number; staleBefore: Date; limit: number },
@@ -52,9 +57,7 @@ describe('SurveyAnswerReconcileService', () => {
     expect(query.maxRetryCount).toBe(5);
     expect(query.limit).toBe(100);
     // 기본 5분 전보다 오래된 발행만 대상이다 — 방금 마지막으로 발행한 기록은 아직 처리 중일 수 있다.
-    expect(before - query.staleBefore.getTime()).toBeGreaterThanOrEqual(
-      5 * 60 * 1000,
-    );
+    expect(query.staleBefore).toEqual(new Date(now.getTime() - 5 * 60 * 1000));
   });
 
   it('대상이 없으면 유저 서비스를 부르지 않고 알리지도 않는다', async () => {
