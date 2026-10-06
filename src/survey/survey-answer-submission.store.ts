@@ -96,20 +96,35 @@ export class SurveyAnswerSubmissionStore {
    * 재발행 상한(`maxRetryCount`)까지 다 쓰고도 결과를 받지 못한 `PUBLISHED` 기록을 가져온다.
    * 릴레이는 이 기록을 더 이상 재발행하지 않으므로, 정합성 점검(`SurveyAnswerReconcileService`)이
    * 유저 서비스에 처리 결과를 직접 물어 맞추거나 사람이 볼 수 있게 알린다.
+   *
+   * 마지막 발행이 `staleBefore`보다 오래된 것만 가져온다 — 방금 마지막으로 발행한 기록은 유저
+   * 서비스가 아직 처리 중일 수 있다. 해결되지 않는 기록이 계속 남아도 그 뒤의 기록까지 점검할 수
+   * 있도록 `id` 순서의 키셋 페이지(`afterId`)로 끝까지 훑는다.
    */
-  async findExhausted(
-    maxRetryCount: number,
-    limit: number,
-  ): Promise<SurveyAnswerSubmissionEntity[]> {
-    return this.submissions
+  async findExhausted({
+    maxRetryCount,
+    staleBefore,
+    limit,
+    afterId,
+  }: {
+    maxRetryCount: number;
+    staleBefore: Date;
+    limit: number;
+    afterId?: string;
+  }): Promise<SurveyAnswerSubmissionEntity[]> {
+    const query = this.submissions
       .createQueryBuilder('submission')
       .where('submission.status = :status', {
         status: SurveyAnswerSubmissionStatus.PUBLISHED,
       })
       .andWhere('submission.retryCount >= :maxRetryCount', { maxRetryCount })
-      .orderBy('submission.publishedAt', 'ASC')
-      .take(limit)
-      .getMany();
+      .andWhere('submission.publishedAt < :staleBefore', { staleBefore });
+
+    if (afterId !== undefined) {
+      query.andWhere('submission.id > :afterId', { afterId });
+    }
+
+    return query.orderBy('submission.id', 'ASC').take(limit).getMany();
   }
 
   /**
