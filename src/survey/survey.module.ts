@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ParticipationClientModule } from '../participation-client/participation-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
+import { InternalSurveyController } from './internal-survey.controller.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerController } from './survey-answer.controller.js';
+import { SurveyAnswerReconcileService } from './survey-answer-reconcile.service.js';
 import { SurveyAnswerRelayService } from './survey-answer-relay.service.js';
 import { SurveyAnswerResultConsumer } from './survey-answer-result.consumer.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
@@ -30,7 +32,12 @@ import { SurveyStore } from './survey.store.js';
     UserClientModule,
     ParticipationClientModule,
   ],
-  controllers: [SurveyController, SurveyAnswerController, SurveyQrController],
+  controllers: [
+    SurveyController,
+    SurveyAnswerController,
+    SurveyQrController,
+    InternalSurveyController,
+  ],
   providers: [
     SurveyService,
     SurveyStore,
@@ -38,6 +45,7 @@ import { SurveyStore } from './survey.store.js';
     SurveyAnswerSubmissionStore,
     SurveyAnswerRelayService,
     SurveyAnswerResultConsumer,
+    SurveyAnswerReconcileService,
     SurveyQrService,
     SurveyQrAnswerStore,
   ],

@@ -7,6 +7,7 @@ import { DicoshotModule } from 'dicoshot-nest';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { DomainExceptionFilter } from './common/exceptions/domain-exception.filter.js';
+import { dicoshotFilterOptions } from './common/notification/dicoshot-filter.options.js';
 import { DatabaseModule } from './database/database.module.js';
 import {
   buildEurekaOptions,
@@ -31,7 +32,7 @@ import { SurveyModule } from './survey/survey.module.js';
       },
       inject: [ConfigService],
       global: true,
-      filter: true,
+      filter: dicoshotFilterOptions,
     }),
     ScheduleModule.forRoot(),
     // Gateway가 `/forms`, `/surveys`를 Eureka에서 찾을 수 있게 `expo-form-server`로 등록한다.

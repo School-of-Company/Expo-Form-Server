@@ -43,6 +43,8 @@ describe('SurveyService', () => {
     save: Mock;
     updateWithQuestions: Mock;
     deleteById: Mock;
+    findSummariesByExpoIds: Mock;
+    deleteByExpoId: Mock;
   };
   let service: SurveyService;
 
@@ -53,6 +55,8 @@ describe('SurveyService', () => {
       save: vi.fn(),
       updateWithQuestions: vi.fn(),
       deleteById: vi.fn(),
+      findSummariesByExpoIds: vi.fn(),
+      deleteByExpoId: vi.fn(),
     };
     service = new SurveyService(surveyStore as unknown as SurveyStore);
   });
@@ -210,6 +214,32 @@ describe('SurveyService', () => {
         '1': '만족',
         '2': '불만족',
       });
+    });
+  });
+
+  describe('summarize', () => {
+    it('저장소가 준 행에서 식별 값만 골라 돌려준다', async () => {
+      surveyStore.findSummariesByExpoIds.mockResolvedValue([
+        {
+          expoId,
+          participationType: ParticipationType.TRAINEE,
+          title: '섞여 들어온 값',
+        },
+      ]);
+
+      await expect(service.summarize([expoId])).resolves.toEqual([
+        { expoId, participationType: ParticipationType.TRAINEE },
+      ]);
+      expect(surveyStore.findSummariesByExpoIds).toHaveBeenCalledWith([expoId]);
+    });
+  });
+
+  describe('deleteAllByExpo', () => {
+    it('지울 설문이 없어도 실패하지 않는다', async () => {
+      surveyStore.deleteByExpoId.mockResolvedValue(0);
+
+      await expect(service.deleteAllByExpo(expoId)).resolves.toBeUndefined();
+      expect(surveyStore.deleteByExpoId).toHaveBeenCalledWith(expoId);
     });
   });
 });

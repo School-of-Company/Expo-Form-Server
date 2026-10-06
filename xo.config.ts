@@ -59,6 +59,9 @@ const xoConfig: FlatXoConfig = [
       // `v` 플래그는 ES2024 이상 타깃에서만 컴파일된다(tsconfig 타깃은 ES2023). `u`면 같은 목적(유니코드 안전)을 만족한다.
       'require-unicode-regexp': ['error', { requireFlag: 'u' }],
 
+      // `Promise.withResolvers()`는 ES2024 API라 tsconfig 타깃(ES2023)에서는 타입 오류가 난다.
+      'unicorn/prefer-promise-with-resolvers': 'off',
+
       // 이 프로젝트의 TSDoc은 `/** ... */`에 ` * ` 접두사를 쓰는 표준 형태이고 주석은 한국어다.
       'jsdoc/require-asterisk-prefix': 'off',
       'jsdoc/check-indentation': 'off',

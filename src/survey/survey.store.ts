@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
+import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
 /**
@@ -99,5 +100,32 @@ export class SurveyStore {
   /** 설문을 삭제한다. 딸린 문항은 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
     await this.surveys.delete({ id });
+  }
+
+  /** 여러 박람회의 설문을 식별 값만 골라 조회한다. 문항은 끌고 오지 않는다. */
+  async findSummariesByExpoIds(
+    expoIds: string[],
+  ): Promise<Array<Pick<SurveyEntity, 'expoId' | 'participationType'>>> {
+    return this.surveys.find({
+      select: { expoId: true, participationType: true },
+      where: { expoId: In(expoIds) },
+    });
+  }
+
+  /**
+   * 박람회의 설문을 모두 삭제하고 지운 개수를 돌려준다. 문항과 종이 QR 답변은 FK CASCADE로 함께
+   * 지워진다.
+   *
+   * 설문 답변 접수 기록(아웃박스)은 설문 FK가 없어 여기서 직접 지운다. 남겨 두면 릴레이가 지워진
+   * 설문의 답변을 계속 발행한다. 설문을 먼저 지우는 건 접수(`createReceived`)와 순서를 맞추기
+   * 위해서다 — 접수가 설문 row를 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤의 접수
+   * 기록 삭제는 새 스냅샷으로 실행돼 방금 커밋된 기록까지 지운다.
+   */
+  async deleteByExpoId(expoId: string): Promise<number> {
+    return this.dataSource.transaction(async (manager) => {
+      const result = await manager.delete(SurveyEntity, { expoId });
+      await manager.delete(SurveyAnswerSubmissionEntity, { expoId });
+      return result.affected ?? 0;
+    });
   }
 }

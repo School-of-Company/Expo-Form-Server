@@ -53,8 +53,9 @@ export class SurveyAnswerService {
    * 각각 자신의 참여자군을 고정해서 넘긴다.
    *
    * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
-   * @throws {ParticipantNotFoundException} 전화번호로 응답자를 찾을 수 없거나, 찾았지만
-   *   참여자군이 이 설문의 대상과 다를 때
+   * @throws {ParticipantNotFoundException} 이 설문의 참여자군에서 그 전화번호로 등록된 응답자를
+   *   찾을 수 없을 때
+   * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙(필수 여부·선택지·최대 선택 개수)과
    *   맞지 않을 때
    * @throws {SurveyAnswerAlreadyExistsException} 같은 응답자의 활성(= 거절되지 않은) 제출
@@ -75,12 +76,16 @@ export class SurveyAnswerService {
 
     const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
 
-    const participant = await this.userClient.findByPhoneNumber(
-      survey.expoId,
+    // 이 설문의 참여자군 테이블에서만 찾는다. 다른 참여자군으로 등록된 번호도 "없음"으로 돌아오므로,
+    // 등록되지 않은 경우와 참여자군이 안 맞는 경우가 같은 예외로 묶인다 — 둘을 구분해서 알려주면
+    // 그 전화번호의 등록 여부 자체가 노출된다.
+    const participant = await this.userClient.findParticipant({
+      expoId: survey.expoId,
       phoneNumber,
-    );
-    // 등록되지 않은 경우와 참여자군이 안 맞는 경우를 같은 예외로 묶는다 — 둘을 구분해서
-    // 알려주면 그 전화번호의 등록 여부 자체가 노출된다.
+      participationType: survey.participationType,
+    });
+    // 요청한 참여자군과 다른 응답은 계약 위반이지만, 다른 참여자군의 응답자가 답변하게 두지 않도록
+    // 여기서도 한 번 더 막는다. 없는 경우와 같은 예외로 묶어 등록 여부를 드러내지 않는다.
     if (participant?.participationType !== survey.participationType) {
       throw new ParticipantNotFoundException();
     }
@@ -118,14 +123,20 @@ export class SurveyAnswerService {
     // 위 findActiveByKey와 이 저장 사이에 같은 응답자의 다른 요청이 끼어들면 둘 다 통과한다.
     // 그럴 땐 활성 제출 유니크 제약이 한쪽을 막는데, 그 위반을 그대로 두면 409가 아니라 500이
     // 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
+    let created: boolean;
     try {
-      await this.submissionStore.createReceived(submission);
+      created = await this.submissionStore.createReceived(submission);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new SurveyAnswerAlreadyExistsException();
       }
 
       throw error;
+    }
+
+    // 위에서 설문을 찾은 뒤 박람회 일괄 삭제가 끼어들면 기록 없이 돌아온다.
+    if (!created) {
+      throw new SurveyNotFoundException();
     }
 
     this.logger.log(

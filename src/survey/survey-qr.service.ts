@@ -44,6 +44,7 @@ export class SurveyQrService {
    * @throws {SurveyNotFoundException} 없는 토큰이거나 입장하지 않은 토큰일 때, 또는 그
    *   박람회에 일반 참가자 설문이 없을 때
    * @throws {SurveyAnswerAlreadyExistsException} 이미 응답한 토큰일 때
+   * @throws {ExternalServiceUnavailableException} 참여 서비스에서 입장 여부를 확인하지 못했을 때
    */
   async findSurvey(token: string): Promise<SurveyResponseDto> {
     const survey = await this.findSurveyByEnteredToken(token);
@@ -62,6 +63,7 @@ export class SurveyQrService {
    *   박람회에 일반 참가자 설문이 없을 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙과 맞지 않을 때
    * @throws {SurveyAnswerAlreadyExistsException} 이미 응답한 토큰일 때
+   * @throws {ExternalServiceUnavailableException} 참여 서비스에서 입장 여부를 확인하지 못했을 때
    */
   async submit(
     token: string,

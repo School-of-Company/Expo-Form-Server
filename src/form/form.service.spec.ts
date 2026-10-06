@@ -47,6 +47,8 @@ describe('FormService', () => {
     save: Mock;
     updateWithFields: Mock;
     deleteById: Mock;
+    findSummariesByExpoIds: Mock;
+    deleteByExpoId: Mock;
   };
   let service: FormService;
 
@@ -57,6 +59,8 @@ describe('FormService', () => {
       save: vi.fn(),
       updateWithFields: vi.fn(),
       deleteById: vi.fn(),
+      findSummariesByExpoIds: vi.fn(),
+      deleteByExpoId: vi.fn(),
     };
     service = new FormService(formStore as unknown as FormStore);
   });
@@ -198,6 +202,37 @@ describe('FormService', () => {
         '1': '온라인',
         '2': '오프라인',
       });
+    });
+  });
+
+  describe('summarize', () => {
+    it('저장소가 준 행에서 식별 값만 골라 돌려준다', async () => {
+      formStore.findSummariesByExpoIds.mockResolvedValue([
+        {
+          expoId,
+          participationType: ParticipationType.STANDARD,
+          applicationType: ApplicationType.PRE,
+          title: '섞여 들어온 값',
+        },
+      ]);
+
+      await expect(service.summarize([expoId])).resolves.toEqual([
+        {
+          expoId,
+          participationType: ParticipationType.STANDARD,
+          applicationType: ApplicationType.PRE,
+        },
+      ]);
+      expect(formStore.findSummariesByExpoIds).toHaveBeenCalledWith([expoId]);
+    });
+  });
+
+  describe('deleteAllByExpo', () => {
+    it('지울 폼이 없어도 실패하지 않는다', async () => {
+      formStore.deleteByExpoId.mockResolvedValue(0);
+
+      await expect(service.deleteAllByExpo(expoId)).resolves.toBeUndefined();
+      expect(formStore.deleteByExpoId).toHaveBeenCalledWith(expoId);
     });
   });
 });

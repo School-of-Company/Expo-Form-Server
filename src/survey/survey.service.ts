@@ -8,6 +8,7 @@ import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
+import { SurveySummaryDto } from './dto/survey-summary.response.dto.js';
 import {
   SurveyResponseDto,
   toSurveyResponse,
@@ -160,6 +161,21 @@ export class SurveyService {
 
     await this.surveyStore.deleteById(survey.id);
     this.logger.log(`설문 삭제 완료: surveyId=${survey.id}`);
+  }
+
+  /** 여러 박람회에 어떤 설문이 만들어져 있는지 돌려준다. 설문이 없는 박람회는 결과에 나오지 않는다. */
+  async summarize(expoIds: string[]): Promise<SurveySummaryDto[]> {
+    const surveys = await this.surveyStore.findSummariesByExpoIds(expoIds);
+    return surveys.map(({ expoId, participationType }) => ({
+      expoId,
+      participationType,
+    }));
+  }
+
+  /** 박람회가 지워질 때 그 박람회의 설문을 모두 삭제한다. 설문이 없어도 성공한다(다시 불러도 안전). */
+  async deleteAllByExpo(expoId: string): Promise<void> {
+    const deleted = await this.surveyStore.deleteByExpoId(expoId);
+    this.logger.log(`박람회 설문 일괄 삭제: expoId=${expoId}, ${deleted}개`);
   }
 
   /**
