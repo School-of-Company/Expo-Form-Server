@@ -8,7 +8,10 @@ import {
   type Mock,
 } from 'vitest';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
-import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
+import {
+  ExternalServiceUnavailableException,
+  ParticipantAmbiguousException,
+} from '../common/exceptions/domain.exception.js';
 import { HttpUserClient } from './http-user-client.js';
 
 const token = 'x'.repeat(32);
@@ -89,6 +92,14 @@ describe('HttpUserClient', () => {
 
     await expect(client.findParticipant(input)).rejects.toThrow(
       ExternalServiceUnavailableException,
+    );
+  });
+
+  it('409(같은 번호가 여러 표기로 저장돼 특정 불가)는 재시도 안내가 아니라 별도 충돌로 던진다', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(409));
+
+    await expect(client.findParticipant(input)).rejects.toThrow(
+      ParticipantAmbiguousException,
     );
   });
 

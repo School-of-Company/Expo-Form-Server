@@ -6,6 +6,7 @@ import { DicoshotModule } from 'dicoshot-nest';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { DomainExceptionFilter } from './common/exceptions/domain-exception.filter.js';
+import { dicoshotFilterOptions } from './common/notification/dicoshot-filter.options.js';
 import { DatabaseModule } from './database/database.module.js';
 import { FormModule } from './form/form.module.js';
 import { KafkaModule } from './kafka/kafka.module.js';
@@ -26,7 +27,7 @@ import { SurveyModule } from './survey/survey.module.js';
       },
       inject: [ConfigService],
       global: true,
-      filter: true,
+      filter: dicoshotFilterOptions,
     }),
     ScheduleModule.forRoot(),
     KafkaModule,
