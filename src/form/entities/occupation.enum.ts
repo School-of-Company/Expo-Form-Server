@@ -3,7 +3,20 @@
  * 있어야 신청 처리 쪽이 답변 값만 보고 교사인지 알 수 있다. 화면에 보일 이름은 폼마다 자유다.
  */
 export enum Occupation {
-  TEACHER = 'TEACHER',
-  STUDENT = 'STUDENT',
+  /** 초등학생 */
+  ELEMENTARY_STUDENT = 'ELEMENTARY_STUDENT',
+  /** 중학생 */
+  MIDDLE_SCHOOL_STUDENT = 'MIDDLE_SCHOOL_STUDENT',
+  /** 고등학생 */
+  HIGH_SCHOOL_STUDENT = 'HIGH_SCHOOL_STUDENT',
+  /** 교직원 */
+  SCHOOL_STAFF = 'SCHOOL_STAFF',
+  /** 예비교사 */
+  PRE_SERVICE_TEACHER = 'PRE_SERVICE_TEACHER',
+  /** 보호자/학부모 */
+  PARENT = 'PARENT',
+  /** 일반인 */
   GENERAL = 'GENERAL',
+  /** 교사 — 이 값일 때만 소속 학교 필드가 보인다. */
+  TEACHER = 'TEACHER',
 }
