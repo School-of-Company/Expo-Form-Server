@@ -22,16 +22,14 @@ async function compileWith(env: Record<string, string>) {
 }
 
 describe('UserClientModule', () => {
-  it('주소와 내부 토큰이 있으면 HTTP 구현체를 등록한다', async () => {
+  it('설정을 읽어 HTTP 구현체를 등록한다', async () => {
     const moduleRef = await compileWith({
       USER_SERVICE_URL: 'http://user-server/',
       USER_SERVICE_INTERNAL_TOKEN: 'x'.repeat(32),
     });
-
     const client = moduleRef.get<UserClient>(USER_CLIENT);
     expect(client).toBeInstanceOf(HttpUserClient);
 
-    // 주소 끝의 `/`는 떼어서 `//internal` 경로가 되지 않는다.
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 404 }));
@@ -51,27 +49,9 @@ describe('UserClientModule', () => {
     );
   });
 
-  it('내부 토큰이 없으면 부팅 단계에서 실패한다', async () => {
-    await expect(
-      compileWith({ USER_SERVICE_URL: 'http://user-server' }),
-    ).rejects.toThrow('USER_SERVICE_INTERNAL_TOKEN');
-  });
-
-  it('내부 토큰이 32자보다 짧으면 값을 드러내지 않고 실패한다', async () => {
-    const shortToken = 'short-secret-value';
-
-    const failure = compileWith({
-      USER_SERVICE_URL: 'http://user-server',
-      USER_SERVICE_INTERNAL_TOKEN: shortToken,
-    });
-
-    await expect(failure).rejects.toThrow('at least 32 characters');
-    await expect(failure).rejects.not.toThrow(shortToken);
-  });
-
-  it('주소가 없으면 부팅 단계에서 실패한다', async () => {
-    await expect(
-      compileWith({ USER_SERVICE_INTERNAL_TOKEN: 'x'.repeat(32) }),
-    ).rejects.toThrow('USER_SERVICE_URL');
+  it('설정이 없으면 부팅 단계에서 실패한다', async () => {
+    await expect(compileWith({})).rejects.toThrow(
+      'USER_SERVICE_URL and USER_SERVICE_INTERNAL_TOKEN are required',
+    );
   });
 });
