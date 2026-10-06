@@ -36,6 +36,10 @@ export class SurveyAnswerController {
     '설문이 없거나, 전화번호로 등록된 참가자를 찾을 수 없음 (SURVEY_NOT_FOUND, PARTICIPANT_NOT_FOUND)',
   )
   @ApiErrorResponse(409, '이미 제출한 응답자 (SURVEY_ANSWER_ALREADY_EXISTS)')
+  @ApiErrorResponse(
+    503,
+    '유저 서비스에서 응답자를 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
   @Post('standard/:expoId')
   @HttpCode(HttpStatus.ACCEPTED)
   async submitStandard(
@@ -61,6 +65,10 @@ export class SurveyAnswerController {
     '설문이 없거나, 전화번호로 등록된 참가자를 찾을 수 없음 (SURVEY_NOT_FOUND, PARTICIPANT_NOT_FOUND)',
   )
   @ApiErrorResponse(409, '이미 제출한 응답자 (SURVEY_ANSWER_ALREADY_EXISTS)')
+  @ApiErrorResponse(
+    503,
+    '유저 서비스에서 응답자를 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
   @Post('trainee/:expoId')
   @HttpCode(HttpStatus.ACCEPTED)
   async submitTrainee(

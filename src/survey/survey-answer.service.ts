@@ -53,8 +53,9 @@ export class SurveyAnswerService {
    * 각각 자신의 참여자군을 고정해서 넘긴다.
    *
    * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
-   * @throws {ParticipantNotFoundException} 전화번호로 응답자를 찾을 수 없거나, 찾았지만
-   *   참여자군이 이 설문의 대상과 다를 때
+   * @throws {ParticipantNotFoundException} 이 설문의 참여자군에서 그 전화번호로 등록된 응답자를
+   *   찾을 수 없을 때
+   * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙(필수 여부·선택지·최대 선택 개수)과
    *   맞지 않을 때
    * @throws {SurveyAnswerAlreadyExistsException} 같은 응답자의 활성(= 거절되지 않은) 제출
@@ -75,13 +76,15 @@ export class SurveyAnswerService {
 
     const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
 
-    const participant = await this.userClient.findByPhoneNumber(
-      survey.expoId,
+    // 이 설문의 참여자군 테이블에서만 찾는다. 다른 참여자군으로 등록된 번호도 "없음"으로 돌아오므로,
+    // 등록되지 않은 경우와 참여자군이 안 맞는 경우가 같은 예외로 묶인다 — 둘을 구분해서 알려주면
+    // 그 전화번호의 등록 여부 자체가 노출된다.
+    const participant = await this.userClient.findParticipant({
+      expoId: survey.expoId,
       phoneNumber,
-    );
-    // 등록되지 않은 경우와 참여자군이 안 맞는 경우를 같은 예외로 묶는다 — 둘을 구분해서
-    // 알려주면 그 전화번호의 등록 여부 자체가 노출된다.
-    if (participant?.participationType !== survey.participationType) {
+      participationType: survey.participationType,
+    });
+    if (!participant) {
       throw new ParticipantNotFoundException();
     }
 
