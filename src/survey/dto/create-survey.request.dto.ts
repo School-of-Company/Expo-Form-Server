@@ -34,11 +34,24 @@ export const dynamicSurveyQuestionSchema = z.object({
  * 그대로 남아 있어 장황하지만, 아직 연결된 클라이언트가 없는 신규 구현이라도 이 계약은
  * 일부러 v1과 어긋나게 두지 않기로 했다.
  */
-export const createSurveySchema = z.object({
-  title: z.string().min(1).max(100),
-  informationText: z.string().max(500),
-  participationType: z.enum(ParticipationType),
-  dynamicSurveyRequestDto: z.array(dynamicSurveyQuestionSchema),
-});
+export const createSurveySchema = z
+  .object({
+    title: z.string().min(1).max(100),
+    informationText: z.string().max(500),
+    participationType: z.enum(ParticipationType),
+    dynamicSurveyRequestDto: z.array(dynamicSurveyQuestionSchema),
+  })
+  .superRefine((survey, ctx) => {
+    // 동반자 추가는 신청 폼 전용이다. 설문 답변에는 동반자 개념이 없다.
+    for (const [index, question] of survey.dynamicSurveyRequestDto.entries()) {
+      if (question.formType === DynamicFormFieldType.COMPANION) {
+        ctx.addIssue({
+          code: 'custom',
+          message: '동반자 필드는 신청 폼에서만 쓸 수 있습니다.',
+          path: ['dynamicSurveyRequestDto', index, 'formType'],
+        });
+      }
+    }
+  });
 
 export class CreateSurveyRequestDto extends createZodDto(createSurveySchema) {}

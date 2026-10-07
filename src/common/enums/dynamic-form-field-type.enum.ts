@@ -13,4 +13,9 @@ export enum DynamicFormFieldType {
   IMAGE = 'IMAGE',
   /** 다중 선택. */
   MULTIPLE = 'MULTIPLE',
+  /**
+   * 동반자 추가. 대표자가 동반자를 한 명씩(이름·학교) 최대 5명(`COMPANION_MAX_COUNT`)까지 더한다.
+   * 신청 폼(일반 참가자)에서만 쓰고 설문 문항에는 쓰지 않는다.
+   */
+  COMPANION = 'COMPANION',
 }
