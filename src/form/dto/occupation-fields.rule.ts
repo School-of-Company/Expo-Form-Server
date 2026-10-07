@@ -38,11 +38,13 @@ const schoolOccupations: string[] = [
 /**
  * 직업(`OCCUPATION`)·소속 학교(`SCHOOL`) 필드가 신청 처리 쪽이 읽을 수 있는 모양인지 검증한다.
  *
- * - 일반 참가자 폼에서만, 각각 최대 하나
- * - 직업은 드롭다운이고 선택지 키가 {@link Occupation} 값과 정확히 같다 — 키가 고정돼야 답변 값으로
+ * - 일반 참가자 폼은 직업·소속 학교를 각각 최대 하나
+ * - 교원연수자 폼은 소속 학교만 받는다(최대 하나). 연수자는 모두 교사라 직업은 묻지 않고, 소속 학교는
+ *   조건 없이 항상 보이는 문장형 필드다 — 명찰에 소속을 찍으려면 반드시 받아야 하기 때문이다
+ * - 일반 참가자 폼의 직업은 드롭다운이고 선택지 키가 {@link Occupation} 값과 정확히 같다 — 키가 고정돼야 답변 값으로
  *   학생·교사를 알아본다
- * - 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 학생(초·중·고)·교직원·교사일 때만 보이는
- *   조건부 필드다(`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
+ * - 일반 참가자 폼의 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 학생(초·중·고)·교직원·교사일
+ *   때만 보이는 조건부 필드다(`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
  */
 export function checkOccupationFields(
   form: FormLike,
@@ -66,8 +68,8 @@ export function checkOccupationFields(
     });
   };
 
-  if (form.participantType !== ParticipationType.STANDARD) {
-    issue('직업·소속 학교 필드는 일반 참가자 폼에서만 쓸 수 있습니다.');
+  if (form.participantType === ParticipationType.TRAINEE) {
+    checkTraineeFields(form, occupationIndexes, schoolIndexes, issue);
     return;
   }
 
@@ -108,6 +110,42 @@ export function checkOccupationFields(
   ) {
     issue(
       `소속 학교 필드는 직업 필드가 ${schoolOccupations.join(', ')} 중 하나일 때만 보이는 문장형 필드여야 합니다.`,
+      schoolIndex,
+    );
+  }
+}
+
+/**
+ * 교원연수자 폼의 직업·소속 학교 필드를 검증한다. 직업은 일반 참가자만 받고, 소속 학교는 하나만
+ * 문장형으로, 조건 없이 항상 보이게 받는다.
+ */
+function checkTraineeFields(
+  form: FormLike,
+  occupationIndexes: number[],
+  schoolIndexes: number[],
+  issue: (message: string, index?: number) => void,
+): void {
+  for (const index of occupationIndexes) {
+    issue('직업 필드는 일반 참가자 폼에서만 쓸 수 있습니다.', index);
+  }
+
+  if (schoolIndexes.length > 1) {
+    issue('소속 학교 필드는 폼에 하나만 둘 수 있습니다.');
+    return;
+  }
+
+  const [schoolIndex] = schoolIndexes;
+  if (schoolIndex === undefined) {
+    return;
+  }
+
+  const school = form.dynamicForm[schoolIndex];
+  if (
+    school.formType !== DynamicFormFieldType.SENTENCE ||
+    school.otherJson?.conditional !== undefined
+  ) {
+    issue(
+      '교원연수자 폼의 소속 학교 필드는 조건 없이 항상 보이는 문장형 필드여야 합니다.',
       schoolIndex,
     );
   }

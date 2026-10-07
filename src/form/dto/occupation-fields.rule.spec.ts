@@ -71,6 +71,9 @@ function formWith(
   };
 }
 
+/** 연수자는 모두 교사라 직업을 묻지 않으므로 조건 없이 항상 보인다. */
+const traineeSchoolField = { ...schoolField, otherJson: null };
+
 const errorsOf = (input: unknown) => {
   const result = createFormSchema.safeParse(input);
   return result.success ? [] : result.error.issues.map((i) => i.message);
@@ -104,7 +107,7 @@ describe('직업·소속 학교 필드 검증', () => {
     expect(errorsOf(formWith([nameField, occupationField]))).toEqual([]);
   });
 
-  it('교원연수자 폼에서는 쓸 수 없다', () => {
+  it('교원연수자 폼에서는 직업 필드를 쓸 수 없다', () => {
     expect(
       errorsOf(
         formWith(
@@ -112,7 +115,7 @@ describe('직업·소속 학교 필드 검증', () => {
           ParticipationType.TRAINEE,
         ),
       ),
-    ).toContain('직업·소속 학교 필드는 일반 참가자 폼에서만 쓸 수 있습니다.');
+    ).toContain('직업 필드는 일반 참가자 폼에서만 쓸 수 있습니다.');
   });
 
   it('직업 필드를 두 개 둘 수 없다', () => {
@@ -231,6 +234,57 @@ describe('직업·소속 학교 필드 검증', () => {
     expect(errorsOf(formWith(fields))).toContain(
       '소속 학교 필드는 직업 필드가 ELEMENTARY_STUDENT, MIDDLE_SCHOOL_STUDENT, HIGH_SCHOOL_STUDENT, SCHOOL_STAFF, TEACHER 중 하나일 때만 보이는 문장형 필드여야 합니다.',
     );
+  });
+
+  describe('교원연수자 폼의 소속 학교', () => {
+    const trainee = (fields: unknown[]) =>
+      formWith(fields, ParticipationType.TRAINEE);
+
+    it('조건 없이 항상 보이는 문장형 소속 학교 필드를 받는다', () => {
+      expect(errorsOf(trainee([nameField, traineeSchoolField]))).toEqual([]);
+    });
+
+    it('소속 학교 필드가 없어도 된다', () => {
+      expect(errorsOf(trainee([nameField]))).toEqual([]);
+    });
+
+    it('소속 학교 필드를 두 개 둘 수 없다', () => {
+      expect(
+        errorsOf(trainee([nameField, traineeSchoolField, traineeSchoolField])),
+      ).toContain('소속 학교 필드는 폼에 하나만 둘 수 있습니다.');
+    });
+
+    it.each([
+      [
+        '문장형이 아니면',
+        { ...traineeSchoolField, formType: DynamicFormFieldType.DROPDOWN },
+      ],
+      [
+        '조건부 표시가 걸려 있으면',
+        {
+          ...traineeSchoolField,
+          otherJson: {
+            hasEtc: false,
+            conditional: { parentIndex: 0, triggerValue: 'TEACHER' },
+          },
+        },
+      ],
+    ])('소속 학교 필드가 %s 거부한다', (_label, field) => {
+      expect(errorsOf(trainee([nameField, field]))).toContain(
+        '교원연수자 폼의 소속 학교 필드는 조건 없이 항상 보이는 문장형 필드여야 합니다.',
+      );
+    });
+
+    it('수정 요청에도 같은 규칙이 적용된다', () => {
+      expect(
+        updateFormSchema.safeParse(trainee([nameField, traineeSchoolField]))
+          .success,
+      ).toBe(true);
+      expect(
+        updateFormSchema.safeParse(trainee([nameField, occupationField]))
+          .success,
+      ).toBe(false);
+    });
   });
 
   it('수정 요청에도 같은 규칙이 적용된다', () => {
