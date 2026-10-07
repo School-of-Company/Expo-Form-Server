@@ -6,6 +6,7 @@ import {
 } from './create-form.request.dto.js';
 import { checkNameField } from './name-field.rule.js';
 import { checkCompanionField } from './companion-field.rule.js';
+import { checkRegionField } from './region-field.rule.js';
 import { checkOccupationFields } from './occupation-fields.rule.js';
 
 /**
@@ -16,6 +17,7 @@ export const updateFormSchema = createFormFieldsSchema
   .refine(withValidPeriod, PERIOD_ERROR)
   .superRefine(checkNameField)
   .superRefine(checkOccupationFields)
-  .superRefine(checkCompanionField);
+  .superRefine(checkCompanionField)
+  .superRefine(checkRegionField);
 
 export class UpdateFormRequestDto extends createZodDto(updateFormSchema) {}

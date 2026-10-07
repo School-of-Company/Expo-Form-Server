@@ -23,3 +23,15 @@ export enum Occupation {
   /** 교사 — 소속 학교 필드가 보인다. */
   TEACHER = 'TEACHER',
 }
+
+/**
+ * 소속 학교를 받는 직업. 학교에 다니는 학생과 학교에 소속된 교직원·교사다. 예비교사는 아직 학교에
+ * 소속되지 않아 뺀다. 직업·소속 학교 필드의 조건부 표시와 동반자 입력이 같은 기준을 쓴다.
+ */
+export const SCHOOL_OCCUPATIONS: readonly Occupation[] = [
+  Occupation.ELEMENTARY_STUDENT,
+  Occupation.MIDDLE_SCHOOL_STUDENT,
+  Occupation.HIGH_SCHOOL_STUDENT,
+  Occupation.SCHOOL_STAFF,
+  Occupation.TEACHER,
+];
