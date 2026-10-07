@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
+import { COMPANION_MAX_COUNT, companionSchema } from './companion.js';
 import type { JsonData, OtherJson } from './field-spec.schema.js';
 
 /**
@@ -56,6 +57,21 @@ const VALUE_SCHEMA_BUILDERS: Record<
     }
 
     return schema;
+  },
+  /**
+   * 동반자 목록(`{ name, school }[]`). 최대 인원은 `otherJson.maxSelection`이고 없으면
+   * {@link COMPANION_MAX_COUNT}명이며 어느 쪽이든 상한을 넘을 수 없다. 필수이면 1명 이상이다.
+   */
+  [DynamicFormFieldType.COMPANION](question) {
+    const max = Math.min(
+      question.otherJson?.maxSelection ?? COMPANION_MAX_COUNT,
+      COMPANION_MAX_COUNT,
+    );
+
+    return z
+      .array(companionSchema)
+      .min(question.requiredStatus ? 1 : 0)
+      .max(max);
   },
 };
 
