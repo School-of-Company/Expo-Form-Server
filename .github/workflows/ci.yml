@@ -24,6 +24,27 @@ jobs:
             exit 1
           fi
 
+  # 린트는 별도 잡으로 둔다. 브랜치 보호의 필수 체크(`lint`)로 걸려 있어서, 테스트·빌드와 따로
+  # 통과 여부가 보여야 하고 한쪽이 실패해도 다른 쪽 결과를 같이 볼 수 있다.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: XO 린트
+        run: pnpm run lint
+
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -40,8 +61,20 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run lint
-
       - run: pnpm run test
 
       - run: pnpm run build
+
+  notify-discord:
+    needs: [lint, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Discord 알림 전송
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: success
+          title: Expo Form CI
+          content: |
+            <@${{ secrets.DISCORD_USER_ID_1 }}> <@${{ secrets.DISCORD_USER_ID_2 }}>
+            확인해주세요.

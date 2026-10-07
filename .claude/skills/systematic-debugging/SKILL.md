@@ -9,7 +9,7 @@ description: Use when encountering any bug, test failure, or unexpected behavior
 
 Random fixes waste time and create new bugs. Quick patches mask underlying issues.
 
-**Core principle:** ALWAYS find the root cause before attempting fixes. Symptom fixes are failures.
+**Core principle:** ALWAYS find root cause before attempting fixes. Symptom fixes are failure.
 
 **Violating the letter of this process is violating the spirit of debugging.**
 
@@ -176,7 +176,7 @@ You MUST complete each phase before proceeding to the next.
     - Automated test if possible
     - One-off test script if no framework
     - MUST have before fixing
-    - Use the `superpowers:test-driven-development` skill for writing proper failing tests
+    - Use the `write-test` skill for writing a test that fails on the current code
 
 2. **Implement Single Fix**
     - Address the root cause identified
@@ -231,7 +231,7 @@ If you catch yourself thinking:
 
 **If 3+ fixes failed:** Question the architecture (see Phase 4.5)
 
-## Signals From Your Human Partner That You're Doing It Wrong
+## your human partner's Signals You're Doing It Wrong
 
 **Watch for these redirections:**
 - "Is that not happening?" - You assumed without verifying
@@ -284,8 +284,8 @@ These techniques are part of systematic debugging and available in this director
 - **`condition-based-waiting.md`** - Replace arbitrary timeouts with condition polling
 
 **Related skills:**
-- **superpowers:test-driven-development** - For creating failing test case (Phase 4, Step 1)
-- **superpowers:verification-before-completion** - Verify fix worked before claiming success
+- **write-test** - For creating the failing test case (Phase 4, Step 1)
+- **test** - Run the suite to verify the fix worked before claiming success
 
 ## Real-World Impact
 

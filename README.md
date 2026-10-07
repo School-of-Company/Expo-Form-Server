@@ -60,6 +60,77 @@ $ pnpm run test:e2e
 $ pnpm run test:cov
 ```
 
+## Lint
+
+[XO](https://github.com/xojs/xo)(ESLint 기반, 타입 정보 사용)로 JS/TS 코드를 검사한다. 포매팅은 Prettier가 맡고 XO는 코드 품질 규칙을 본다(`prettier: 'compat'`).
+
+```bash
+# 검사 (CI의 `lint` 잡과 같다)
+$ pnpm run lint
+
+# 자동 수정 가능한 것만 고친다
+$ pnpm run lint:fix
+
+# 포매팅
+$ pnpm run format
+```
+
+- `develop`으로 가는 PR은 CI의 `lint` 잡이 통과해야 머지할 수 있다(브랜치 보호의 필수 체크).
+- 규칙은 `xo.config.ts`에서 끈 것만 예외다. 끄는 경우는 NestJS 런타임과 충돌하거나, API 계약·DB 스키마를 바꿔야 하거나, 프로젝트 컨벤션과 충돌할 때뿐이고 이유를 설정 파일에 같이 적는다. 코드 한 줄만 예외로 둘 때는 `// eslint-disable-next-line <rule>`에 이유를 남긴다.
+- 검사 대상은 JS/TS 코드다. TypeORM이 생성하는 `src/database/migrations`와 `.claude`, `.agents`는 제외한다.
+
+## Database migrations
+
+개발에서는 엔티티를 보고 스키마를 자동으로 맞추지만(`synchronize`), **운영에서는 끄고** `src/database/migrations`의 마이그레이션으로만 바꾼다. 컬럼 이름을 바꾸면 TypeORM이 "삭제 후 추가"로 처리해서 운영 데이터가 사라질 수 있기 때문이다.
+
+```bash
+# 운영/클린 DB에 마이그레이션 적용 (배포 단계에서 한 번)
+$ pnpm migration:run
+
+# 적용 상태 확인 / 마지막 마이그레이션 되돌리기
+$ pnpm migration:show
+$ pnpm migration:revert
+
+# 엔티티를 바꾼 뒤 마이그레이션 생성
+$ pnpm migration:generate src/database/migrations/<이름>
+```
+
+- 명령은 `DATABASE_URL`(없으면 `.env`)의 DB를 대상으로 하고, 실행 전에 `dist`를 비우고 다시 빌드한다. 컴파일된 엔티티를 읽기 때문에 오래된 빌드 결과가 남아 있으면 없는 엔티티까지 스키마에 들어간다.
+- `migration:generate`는 **대상 DB의 현재 스키마와 엔티티의 차이**를 만든다. `synchronize`로 자동 갱신되는 개발 DB로는 차이가 없으니, `pnpm migration:run`으로만 만든 DB를 대상으로 해야 한다.
+- 생성된 파일은 반드시 읽어 본다. 컬럼 이름 변경은 삭제와 추가로 만들어지므로 `RENAME COLUMN`으로 직접 고친다.
+- 앱 시작 시 자동 실행(`migrationsRun`)은 하지 않는다. 인스턴스가 여러 개 뜰 때 서로 부딪히지 않도록 배포 단계에서 한 번만 실행한다.
+
+## Survey answer submission recovery
+
+사전 신청자의 설문 답변은 접수 기록(`survey_answer_submission`)으로 남은 뒤 Kafka로 유저 서비스에 전달된다.
+
+- **릴레이(30초마다)**: `RECEIVED`를 발행하고, 결과를 받지 못한 `PUBLISHED`는 `SURVEY_ANSWER_STALE_MS`(기본 5분)가 지나면 같은 `eventId`로 다시 보낸다. 최대 `SURVEY_ANSWER_MAX_RETRY_COUNT`(기본 5회)까지만 보낸다.
+- **정합성 점검(매시간)**: 재발행 상한을 다 썼고 마지막 발행 후 `SURVEY_ANSWER_STALE_MS`가 지난 `PUBLISHED` 기록마다 유저 서비스에 처리 결과를 묻는다(한 번에 최대 1000건). 결과가 있으면(결과 이벤트만 유실된 경우) `STORED`/`REJECTED`로 반영하고, 처리한 적 없으면 상태를 그대로 두고 Discord로 알린다. 유저 서비스가 응답하지 않으면 그 자리에서 점검을 멈추고 알린다.
+  - `SURVEY_ANSWER_RECONCILE_ENABLED=true`일 때만 돈다(기본 꺼짐). 유저 서비스의 처리 결과 조회 API(Expo-User-Server#11)가 배포된 뒤에 켠다.
+  - 상한이나 장애로 멈추면 다음 점검은 마지막으로 확인한 기록 다음부터 이어 본다. 이 위치는 인스턴스 메모리에만 있어서, 재시작하면 처음부터 다시 본다.
+  - 알릴 결과는 Discord와 별개로 항상 오류 로그에 남긴다. `DISCORD_WEBHOOK_URL`이 비어 있으면 로그에 "웹훅 미설정"이 함께 찍히고, Discord 전송이 실패해도 오류 로그를 남긴다.
+
+알림의 "유저 서비스 미처리" 건을 다시 보내려면, 유저 서비스가 정상인지 먼저 확인한 뒤 해당 기록을 처음 상태로 되돌린다. 릴레이가 다음 주기에 같은 `eventId`로 발행하므로, 유저 서비스는 이미 처리한 건이면 중복 저장하지 않는다.
+
+```sql
+UPDATE survey_answer_submission
+SET status = 'RECEIVED', retry_count = 0
+WHERE event_id = '<알림의 eventId>' AND status = 'PUBLISHED';
+```
+
+"확인 불가"는 유저 서비스가 응답하지 않은 경우라, 장애가 풀리면 다음 점검에서 다시 판단한다. 되돌릴 필요가 없다.
+
+## Internal API
+
+다른 서비스가 Gateway를 거치지 않고 부르는 `/internal` 경로다. `X-Internal-Token` 헤더가 `INTERNAL_TOKEN`(필수, 32자 이상)과 같아야 하고, 아니면 401이다. Gateway 라우팅 표에 `/internal` prefix를 넣지 않는다.
+
+| 메서드·경로                                                                                    | 쓰는 곳                                         |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `GET /internal/forms/{expoId}?type=&applicationType=`                                          | 신청 서비스 — 제출된 신청서를 폼 스펙으로 검증  |
+| `GET /internal/surveys/{expoId}?type=`                                                         | 리포트 서비스 등 — 설문 문항 스펙               |
+| `POST /internal/forms/summaries`, `POST /internal/surveys/summaries` (`{expoIds}`, 최대 100개) | 박람회 서비스 — 박람회별 폼·설문 생성 현황      |
+| `DELETE /internal/expos/{expoId}`                                                              | 박람회 서비스 — 박람회 삭제 시 폼·설문·접수 기록을 한 번에 지우고 삭제 기록을 남김(없어도 204) |
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
@@ -75,18 +146,7 @@ With Mau, you can deploy your application in just a few clicks, allowing you to 
 
 ## Observability
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+앱 시작/종료와 처리되지 않은 예외를 [`dicoshot-nest`](https://www.npmjs.com/package/dicoshot-nest)로 Discord 채널에 알립니다. `.env`에 `DISCORD_WEBHOOK_URL`을 설정하면 활성화되고, 비워두면 자동으로 비활성화됩니다.
 
 ## Resources
 

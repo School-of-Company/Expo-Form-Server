@@ -10,44 +10,54 @@ if [ ! -f "$BODY_FILE" ]; then
   exit 1
 fi
 
-# Git Flow: any feature branch targets develop, develop targets main.
-# Branch names follow the git-commit skill's <type>/<description> form
-# (feat/, fix/, refactor/, docs/, chore/, test/), so match on the exceptions
-# rather than on a prefix list that would silently miss a new type.
-CURRENT=$(git branch --show-current)
-case "$CURRENT" in
-  develop) BASE="main" ;;
-  main)
-    echo "ERROR: main에서는 PR을 만들 수 없습니다. 피처 브랜치를 먼저 만드세요." >&2
-    exit 1
-    ;;
-  "")
-    echo "ERROR: detached HEAD 상태입니다. 브랜치를 체크아웃하세요." >&2
-    exit 1
-    ;;
-  *) BASE="develop" ;;
-esac
+# Base branch — ask the repo instead of assuming a branching model.
+#
+# A hardcoded develop/master pair fails in two directions: it targets a branch that doesn't exist in
+# trunk-based repos, and it picks the wrong one where the integration branch has another name. So reuse
+# the base of an existing PR for this branch, else prefer an integration branch if the remote has one,
+# else fall back to whatever GitHub reports as the default branch.
+BASE=$(gh pr view --json baseRefName -q .baseRefName 2>/dev/null || true)
 
-if ! git ls-remote --exit-code --heads origin "$BASE" >/dev/null 2>&1; then
-  echo "ERROR: base 브랜치 '$BASE'가 origin에 없습니다." >&2
-  echo "       git branch $BASE main && git push -u origin $BASE" >&2
-  exit 1
+if [ -z "$BASE" ]; then
+  DEFAULT=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || echo main)
+  CURRENT=$(git branch --show-current)
+
+  for candidate in develop development dev; do
+    if [ "$CURRENT" != "$candidate" ] && git ls-remote --exit-code --heads origin "$candidate" >/dev/null 2>&1; then
+      BASE="$candidate"
+      break
+    fi
+  done
+
+  [ -z "$BASE" ] && BASE="$DEFAULT"
+  # Standing on the integration branch means this is a release PR — target the default branch.
+  [ "$CURRENT" = "$BASE" ] && BASE="$DEFAULT"
 fi
 
 ARGS=(gh pr create --title "$TITLE" --body-file "$BODY_FILE" --base "$BASE")
 
+# Labels — only pass ones this repo actually defines. `gh pr create` fails outright on an unknown label,
+# which would throw away a finished title and body over a naming difference between repos.
+APPLIED=""
 if [ -n "$LABELS" ]; then
+  EXISTING=$(gh label list --limit 200 --json name -q '.[].name' 2>/dev/null || true)
   IFS=',' read -ra LABEL_ARRAY <<< "$LABELS"
   for label in "${LABEL_ARRAY[@]}"; do
     trimmed=$(echo "$label" | xargs)
-    [ -n "$trimmed" ] && ARGS+=(--label "$trimmed")
+    [ -z "$trimmed" ] && continue
+    if printf '%s\n' "$EXISTING" | grep -Fxq "$trimmed"; then
+      ARGS+=(--label "$trimmed")
+      APPLIED="${APPLIED:+$APPLIED, }$trimmed"
+    else
+      echo "  (label '$trimmed' not defined in this repo — skipped)" >&2
+    fi
   done
 fi
 
 echo "Creating PR..."
 echo "  Title : $TITLE"
 echo "  Base  : $BASE"
-[ -n "$LABELS" ] && echo "  Labels: $LABELS"
+[ -n "$APPLIED" ] && echo "  Labels: $APPLIED"
 echo ""
 
 "${ARGS[@]}"

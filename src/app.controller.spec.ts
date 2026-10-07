@@ -4,7 +4,7 @@ import { AppService } from './app.service.js';
 
 describe('AppController', () => {
   it('AppService의 getHello 결과를 그대로 반환한다', () => {
-    const service = { getHello: () => 'Hello World!' } as AppService;
+    const service = { getHello: () => 'Hello World!' };
 
     expect(new AppController(service).getHello()).toBe('Hello World!');
   });
