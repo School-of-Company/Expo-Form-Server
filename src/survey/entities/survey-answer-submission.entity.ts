@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { ParticipationType } from '../../common/enums/participation-type.enum.js';
+import type { QuestionSnapshot } from '../question-snapshot.js';
 import { SurveyAnswerSubmissionStatus } from './survey-answer-submission-status.enum.js';
 
 /**
@@ -70,13 +71,17 @@ export class SurveyAnswerSubmissionEntity {
   publishedAt: Date | null;
 
   /**
-   * 검증까지 끝난 제출 내용(`answers`, `personalInformationStatus`)을 그대로 보관한다.
-   * Kafka로 발행할 페이로드이자, 재발행 시 다시 읽어오는 원본이다.
+   * 검증까지 끝난 제출 내용(`answers`, `personalInformationStatus`)과 제출 당시의 문항 정의
+   * (`questions`)를 그대로 보관한다. Kafka로 발행할 페이로드이자, 재발행 시 다시 읽어오는 원본이다.
+   * 설문을 수정해도 이 값은 바뀌지 않아서, 옛 접수 건을 재발행해도 제출 당시의 문항이 나간다.
+   *
+   * `questions`는 스냅샷을 저장하기 전에 접수된 건에는 없다.
    */
   @Column({ type: 'jsonb' })
   payload: {
     answers: Record<string, unknown>;
     personalInformationStatus: boolean;
+    questions?: QuestionSnapshot[];
   };
 
   @CreateDateColumn({ type: 'timestamptz' })

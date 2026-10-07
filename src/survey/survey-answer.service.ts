@@ -16,6 +16,7 @@ import {
 } from '../user-client/user-client.interface.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { toQuestionSnapshots } from './question-snapshot.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 import { SurveyStore } from './survey.store.js';
@@ -117,6 +118,8 @@ export class SurveyAnswerService {
       payload: {
         answers: result.data,
         personalInformationStatus: dto.personalInformationStatus,
+        // 설문을 나중에 수정해도 이 답변의 문항 제목을 복원할 수 있게 제출 당시의 문항을 남긴다.
+        questions: toQuestionSnapshots(survey.dynamicSurveys),
       },
     } satisfies SubmissionFields);
 

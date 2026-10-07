@@ -27,6 +27,7 @@ const BATCH_SIZE = 100;
 export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SurveyAnswerRelayService.name);
   private readonly producer: Producer;
+  private readonly eventVersion: 1 | 2;
 
   constructor(
     @Inject(KAFKA_CLIENT) kafka: Kafka,
@@ -34,6 +35,14 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
     private readonly store: SurveyAnswerSubmissionStore,
   ) {
     this.producer = kafka.producer();
+
+    // 유저 서비스가 v2를 받기 전에 v2를 발행하면 이벤트가 거부되므로, 어느 버전을 보낼지 배포 때 고른다.
+    const version = Number(config.get('SURVEY_ANSWER_EVENT_VERSION', 1));
+    if (version !== 1 && version !== 2) {
+      throw new Error('SURVEY_ANSWER_EVENT_VERSION must be 1 or 2.');
+    }
+
+    this.eventVersion = version;
   }
 
   async onModuleInit(): Promise<void> {
@@ -78,6 +87,11 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
       'KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC',
     );
 
+    // v2는 제출 당시 문항 스냅샷을 함께 싣는다. 스냅샷이 없는 옛 접수 건은 v2로 만들 수 없어서
+    // 설정이 v2여도 v1 그대로 재발행한다. 재발행이어도 `eventId`는 그대로다.
+    const { questions } = submission.payload;
+    const version = questions !== undefined && this.eventVersion === 2 ? 2 : 1;
+
     try {
       await this.producer.send({
         topic,
@@ -88,7 +102,7 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
             key: `${submission.surveyId}:${submission.phoneNumber}`,
             value: JSON.stringify({
               eventId: submission.eventId,
-              version: 1,
+              version,
               surveyId: submission.surveyId,
               expoId: submission.expoId,
               participationType: submission.participationType,
@@ -97,6 +111,7 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
               answerJson: JSON.stringify(submission.payload.answers),
               personalInformationStatus:
                 submission.payload.personalInformationStatus,
+              ...(version === 2 && { questions }),
             }),
           },
         ],
