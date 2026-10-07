@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, type QueryDeepPartialEntity } from 'typeorm';
+import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
@@ -29,6 +30,7 @@ export class SurveyQrAnswerStore {
     surveyId: string,
     token: string,
     answers: Record<string, unknown>,
+    occupation: Occupation,
   ): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       await manager.insert(SurveyQrAnswerEntity, {
@@ -37,6 +39,7 @@ export class SurveyQrAnswerStore {
         // QueryDeepPartialEntity가 Record<string, unknown>을 깊게 펼치다 타입이 어긋난다.
         // 값은 그대로 jsonb로 들어간다.
         answers: answers as QueryDeepPartialEntity<Record<string, unknown>>,
+        occupation,
       });
       await manager.increment(
         SurveyEntity,

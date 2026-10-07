@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyQrController } from './survey-qr.controller.js';
 import { SurveyQrService } from './survey-qr.service.js';
 
@@ -20,7 +21,10 @@ describe('SurveyQrController', () => {
   });
 
   it('QR 토큰과 답변을 그대로 서비스에 넘긴다', async () => {
-    const dto = { answers: { '1': '좋았습니다' } };
+    const dto = {
+      answers: { '1': '좋았습니다' },
+      occupation: Occupation.TEACHER,
+    };
 
     await controller.submit('qr-1', dto);
 

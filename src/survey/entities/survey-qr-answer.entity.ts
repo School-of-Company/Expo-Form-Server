@@ -7,6 +7,7 @@ import {
   PrimaryColumn,
   type Relation,
 } from 'typeorm';
+import { Occupation } from '../../common/enums/occupation.enum.js';
 import { SurveyEntity } from './survey.entity.js';
 
 /** 참여 서비스가 정하는 토큰 형식에 맞춰 여유를 둔 최대 길이. 컬럼 길이와 경로 검증이 함께 쓴다. */
@@ -36,6 +37,13 @@ export class SurveyQrAnswerEntity {
   /** `{ [문항id]: 값 }`. */
   @Column({ type: 'jsonb' })
   answers: Record<string, unknown>;
+
+  /**
+   * 응답자가 고른 직업. 익명 응답을 직업별(초등학생·교사 등)로 나눠 보려고 문항이 아닌 컬럼으로 둔다.
+   * 이 컬럼이 생기기 전 응답은 null이다.
+   */
+  @Column({ type: 'enum', enum: Occupation, nullable: true })
+  occupation: Occupation | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

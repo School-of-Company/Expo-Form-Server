@@ -7,7 +7,7 @@ import {
   triggerValuesOf,
 } from '../../json/field-spec.schema.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
-import { Occupation } from '../entities/occupation.enum.js';
+import { Occupation } from '../../common/enums/occupation.enum.js';
 
 type FieldLike = {
   formType: DynamicFormFieldType;
