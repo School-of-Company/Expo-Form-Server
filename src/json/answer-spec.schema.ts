@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
+import { Region } from '../common/enums/region.enum.js';
 import { COMPANION_MAX_COUNT, companionSchema } from './companion.js';
 import type { JsonData, OtherJson } from './field-spec.schema.js';
 
@@ -59,7 +60,7 @@ const VALUE_SCHEMA_BUILDERS: Record<
     return schema;
   },
   /**
-   * 동반자 목록(`{ name, school }[]`). 최대 인원은 `otherJson.maxSelection`이고 없으면
+   * 동반자 목록(`{ name, occupation, region, school? }[]`). 최대 인원은 `otherJson.maxSelection`이고 없으면
    * {@link COMPANION_MAX_COUNT}명이며 어느 쪽이든 상한을 넘을 수 없다. 필수이면 1명 이상이다.
    */
   [DynamicFormFieldType.COMPANION](question) {
@@ -73,6 +74,8 @@ const VALUE_SCHEMA_BUILDERS: Record<
       .min(question.requiredStatus ? 1 : 0)
       .max(max);
   },
+  /** {@link Region} 값 하나. 선택지가 고정이라 `jsonData`를 쓰지 않는다. */
+  [DynamicFormFieldType.REGION]: () => z.enum(Region),
 };
 
 /** 문항 하나가 허용하는 답변 값의 형태를 문항 스펙에서 조립한다. */

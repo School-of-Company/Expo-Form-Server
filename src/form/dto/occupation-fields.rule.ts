@@ -7,7 +7,10 @@ import {
   triggerValuesOf,
 } from '../../json/field-spec.schema.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
-import { Occupation } from '../../common/enums/occupation.enum.js';
+import {
+  Occupation,
+  SCHOOL_OCCUPATIONS,
+} from '../../common/enums/occupation.enum.js';
 
 type FieldLike = {
   formType: DynamicFormFieldType;
@@ -23,17 +26,7 @@ type FormLike = {
 
 const occupationValues = Object.values(Occupation) as string[];
 
-/**
- * 소속 학교 필드를 보여 줄 직업 값. 학교에 다니는 학생과 학교에 소속된 교직원·교사다. 예비교사는
- * 아직 학교에 소속되지 않아 뺀다.
- */
-const schoolOccupations: string[] = [
-  Occupation.ELEMENTARY_STUDENT,
-  Occupation.MIDDLE_SCHOOL_STUDENT,
-  Occupation.HIGH_SCHOOL_STUDENT,
-  Occupation.SCHOOL_STAFF,
-  Occupation.TEACHER,
-];
+const schoolOccupations: string[] = [...SCHOOL_OCCUPATIONS];
 
 /**
  * 직업(`OCCUPATION`)·소속 학교(`SCHOOL`) 필드가 신청 처리 쪽이 읽을 수 있는 모양인지 검증한다.

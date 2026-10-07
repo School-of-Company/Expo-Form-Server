@@ -21,23 +21,29 @@ const base = {
 };
 
 describe('createSurveySchema', () => {
-  it('동반자 추가 문항은 설문에 쓸 수 없다', () => {
-    const companion = {
-      title: '동반자',
-      formType: DynamicFormFieldType.COMPANION,
+  it.each([
+    [
+      DynamicFormFieldType.COMPANION,
+      '동반자 필드는 신청 폼에서만 쓸 수 있습니다.',
+    ],
+    [DynamicFormFieldType.REGION, '지역 필드는 신청 폼에서만 쓸 수 있습니다.'],
+  ])('신청 폼 전용 문항(%s)은 설문에 쓸 수 없다', (formType, message) => {
+    const question = {
+      title: '신청 폼 전용',
+      formType,
       requiredStatus: false,
       jsonData: {},
       otherJson: null,
     };
     const body = {
       ...base,
-      dynamicSurveyRequestDto: [...base.dynamicSurveyRequestDto, companion],
+      dynamicSurveyRequestDto: [...base.dynamicSurveyRequestDto, question],
     };
 
     const result = createSurveySchema.safeParse(body);
     expect(result.success).toBe(false);
     expect(result.error?.issues.map((issue) => issue.message)).toContain(
-      '동반자 필드는 신청 폼에서만 쓸 수 있습니다.',
+      message,
     );
     expect(updateSurveySchema.safeParse(body).success).toBe(false);
   });
