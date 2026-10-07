@@ -158,7 +158,7 @@ describe('buildAnswerSchema', () => {
       ],
       [
         '소속이 필요 없는 구분인데 소속을 보내면',
-        { ...person(1), occupation: 'PARENT' },
+        { ...person(1), occupation: 'GENERAL' },
       ],
     ])('동반자의 %s 거부한다', (_label, companion) => {
       const schema = buildAnswerSchema([companionQuestion]);
@@ -179,11 +179,9 @@ describe('buildAnswerSchema', () => {
     });
 
     it.each([
+      'KINDERGARTEN_STUDENT',
       'ELEMENTARY_STUDENT',
-      'MIDDLE_SCHOOL_STUDENT',
-      'HIGH_SCHOOL_STUDENT',
-      'SCHOOL_STAFF',
-      'PARENT',
+      'MIDDLE_HIGH_SCHOOL_STUDENT',
       'GENERAL',
     ])('소속이 필요 없는 구분(%s)은 소속 없이 받는다', (occupation) => {
       const schema = buildAnswerSchema([companionQuestion]);

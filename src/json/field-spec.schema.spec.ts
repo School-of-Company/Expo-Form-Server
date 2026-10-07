@@ -45,13 +45,13 @@ describe('otherJsonSchema', () => {
       hasEtc: false,
       conditional: {
         parentIndex: 0,
-        triggerValues: ['TEACHER', 'SCHOOL_STAFF'],
+        triggerValues: ['TEACHER', 'PRE_SERVICE_TEACHER'],
       },
     });
 
     expect(parsed.conditional?.triggerValues).toEqual([
       'TEACHER',
-      'SCHOOL_STAFF',
+      'PRE_SERVICE_TEACHER',
     ]);
   });
 

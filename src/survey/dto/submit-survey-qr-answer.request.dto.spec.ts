@@ -9,7 +9,7 @@ describe('submitSurveyQrAnswerSchema', () => {
     expect(
       submitSurveyQrAnswerSchema.safeParse({
         answers,
-        occupation: Occupation.MIDDLE_SCHOOL_STUDENT,
+        occupation: Occupation.MIDDLE_HIGH_SCHOOL_STUDENT,
       }).success,
     ).toBe(true);
   });
