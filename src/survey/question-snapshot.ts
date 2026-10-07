@@ -14,6 +14,7 @@ export type QuestionSnapshot = {
   formType: DynamicFormFieldType;
   /** 드롭다운·복수선택 답변은 이 선택지의 키로 저장되므로, 보기 문구를 복원하려면 필요하다. */
   jsonData: JsonData;
+  /** 기타 입력 허용·최대 선택 개수·조건부 표시 같은 문항의 부가 설정. 없으면 null. */
   otherJson: OtherJson | null;
 };
 
