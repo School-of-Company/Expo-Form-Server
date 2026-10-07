@@ -119,11 +119,11 @@ describe('buildAnswerSchema', () => {
       expect(schema.safeParse({ '5': people(2) }).success).toBe(true);
     });
 
-    it('최대 5명까지 받고 6명부터는 거부한다', () => {
+    it('최대 4명까지 받고 5명부터는 거부한다', () => {
       const schema = buildAnswerSchema([companionQuestion]);
 
-      expect(schema.safeParse({ '5': people(5) }).success).toBe(true);
-      expect(schema.safeParse({ '5': people(6) }).success).toBe(false);
+      expect(schema.safeParse({ '5': people(4) }).success).toBe(true);
+      expect(schema.safeParse({ '5': people(5) }).success).toBe(false);
     });
 
     it('otherJson.maxSelection이 있으면 그 인원까지만 받는다', () => {
@@ -135,12 +135,12 @@ describe('buildAnswerSchema', () => {
       expect(schema.safeParse({ '5': people(3) }).success).toBe(false);
     });
 
-    it('maxSelection이 상한보다 커도 5명을 넘을 수 없다', () => {
+    it('maxSelection이 상한보다 커도 4명을 넘을 수 없다', () => {
       const schema = buildAnswerSchema([
         { ...companionQuestion, otherJson: { hasEtc: false, maxSelection: 9 } },
       ]);
 
-      expect(schema.safeParse({ '5': people(6) }).success).toBe(false);
+      expect(schema.safeParse({ '5': people(5) }).success).toBe(false);
     });
 
     it.each([
