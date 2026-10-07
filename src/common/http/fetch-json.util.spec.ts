@@ -9,7 +9,7 @@ import {
 } from 'vitest';
 import { z } from 'zod';
 import { ExternalServiceError } from './external-service.error.js';
-import { postJson } from './fetch-json.util.js';
+import { fetchJson, postJson } from './fetch-json.util.js';
 
 /** 바디 취소 여부를 확인할 수 있는 응답. */
 function trackedResponse(status: number) {
@@ -47,5 +47,47 @@ describe('postJson', () => {
       ExternalServiceError,
     );
     expect(cancel).toHaveBeenCalled();
+  });
+});
+
+describe('fetchJson', () => {
+  let fetchMock: Mock;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('요청 헤더를 그대로 싣고 응답을 스키마로 검증해 돌려준다', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{"ok":true}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      fetchJson('http://x/y', z.object({ ok: z.boolean() }), {
+        headers: { 'X-Internal-Token': 'secret' },
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://x/y');
+    expect(init.headers).toEqual({ 'X-Internal-Token': 'secret' });
+  });
+
+  it('404는 null을 돌려주고, 그 외 비정상 응답은 ExternalServiceError를 던진다', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(fetchJson('http://x/y', z.object({}))).resolves.toBeNull();
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    await expect(fetchJson('http://x/y', z.object({}))).rejects.toThrow(
+      ExternalServiceError,
+    );
   });
 });

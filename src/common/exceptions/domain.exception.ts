@@ -153,3 +153,17 @@ export class ExpoDeletedException extends DomainException {
     super(ErrorCode.EXPO_DELETED, '삭제된 박람회입니다.', HttpStatus.GONE);
   }
 }
+
+/**
+ * 박람회 서비스에 존재하지 않는 박람회에 폼·설문을 만들려 할 때. v1처럼 박람회가 있어야 그 아래에
+ * 폼·설문을 만들 수 있다(삭제된 박람회는 {@link ExpoDeletedException}).
+ */
+export class ExpoNotFoundException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.EXPO_NOT_FOUND,
+      '박람회를 찾을 수 없습니다.',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+}

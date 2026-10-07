@@ -3,8 +3,8 @@ import { ExternalServiceError } from './external-service.error.js';
 
 const DEFAULT_TIMEOUT_MS = 3000;
 
-/** {@link postJson} 호출 옵션. */
-export type PostJsonOptions = {
+/** {@link fetchJson}·{@link postJson} 호출 옵션. */
+export type JsonRequestOptions = {
   headers?: Record<string, string>;
   timeoutMs?: number;
 };
@@ -17,9 +17,12 @@ export type PostJsonOptions = {
 export async function fetchJson<T>(
   url: string,
   schema: z.ZodType<T>,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
+  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions = {},
 ): Promise<T | null> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  const response = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
 
   return parseJsonResponse(url, response, schema);
 }
@@ -34,7 +37,7 @@ export async function postJson<T>(
   url: string,
   body: unknown,
   schema: z.ZodType<T>,
-  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: PostJsonOptions = {},
+  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions = {},
 ): Promise<T | null> {
   const response = await fetch(url, {
     method: 'POST',
