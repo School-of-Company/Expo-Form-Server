@@ -1,10 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
+  ExpoNotFoundException,
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
+import {
+  EXPO_CLIENT,
+  type ExpoClient,
+} from '../expo-client/expo-client.interface.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
@@ -50,12 +55,17 @@ type DynamicSurveyFields = Omit<
 export class SurveyService {
   private readonly logger = new Logger(SurveyService.name);
 
-  constructor(private readonly surveyStore: SurveyStore) {}
+  constructor(
+    private readonly surveyStore: SurveyStore,
+    @Inject(EXPO_CLIENT) private readonly expoClient: ExpoClient,
+  ) {}
 
   /**
    * 설문과 그 문항들을 함께 생성한다.
    *
    * @returns 생성된 설문의 id — 이어서 수정·삭제하려면 필요하다.
+   * @throws {ExpoNotFoundException} 박람회 서비스에 없는 박람회일 때
+   * @throws {ExternalServiceUnavailableException} 박람회 서비스에 확인할 수 없을 때
    * @throws {SurveyAlreadyExistsException} 같은 (박람회, 참여자군) 조합의 설문이 이미 있을 때
    *   (동시 요청 사이의 경합으로 DB 유니크 제약이 걸린 경우 포함)
    */
@@ -63,6 +73,10 @@ export class SurveyService {
     expoId: string,
     dto: CreateSurveyRequestDto,
   ): Promise<CreateSurveyResponseDto> {
+    if (!(await this.expoClient.exists(expoId))) {
+      throw new ExpoNotFoundException();
+    }
+
     const duplicated = await this.surveyStore.existsByExpoAndType(
       expoId,
       dto.participationType,

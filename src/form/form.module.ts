@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DeletedExpoModule } from '../deleted-expo/deleted-expo.module.js';
+import { ExpoClientModule } from '../expo-client/expo-client.module.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormController } from './form.controller.js';
@@ -13,6 +14,7 @@ import { InternalFormController } from './internal-form.controller.js';
   imports: [
     TypeOrmModule.forFeature([FormEntity, DynamicFormEntity]),
     DeletedExpoModule,
+    ExpoClientModule,
   ],
   controllers: [FormController, InternalFormController],
   providers: [FormService, FormStore],
