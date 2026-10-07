@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DeletedExpoModule } from '../deleted-expo/deleted-expo.module.js';
 import { ParticipationClientModule } from '../participation-client/participation-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
 import { InternalSurveyController } from './internal-survey.controller.js';
@@ -29,6 +30,7 @@ import { SurveyStore } from './survey.store.js';
       SurveyAnswerSubmissionEntity,
       SurveyQrAnswerEntity,
     ]),
+    DeletedExpoModule,
     UserClientModule,
     ParticipationClientModule,
   ],
@@ -49,5 +51,6 @@ import { SurveyStore } from './survey.store.js';
     SurveyQrService,
     SurveyQrAnswerStore,
   ],
+  exports: [SurveyStore],
 })
 export class SurveyModule {}

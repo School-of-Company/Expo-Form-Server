@@ -105,7 +105,8 @@ export class FormService {
    * 그래서 기존 필드의 id는 보존되지 않는다 — 이미 제출된 응답이 옛 필드를 가리키고 있다면
    * 연결이 끊긴다. 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
    *
-   * @throws {FormNotFoundException} 해당 조합의 폼이 없을 때
+   * @throws {FormNotFoundException} 해당 조합의 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async update(expoId: string, dto: UpdateFormRequestDto): Promise<void> {
     const form = await this.formStore.findByExpoAndTypes(
@@ -125,7 +126,12 @@ export class FormService {
 
     const fields = dynamicForm.map((field) => this.toFieldEntity(field));
 
-    await this.formStore.updateWithFields(form, fields);
+    // 폼을 읽은 뒤 그 폼이 삭제됐다면 아무것도 바꾸지 않고 false가 온다.
+    const updated = await this.formStore.updateWithFields(form, fields);
+    if (!updated) {
+      throw new FormNotFoundException();
+    }
+
     this.logger.log(
       `폼 수정 완료: formId=${form.id}, 필드 ${fields.length}개로 교체`,
     );
@@ -163,12 +169,6 @@ export class FormService {
       participationType,
       applicationType,
     }));
-  }
-
-  /** 박람회가 지워질 때 그 박람회의 폼을 모두 삭제한다. 폼이 없어도 성공한다(다시 불러도 안전). */
-  async deleteAllByExpo(expoId: string): Promise<void> {
-    const deleted = await this.formStore.deleteByExpoId(expoId);
-    this.logger.log(`박람회 폼 일괄 삭제: expoId=${expoId}, ${deleted}개`);
   }
 
   /**

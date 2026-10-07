@@ -129,7 +129,7 @@ WHERE event_id = '<알림의 eventId>' AND status = 'PUBLISHED';
 | `GET /internal/forms/{expoId}?type=&applicationType=`                                          | 신청 서비스 — 제출된 신청서를 폼 스펙으로 검증  |
 | `GET /internal/surveys/{expoId}?type=`                                                         | 리포트 서비스 등 — 설문 문항 스펙               |
 | `POST /internal/forms/summaries`, `POST /internal/surveys/summaries` (`{expoIds}`, 최대 100개) | 박람회 서비스 — 박람회별 폼·설문 생성 현황      |
-| `DELETE /internal/forms/{expoId}`, `DELETE /internal/surveys/{expoId}`                         | 박람회 서비스 — 박람회 삭제 시 정리(없어도 204) |
+| `DELETE /internal/expos/{expoId}`                                                              | 박람회 서비스 — 박람회 삭제 시 폼·설문·접수 기록을 한 번에 지우고 삭제 기록을 남김(없어도 204) |
 
 ## Deployment
 

@@ -48,7 +48,6 @@ describe('FormService', () => {
     updateWithFields: Mock;
     deleteById: Mock;
     findSummariesByExpoIds: Mock;
-    deleteByExpoId: Mock;
   };
   let service: FormService;
 
@@ -57,10 +56,9 @@ describe('FormService', () => {
       findByExpoAndTypes: vi.fn(),
       existsByExpoAndTypes: vi.fn(),
       save: vi.fn(),
-      updateWithFields: vi.fn(),
+      updateWithFields: vi.fn().mockResolvedValue(true),
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
-      deleteByExpoId: vi.fn(),
     };
     service = new FormService(formStore as unknown as FormStore);
   });
@@ -132,6 +130,15 @@ describe('FormService', () => {
         FormNotFoundException,
       );
       expect(formStore.updateWithFields).not.toHaveBeenCalled();
+    });
+
+    it('수정하는 사이 폼이 삭제됐으면 예외를 던진다', async () => {
+      formStore.findByExpoAndTypes.mockResolvedValue(existingForm);
+      formStore.updateWithFields.mockResolvedValue(false);
+
+      await expect(service.update(expoId, createDto)).rejects.toThrow(
+        FormNotFoundException,
+      );
     });
 
     it('기존 필드를 새 필드로 통째로 교체한다', async () => {
@@ -224,15 +231,6 @@ describe('FormService', () => {
         },
       ]);
       expect(formStore.findSummariesByExpoIds).toHaveBeenCalledWith([expoId]);
-    });
-  });
-
-  describe('deleteAllByExpo', () => {
-    it('지울 폼이 없어도 실패하지 않는다', async () => {
-      formStore.deleteByExpoId.mockResolvedValue(0);
-
-      await expect(service.deleteAllByExpo(expoId)).resolves.toBeUndefined();
-      expect(formStore.deleteByExpoId).toHaveBeenCalledWith(expoId);
     });
   });
 });

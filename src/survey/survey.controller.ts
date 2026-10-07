@@ -42,6 +42,7 @@ export class SurveyController {
   })
   @ApiCreatedResponse({ type: CreateSurveyResponseDto })
   @ApiErrorResponse(409, '같은 조합의 설문이 이미 있음 (SURVEY_ALREADY_EXISTS)')
+  @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @Post(':expoId')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
@@ -80,6 +81,7 @@ export class SurveyController {
   })
   @ApiNoContentResponse({ description: '수정 완료' })
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
+  @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @Patch(':expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async update(

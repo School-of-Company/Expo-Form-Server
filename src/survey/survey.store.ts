@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
+import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -24,6 +25,7 @@ export class SurveyStore {
     @InjectRepository(SurveyEntity)
     private readonly surveys: Repository<SurveyEntity>,
     private readonly dataSource: DataSource,
+    private readonly deletedExpos: DeletedExpoStore,
   ) {}
 
   /**
@@ -55,9 +57,18 @@ export class SurveyStore {
   /**
    * 설문과 문항을 함께 저장한다.
    * `dynamicSurveys` 관계에 cascade가 걸려 있어서, 자식 문항도 이 한 번의 호출로 같이 들어간다.
+   *
+   * 삭제된 박람회에는 저장하지 않는다. 박람회 삭제와 같은 잠금 안에서 확인하고 저장하므로, 삭제가
+   * 끝나는 순간 설문이 새로 생기는 일이 없다.
+   *
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async save(survey: SurveyEntity): Promise<SurveyEntity> {
-    return this.surveys.save(survey);
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, survey.expoId);
+
+      return manager.save(SurveyEntity, survey);
+    });
   }
 
   /**
@@ -72,14 +83,31 @@ export class SurveyStore {
    * 문항은 더 이상 부모 저장에 얹혀가는 cascade로 들어가지 않으므로, 여기서 직접 관계를
    * 채워 저장한다.
    *
+   * 설문을 읽은 뒤 그 설문이 삭제됐다면 아래 UPDATE는 0행이 바뀌고 문항 저장이 외래 키 위반(500)이
+   * 되거나 빈 문항으로 조용히 끝난다. 그래서 박람회 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 설문
+   * row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
+   *
    * @param survey 조회해온 설문 엔티티(메타데이터는 이미 갱신된 상태)
    * @param questions 이 설문의 문항을 전부 대체할 새 문항들
+   * @returns 갱신했으면 true, 그 사이 설문이 삭제돼 아무것도 바꾸지 않았으면 false
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithQuestions(
     survey: SurveyEntity,
     questions: DynamicSurveyEntity[],
-  ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, survey.expoId);
+
+      const locked = await manager.findOne(SurveyEntity, {
+        where: { id: survey.id },
+        select: { id: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) {
+        return false;
+      }
+
       await manager.delete(DynamicSurveyEntity, { survey: { id: survey.id } });
 
       await manager.update(SurveyEntity, survey.id, {
@@ -94,6 +122,8 @@ export class SurveyStore {
 
       survey.dynamicSurveys = questions;
       await manager.save(DynamicSurveyEntity, questions);
+
+      return true;
     });
   }
 
@@ -120,12 +150,15 @@ export class SurveyStore {
    * 설문의 답변을 계속 발행한다. 설문을 먼저 지우는 건 접수(`createReceived`)와 순서를 맞추기
    * 위해서다 — 접수가 설문 row를 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤의 접수
    * 기록 삭제는 새 스냅샷으로 실행돼 방금 커밋된 기록까지 지운다.
+   *
+   * 박람회 삭제 트랜잭션(`ExpoPurgeService`) 안에서 부르므로 그 트랜잭션의 `manager`로 지운다.
    */
-  async deleteByExpoId(expoId: string): Promise<number> {
-    return this.dataSource.transaction(async (manager) => {
-      const result = await manager.delete(SurveyEntity, { expoId });
-      await manager.delete(SurveyAnswerSubmissionEntity, { expoId });
-      return result.affected ?? 0;
-    });
+  async deleteByExpoId(
+    expoId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    const result = await manager.delete(SurveyEntity, { expoId });
+    await manager.delete(SurveyAnswerSubmissionEntity, { expoId });
+    return result.affected ?? 0;
   }
 }

@@ -121,7 +121,17 @@ describe('SurveyQrService', () => {
       );
     });
 
-    it('유니크 위반이 아닌 오류는 그대로 전파한다', async () => {
+    it('저장 전에 박람회 삭제로 설문이 지워져 외래 키 위반이 나면 404로 변환한다', async () => {
+      qrAnswerStore.create.mockRejectedValue(
+        new QueryFailedError('INSERT', [], { code: '23503' } as never),
+      );
+
+      await expect(service.submit('qr-1', answerDto)).rejects.toThrow(
+        SurveyNotFoundException,
+      );
+    });
+
+    it('유니크·외래 키 위반이 아닌 오류는 그대로 전파한다', async () => {
       qrAnswerStore.create.mockRejectedValue(new Error('connection lost'));
 
       await expect(service.submit('qr-1', answerDto)).rejects.toThrow(

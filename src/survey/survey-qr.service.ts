@@ -5,7 +5,10 @@ import {
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
-import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from '../common/exceptions/postgres-error.util.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
 import {
   PARTICIPATION_CLIENT,
@@ -82,6 +85,11 @@ export class SurveyQrService {
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new SurveyAnswerAlreadyExistsException();
+      }
+
+      // 설문을 확인한 뒤 저장하기 전에 박람회 삭제로 설문이 지워진 경우다.
+      if (isForeignKeyViolation(error)) {
+        throw new SurveyNotFoundException();
       }
 
       throw error;

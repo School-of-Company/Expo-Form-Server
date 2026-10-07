@@ -63,19 +63,4 @@ export class InternalFormController {
   async summarize(@Body() dto: ExpoIdsRequestDto): Promise<FormSummaryDto[]> {
     return this.formService.summarize(dto.expoIds);
   }
-
-  /** 박람회 서비스가 박람회를 지울 때 그 박람회의 폼을 모두 지운다(v1 `DeleteExpo`). */
-  @ApiOperation({
-    summary: '박람회 폼 일괄 삭제 (내부)',
-    description:
-      '박람회의 폼과 입력 필드를 모두 삭제한다. 폼이 없어도 204라 다시 불러도 안전하다.',
-  })
-  @ApiNoContentResponse({ description: '삭제 완료' })
-  @Delete(':expoId')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteAll(
-    @Param('expoId', ParseUUIDPipe) expoId: string,
-  ): Promise<void> {
-    return this.formService.deleteAllByExpo(expoId);
-  }
 }

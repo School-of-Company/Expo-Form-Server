@@ -143,3 +143,13 @@ export class ExternalServiceUnavailableException extends DomainException {
     );
   }
 }
+
+/**
+ * 삭제된 박람회에 폼·설문을 만들려 할 때. 박람회가 삭제되면 그 박람회의 데이터는 모두 지워지고 새로
+ * 만들 수도 없다(삭제와 겹친 생성이 지워졌어야 할 데이터를 되살리지 않게 막는다).
+ */
+export class ExpoDeletedException extends DomainException {
+  constructor() {
+    super(ErrorCode.EXPO_DELETED, '삭제된 박람회입니다.', HttpStatus.GONE);
+  }
+}

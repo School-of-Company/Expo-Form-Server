@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
+import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { FormEntity } from './entities/form.entity.js';
@@ -24,6 +25,7 @@ export class FormStore {
     @InjectRepository(FormEntity)
     private readonly forms: Repository<FormEntity>,
     private readonly dataSource: DataSource,
+    private readonly deletedExpos: DeletedExpoStore,
   ) {}
 
   /**
@@ -57,9 +59,18 @@ export class FormStore {
   /**
    * 폼과 입력 필드를 함께 저장한다.
    * `dynamicForms` 관계에 cascade가 걸려 있어서, 자식 필드도 이 한 번의 호출로 같이 들어간다.
+   *
+   * 삭제된 박람회에는 저장하지 않는다. 박람회 삭제와 같은 잠금 안에서 확인하고 저장하므로, 삭제가
+   * 끝나는 순간 폼이 새로 생기는 일이 없다.
+   *
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async save(form: FormEntity): Promise<FormEntity> {
-    return this.forms.save(form);
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
+
+      return manager.save(FormEntity, form);
+    });
   }
 
   /**
@@ -68,20 +79,38 @@ export class FormStore {
    * 삭제와 재삽입 사이에 다른 요청이 폼을 조회하면 필드가 하나도 없는 상태를 보게 되므로,
    * 두 작업을 한 트랜잭션으로 묶는다.
    *
+   * 폼을 읽은 뒤 그 폼이 삭제됐다면 아래 `save`가 지워진 폼을 다시 INSERT해 버린다. 그래서 박람회
+   * 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 폼 row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
+   *
    * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
    * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
+   * @returns 갱신했으면 true, 그 사이 폼이 삭제돼 아무것도 바꾸지 않았으면 false
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithFields(
     form: FormEntity,
     fields: DynamicFormEntity[],
-  ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+  ): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
+
+      const locked = await manager.findOne(FormEntity, {
+        where: { id: form.id },
+        select: { id: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) {
+        return false;
+      }
+
       await manager.delete(DynamicFormEntity, { form: { id: form.id } });
 
       // 조회해온 form에는 방금 지운 옛 필드들이 매달려 있다. 새 필드로 바꿔놓지 않으면
       // dynamicForms의 cascade가 옛 필드를 그대로 되살려버린다.
       form.dynamicForms = fields;
       await manager.save(FormEntity, form);
+
+      return true;
     });
   }
 
@@ -102,9 +131,15 @@ export class FormStore {
     });
   }
 
-  /** 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 FK CASCADE로 함께 지워진다. */
-  async deleteByExpoId(expoId: string): Promise<number> {
-    const result = await this.forms.delete({ expoId });
+  /**
+   * 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 FK CASCADE로 함께 지워진다.
+   * 박람회 삭제 트랜잭션(`ExpoPurgeService`) 안에서 부르므로 그 트랜잭션의 `manager`로 지운다.
+   */
+  async deleteByExpoId(
+    expoId: string,
+    manager: EntityManager,
+  ): Promise<number> {
+    const result = await manager.delete(FormEntity, { expoId });
     return result.affected ?? 0;
   }
 }
