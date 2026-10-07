@@ -178,34 +178,35 @@ describe('buildAnswerSchema', () => {
       expect(required.safeParse({ '5': people(1) }).success).toBe(true);
     });
 
-    it.each(['PRE_SERVICE_TEACHER', 'PARENT', 'GENERAL'])(
-      '소속이 필요 없는 구분(%s)은 소속 없이 받는다',
-      (occupation) => {
-        const schema = buildAnswerSchema([companionQuestion]);
-        const companion = { ...person(1), occupation, school: undefined };
-
-        expect(schema.safeParse({ '5': [companion] }).success).toBe(true);
-      },
-    );
-
     it.each([
       'ELEMENTARY_STUDENT',
       'MIDDLE_SCHOOL_STUDENT',
       'HIGH_SCHOOL_STUDENT',
       'SCHOOL_STAFF',
-      'TEACHER',
-    ])('소속이 필요한 구분(%s)은 소속이 있어야 한다', (occupation) => {
+      'PARENT',
+      'GENERAL',
+    ])('소속이 필요 없는 구분(%s)은 소속 없이 받는다', (occupation) => {
       const schema = buildAnswerSchema([companionQuestion]);
+      const companion = { ...person(1), occupation, school: undefined };
 
-      expect(
-        schema.safeParse({ '5': [{ ...person(1), occupation }] }).success,
-      ).toBe(true);
-      expect(
-        schema.safeParse({
-          '5': [{ ...person(1), occupation, school: undefined }],
-        }).success,
-      ).toBe(false);
+      expect(schema.safeParse({ '5': [companion] }).success).toBe(true);
     });
+
+    it.each(['TEACHER', 'PRE_SERVICE_TEACHER'])(
+      '소속이 필요한 구분(%s)은 소속이 있어야 한다',
+      (occupation) => {
+        const schema = buildAnswerSchema([companionQuestion]);
+
+        expect(
+          schema.safeParse({ '5': [{ ...person(1), occupation }] }).success,
+        ).toBe(true);
+        expect(
+          schema.safeParse({
+            '5': [{ ...person(1), occupation, school: undefined }],
+          }).success,
+        ).toBe(false);
+      },
+    );
 
     it('목록이 아닌 값은 거부한다', () => {
       const schema = buildAnswerSchema([companionQuestion]);

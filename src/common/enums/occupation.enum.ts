@@ -6,32 +6,30 @@
  * - 종이 QR 설문: 응답자가 익명이라 신청 정보로 직업을 알 수 없어서, 답변과 함께 직접 받아 저장한다.
  */
 export enum Occupation {
-  /** 초등학생 — 소속 학교 필드가 보인다. */
+  /** 초등학생 */
   ELEMENTARY_STUDENT = 'ELEMENTARY_STUDENT',
-  /** 중학생 — 소속 학교 필드가 보인다. */
+  /** 중학생 */
   MIDDLE_SCHOOL_STUDENT = 'MIDDLE_SCHOOL_STUDENT',
-  /** 고등학생 — 소속 학교 필드가 보인다. */
+  /** 고등학생 */
   HIGH_SCHOOL_STUDENT = 'HIGH_SCHOOL_STUDENT',
-  /** 교직원 — 소속 학교 필드가 보인다. */
+  /** 교직원 */
   SCHOOL_STAFF = 'SCHOOL_STAFF',
-  /** 예비교사 — 아직 학교에 소속되지 않아 소속 학교 필드가 보이지 않는다. */
+  /** 예비교사 — 소속(학교나 기관)을 입력한다. */
   PRE_SERVICE_TEACHER = 'PRE_SERVICE_TEACHER',
   /** 보호자/학부모 */
   PARENT = 'PARENT',
   /** 일반인 */
   GENERAL = 'GENERAL',
-  /** 교사 — 소속 학교 필드가 보인다. */
+  /** 교사 — 소속 학교를 입력한다. */
   TEACHER = 'TEACHER',
 }
 
 /**
- * 소속 학교를 받는 직업. 학교에 다니는 학생과 학교에 소속된 교직원·교사다. 예비교사는 아직 학교에
- * 소속되지 않아 뺀다. 직업·소속 학교 필드의 조건부 표시와 동반자 입력이 같은 기준을 쓴다.
+ * 소속을 받는 직업. 교사와 예비교사만 소속과 이름을 입력하고, 학생·교직원·보호자·일반은 소속을 받지 않는다
+ * (사전등록 공식 요구사항). 소속은 명찰에 "소속 이름"으로 찍힌다. 직업·소속 학교 필드의 조건부 표시와 동반자
+ * 입력이 같은 기준을 쓴다.
  */
 export const SCHOOL_OCCUPATIONS: readonly Occupation[] = [
-  Occupation.ELEMENTARY_STUDENT,
-  Occupation.MIDDLE_SCHOOL_STUDENT,
-  Occupation.HIGH_SCHOOL_STUDENT,
-  Occupation.SCHOOL_STAFF,
   Occupation.TEACHER,
+  Occupation.PRE_SERVICE_TEACHER,
 ];
