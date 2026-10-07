@@ -3,6 +3,8 @@ import { QueryFailedError } from 'typeorm';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
+  ExpoNotFoundException,
+  ExternalServiceUnavailableException,
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
@@ -45,6 +47,7 @@ describe('SurveyService', () => {
     deleteById: Mock;
     findSummariesByExpoIds: Mock;
   };
+  let expoClient: { exists: Mock };
   let service: SurveyService;
 
   beforeEach(() => {
@@ -56,10 +59,36 @@ describe('SurveyService', () => {
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
     };
-    service = new SurveyService(surveyStore as unknown as SurveyStore);
+    expoClient = { exists: vi.fn().mockResolvedValue(true) };
+    service = new SurveyService(
+      surveyStore as unknown as SurveyStore,
+      expoClient,
+    );
   });
 
   describe('create', () => {
+    it('박람회 서비스에 없는 박람회면 거부하고 아무것도 저장하지 않는다', async () => {
+      expoClient.exists.mockResolvedValue(false);
+
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
+        ExpoNotFoundException,
+      );
+      expect(expoClient.exists).toHaveBeenCalledWith(expoId);
+      expect(surveyStore.existsByExpoAndType).not.toHaveBeenCalled();
+      expect(surveyStore.save).not.toHaveBeenCalled();
+    });
+
+    it('박람회 서비스에 확인할 수 없으면 없음으로 보지 않고 장애로 전파한다', async () => {
+      expoClient.exists.mockRejectedValue(
+        new ExternalServiceUnavailableException(),
+      );
+
+      await expect(service.create(expoId, createDto)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+      expect(surveyStore.save).not.toHaveBeenCalled();
+    });
+
     it('같은 조합의 설문이 이미 있으면 거부한다', async () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(true);
 

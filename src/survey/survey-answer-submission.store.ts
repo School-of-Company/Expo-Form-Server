@@ -144,8 +144,11 @@ export class SurveyAnswerSubmissionStore {
    *
    * 아직 종결되지 않은 row만 갱신한다. 발행하는 사이 결과 이벤트가 먼저 도착해 `STORED`/
    * `REJECTED`가 됐다면, 늦게 실행된 이 갱신이 종결 상태를 덮어쓰면 안 된다.
+   *
+   * 이벤트 버전은 처음 발행할 때 한 번만 기록한다. 이미 기록돼 있으면 그대로 둔다(재발행은 그 버전으로
+   * 나갔으므로 같은 값이다).
    */
-  async markPublished(id: string): Promise<void> {
+  async markPublished(id: string, eventVersion: 1 | 2): Promise<void> {
     await this.submissions.update(
       { id, status: In(IN_FLIGHT_STATUSES) },
       {
@@ -153,6 +156,7 @@ export class SurveyAnswerSubmissionStore {
         publishedAt: new Date(),
         // 원시 SQL이라 SnakeNamingStrategy가 적용되지 않는다 — 실제 컬럼명을 써야 한다.
         retryCount: () => 'retry_count + 1',
+        eventVersion: () => `COALESCE(event_version, ${eventVersion})`,
       },
     );
   }

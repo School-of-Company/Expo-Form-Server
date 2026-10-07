@@ -41,8 +41,13 @@ export class SurveyController {
       '박람회의 후기 설문과 문항을 함께 만든다. (박람회, 참여자군) 조합당 하나만 존재한다.',
   })
   @ApiCreatedResponse({ type: CreateSurveyResponseDto })
+  @ApiErrorResponse(404, '박람회가 없음 (EXPO_NOT_FOUND)')
   @ApiErrorResponse(409, '같은 조합의 설문이 이미 있음 (SURVEY_ALREADY_EXISTS)')
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
+  @ApiErrorResponse(
+    503,
+    '박람회 서비스에 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
   @Post(':expoId')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,

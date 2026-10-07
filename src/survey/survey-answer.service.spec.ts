@@ -24,6 +24,7 @@ const survey = {
   dynamicSurveys: [
     {
       id: 1,
+      title: '프로그램 만족도',
       formType: DynamicFormFieldType.SENTENCE,
       requiredStatus: true,
       jsonData: {},
@@ -182,10 +183,22 @@ describe('SurveyAnswerService', () => {
     expect(saved.participationType).toBe(ParticipationType.TRAINEE);
     expect(saved.phoneNumber).toBe('01012345678');
     expect(saved.status).toBe(SurveyAnswerSubmissionStatus.RECEIVED);
+    expect(saved.eventVersion).toBeNull();
     expect(saved.eventId).toEqual(expect.any(String));
     expect(saved.payload).toEqual({
       answers: { '1': '좋았습니다' },
       personalInformationStatus: true,
+      // 제출 당시의 문항을 같이 남긴다 — 설문을 수정해 문항 ID가 바뀌어도 제목을 복원할 수 있다.
+      questions: [
+        {
+          id: 1,
+          title: '프로그램 만족도',
+          order: 0,
+          formType: DynamicFormFieldType.SENTENCE,
+          jsonData: {},
+          otherJson: null,
+        },
+      ],
     });
   });
 });
