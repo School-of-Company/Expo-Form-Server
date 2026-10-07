@@ -90,7 +90,7 @@ describe('SurveyAnswerRelayService', () => {
         },
       ],
     });
-    expect(store.markPublished).toHaveBeenCalledWith('submission-1');
+    expect(store.markPublished).toHaveBeenCalledWith('submission-1', 1);
   });
 
   it('오래 머문 PUBLISHED 건도 같은 eventId로 재발행한다', async () => {
@@ -135,7 +135,7 @@ describe('SurveyAnswerRelayService', () => {
     await service.relay();
 
     expect(store.markPublished).toHaveBeenCalledTimes(1);
-    expect(store.markPublished).toHaveBeenCalledWith('submission-2');
+    expect(store.markPublished).toHaveBeenCalledWith('submission-2', 1);
   });
   describe('이벤트 버전', () => {
     const publishedValue = () => {
@@ -191,14 +191,62 @@ describe('SurveyAnswerRelayService', () => {
       expect(value).not.toHaveProperty('questions');
     });
 
-    it('재발행해도 같은 eventId와 저장된 스냅샷을 쓴다', async () => {
-      store.findStalePublished.mockResolvedValue([submissionWithSnapshot]);
+    it('처음 발행하면 정한 버전을 기록한다', async () => {
+      store.findReceived.mockResolvedValue([submissionWithSnapshot]);
 
-      await serviceWithVersion(2).relay();
+      await serviceWithVersion('2').relay();
+
+      expect(store.markPublished).toHaveBeenCalledWith('submission-1', 2);
+    });
+
+    it('v1로 발행한 건은 설정이 v2로 바뀌어도 같은 v1로 재발행한다', async () => {
+      store.findStalePublished.mockResolvedValue([
+        {
+          ...submissionWithSnapshot,
+          status: SurveyAnswerSubmissionStatus.PUBLISHED,
+          eventVersion: 1,
+        },
+      ]);
+
+      await serviceWithVersion('2').relay();
 
       const value = publishedValue();
       expect(value.eventId).toBe('event-1');
+      expect(value.version).toBe(1);
+      expect(value).not.toHaveProperty('questions');
+      expect(store.markPublished).toHaveBeenCalledWith('submission-1', 1);
+    });
+
+    it('v2로 발행한 건은 설정이 v1로 돌아가도 같은 v2로 재발행한다', async () => {
+      store.findStalePublished.mockResolvedValue([
+        {
+          ...submissionWithSnapshot,
+          status: SurveyAnswerSubmissionStatus.PUBLISHED,
+          eventVersion: 2,
+        },
+      ]);
+
+      await service.relay();
+
+      const value = publishedValue();
+      expect(value.eventId).toBe('event-1');
+      expect(value.version).toBe(2);
       expect(value.questions).toEqual(questions);
+      expect(store.markPublished).toHaveBeenCalledWith('submission-1', 2);
+    });
+
+    it('버전을 기록하기 전에 이미 발행된 건은 설정이 v2여도 v1로 재발행한다', async () => {
+      store.findStalePublished.mockResolvedValue([
+        {
+          ...submissionWithSnapshot,
+          status: SurveyAnswerSubmissionStatus.PUBLISHED,
+          eventVersion: null,
+        },
+      ]);
+
+      await serviceWithVersion('2').relay();
+
+      expect(publishedValue().version).toBe(1);
     });
 
     it.each(['0', '3', 'abc'])(

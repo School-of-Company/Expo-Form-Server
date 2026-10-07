@@ -115,6 +115,7 @@ export class SurveyAnswerService {
       rejectReason: null,
       retryCount: 0,
       publishedAt: null,
+      eventVersion: null,
       payload: {
         answers: result.data,
         personalInformationStatus: dto.personalInformationStatus,

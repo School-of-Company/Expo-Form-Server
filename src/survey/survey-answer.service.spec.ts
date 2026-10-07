@@ -183,6 +183,7 @@ describe('SurveyAnswerService', () => {
     expect(saved.participationType).toBe(ParticipationType.TRAINEE);
     expect(saved.phoneNumber).toBe('01012345678');
     expect(saved.status).toBe(SurveyAnswerSubmissionStatus.RECEIVED);
+    expect(saved.eventVersion).toBeNull();
     expect(saved.eventId).toEqual(expect.any(String));
     expect(saved.payload).toEqual({
       answers: { '1': '좋았습니다' },

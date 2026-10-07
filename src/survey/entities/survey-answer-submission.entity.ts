@@ -71,6 +71,15 @@ export class SurveyAnswerSubmissionEntity {
   publishedAt: Date | null;
 
   /**
+   * 처음 발행한 이벤트의 버전. 같은 `eventId`는 재발행해도 같은 내용이어야 한다 — 유저 서비스는 처음
+   * 처리한 이벤트만 반영하고 같은 `eventId`는 중복으로 무시하므로, 설정이 바뀐 뒤 다른 버전으로 다시
+   * 보내면 새 내용(스냅샷)이 영영 전달되지 않는다. 그래서 한 번 정해지면 이 버전으로만 재발행한다.
+   * 한 번도 발행하지 않았으면 null이다.
+   */
+  @Column({ type: 'smallint', nullable: true })
+  eventVersion: number | null;
+
+  /**
    * 검증까지 끝난 제출 내용(`answers`, `personalInformationStatus`)과 제출 당시의 문항 정의
    * (`questions`)를 그대로 보관한다. Kafka로 발행할 페이로드이자, 재발행 시 다시 읽어오는 원본이다.
    * 설문을 수정해도 이 값은 바뀌지 않아서, 옛 접수 건을 재발행해도 제출 당시의 문항이 나간다.

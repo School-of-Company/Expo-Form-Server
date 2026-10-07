@@ -10,6 +10,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Kafka, Producer } from 'kafkajs';
 import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
 /** 한 번에 처리할 최대 건수. 배치가 무한정 커지지 않게 상한을 둔다. */
@@ -87,10 +88,8 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
       'KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC',
     );
 
-    // v2는 제출 당시 문항 스냅샷을 함께 싣는다. 스냅샷이 없는 옛 접수 건은 v2로 만들 수 없어서
-    // 설정이 v2여도 v1 그대로 재발행한다. 재발행이어도 `eventId`는 그대로다.
+    const version = this.versionFor(submission);
     const { questions } = submission.payload;
-    const version = questions !== undefined && this.eventVersion === 2 ? 2 : 1;
 
     try {
       await this.producer.send({
@@ -117,7 +116,7 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
         ],
       });
 
-      await this.store.markPublished(submission.id);
+      await this.store.markPublished(submission.id, version);
     } catch (error) {
       // 발행 실패는 다음 주기에 그대로 재시도된다(RECEIVED는 publishedAt이 없어 계속
       // findReceived에 잡히고, PUBLISHED로 안 바뀌었으니 재시도 대상에서 빠지지 않는다) —
@@ -127,5 +126,26 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
         error,
       );
     }
+  }
+
+  /**
+   * 이 접수 건을 어떤 버전으로 발행할지 정한다.
+   *
+   * 이미 발행한 적 있으면 그때의 버전을 그대로 쓴다. 같은 `eventId`가 다른 내용으로 나가면 유저 서비스가
+   * 처음 처리한 이벤트만 반영하고 나머지는 중복으로 무시해서, 설정을 올린 뒤 재발행해도 스냅샷이 전달되지
+   * 않는다. 처음 발행하는 건은 설정을 따르되, 스냅샷이 없으면 v2를 만들 수 없어 v1이다.
+   */
+  private versionFor(submission: SurveyAnswerSubmissionEntity): 1 | 2 {
+    const { eventVersion, status, payload } = submission;
+    if (eventVersion === 1 || eventVersion === 2) {
+      return eventVersion;
+    }
+
+    // 버전을 기록하기 전에 이미 발행된 건은 v1만 있던 때 나간 것이다.
+    if (status === SurveyAnswerSubmissionStatus.PUBLISHED) {
+      return 1;
+    }
+
+    return payload.questions !== undefined && this.eventVersion === 2 ? 2 : 1;
   }
 }
