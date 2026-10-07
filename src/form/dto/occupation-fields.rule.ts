@@ -36,7 +36,7 @@ const schoolOccupations: string[] = [...SCHOOL_OCCUPATIONS];
  *   조건 없이 항상 보이는 문장형 필드다 — 명찰에 소속을 찍으려면 반드시 받아야 하기 때문이다
  * - 일반 참가자 폼의 직업은 드롭다운이고 선택지 키가 {@link Occupation} 값과 정확히 같다 — 키가 고정돼야 답변 값으로
  *   학생·교사를 알아본다
- * - 일반 참가자 폼의 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 학생(초·중·고)·교직원·교사일
+ * - 일반 참가자 폼의 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 교사·예비교사일
  *   때만 보이는 조건부 필드다(`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
  */
 export function checkOccupationFields(
