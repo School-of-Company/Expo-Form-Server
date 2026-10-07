@@ -10,6 +10,7 @@ import { ApplicationType } from '../entities/application-type.enum.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
 import { dateTimeRequestSchema } from '../../common/zod/date-time.schema.js';
 import { checkNameField } from './name-field.rule.js';
+import { checkCompanionField } from './companion-field.rule.js';
 import { checkOccupationFields } from './occupation-fields.rule.js';
 
 /**
@@ -60,6 +61,7 @@ export const PERIOD_ERROR = {
 export const createFormSchema = createFormFieldsSchema
   .refine(withValidPeriod, PERIOD_ERROR)
   .superRefine(checkNameField)
-  .superRefine(checkOccupationFields);
+  .superRefine(checkOccupationFields)
+  .superRefine(checkCompanionField);
 
 export class CreateFormRequestDto extends createZodDto(createFormSchema) {}

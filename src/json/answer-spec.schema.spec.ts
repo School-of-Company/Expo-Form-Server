@@ -97,4 +97,78 @@ describe('buildAnswerSchema', () => {
       schema.parse({ '1': '좋았습니다', '999': '알 수 없는 답변' }),
     ).toThrow();
   });
+
+  describe('동반자 추가(COMPANION)', () => {
+    const companionQuestion = {
+      id: 5,
+      formType: DynamicFormFieldType.COMPANION,
+      requiredStatus: false,
+      jsonData: {},
+      otherJson: null,
+    } satisfies QuestionSpec;
+    const person = (n: number) => ({
+      name: `동반자${n}`,
+      school: '○○초등학교',
+    });
+    const people = (count: number) =>
+      Array.from({ length: count }, (_, index) => person(index + 1));
+
+    it('이름과 학교가 있는 동반자 목록을 받는다', () => {
+      const schema = buildAnswerSchema([companionQuestion]);
+
+      expect(schema.safeParse({ '5': people(2) }).success).toBe(true);
+    });
+
+    it('최대 5명까지 받고 6명부터는 거부한다', () => {
+      const schema = buildAnswerSchema([companionQuestion]);
+
+      expect(schema.safeParse({ '5': people(5) }).success).toBe(true);
+      expect(schema.safeParse({ '5': people(6) }).success).toBe(false);
+    });
+
+    it('otherJson.maxSelection이 있으면 그 인원까지만 받는다', () => {
+      const schema = buildAnswerSchema([
+        { ...companionQuestion, otherJson: { hasEtc: false, maxSelection: 2 } },
+      ]);
+
+      expect(schema.safeParse({ '5': people(2) }).success).toBe(true);
+      expect(schema.safeParse({ '5': people(3) }).success).toBe(false);
+    });
+
+    it('maxSelection이 상한보다 커도 5명을 넘을 수 없다', () => {
+      const schema = buildAnswerSchema([
+        { ...companionQuestion, otherJson: { hasEtc: false, maxSelection: 9 } },
+      ]);
+
+      expect(schema.safeParse({ '5': people(6) }).success).toBe(false);
+    });
+
+    it.each([
+      ['이름이 비면', { name: '  ', school: '○○초등학교' }],
+      ['학교가 빠지면', { name: '홍길동' }],
+      ['이름이 10자를 넘으면', { name: '가'.repeat(11), school: '○○초등학교' }],
+    ])('동반자의 %s 거부한다', (_label, companion) => {
+      const schema = buildAnswerSchema([companionQuestion]);
+
+      expect(schema.safeParse({ '5': [companion] }).success).toBe(false);
+    });
+
+    it('필수가 아니면 빈 목록이나 생략을 받고, 필수이면 1명 이상이어야 한다', () => {
+      const optional = buildAnswerSchema([companionQuestion]);
+      const required = buildAnswerSchema([
+        { ...companionQuestion, requiredStatus: true },
+      ]);
+
+      expect(optional.safeParse({ '5': [] }).success).toBe(true);
+      expect(optional.safeParse({}).success).toBe(true);
+      expect(required.safeParse({ '5': [] }).success).toBe(false);
+      expect(required.safeParse({ '5': people(1) }).success).toBe(true);
+    });
+
+    it('목록이 아닌 값은 거부한다', () => {
+      const schema = buildAnswerSchema([companionQuestion]);
+
+      expect(schema.safeParse({ '5': '홍길동' }).success).toBe(false);
+    });
+  });
 });

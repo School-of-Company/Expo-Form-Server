@@ -21,6 +21,27 @@ const base = {
 };
 
 describe('createSurveySchema', () => {
+  it('동반자 추가 문항은 설문에 쓸 수 없다', () => {
+    const companion = {
+      title: '동반자',
+      formType: DynamicFormFieldType.COMPANION,
+      requiredStatus: false,
+      jsonData: {},
+      otherJson: null,
+    };
+    const body = {
+      ...base,
+      dynamicSurveyRequestDto: [...base.dynamicSurveyRequestDto, companion],
+    };
+
+    const result = createSurveySchema.safeParse(body);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.message)).toContain(
+      '동반자 필드는 신청 폼에서만 쓸 수 있습니다.',
+    );
+    expect(updateSurveySchema.safeParse(body).success).toBe(false);
+  });
+
   it('선택지 스펙이 어긋난 문항은 거부한다', () => {
     expect(() =>
       createSurveySchema.parse({
