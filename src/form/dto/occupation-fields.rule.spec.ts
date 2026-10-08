@@ -21,6 +21,7 @@ const occupationField = {
   formType: DynamicFormFieldType.DROPDOWN,
   requiredStatus: true,
   jsonData: {
+    [Occupation.KINDERGARTEN_STUDENT]: '유치원생',
     [Occupation.ELEMENTARY_STUDENT]: '초등학생',
     [Occupation.MIDDLE_SCHOOL_STUDENT]: '중학생',
     [Occupation.HIGH_SCHOOL_STUDENT]: '고등학생',
@@ -34,16 +35,10 @@ const occupationField = {
   dynamicFormType: DynamicFormType.OCCUPATION,
 };
 
-/** 소속 학교 필드를 보여 줄 직업 값 — 학생(초·중·고)·교직원·교사. */
-const schoolTriggers = [
-  'ELEMENTARY_STUDENT',
-  'MIDDLE_SCHOOL_STUDENT',
-  'HIGH_SCHOOL_STUDENT',
-  'SCHOOL_STAFF',
-  'TEACHER',
-];
+/** 소속 학교 필드를 보여 줄 직업 값 — 교사·예비교사. */
+const schoolTriggers = ['TEACHER', 'PRE_SERVICE_TEACHER'];
 
-/** 직업 필드가 `dynamicForm`의 1번 위치에 있다고 보고, 학생·교직원·교사일 때 보이도록 조건을 건다. */
+/** 직업 필드가 `dynamicForm`의 1번 위치에 있다고 보고, 교사·예비교사일 때 보이도록 조건을 건다. */
 const schoolField = {
   title: '소속 학교',
   formType: DynamicFormFieldType.SENTENCE,
@@ -147,7 +142,7 @@ describe('직업·소속 학교 필드 검증', () => {
     ],
   ])('직업 필드는 %s 거부한다', (_label, field) => {
     expect(errorsOf(formWith([nameField, field])).join('\n')).toContain(
-      '직업 필드는 선택지 키가 ELEMENTARY_STUDENT, MIDDLE_SCHOOL_STUDENT, HIGH_SCHOOL_STUDENT, SCHOOL_STAFF, PRE_SERVICE_TEACHER, PARENT, GENERAL, TEACHER인 드롭다운이어야 합니다.',
+      '직업 필드는 선택지 키가 KINDERGARTEN_STUDENT, ELEMENTARY_STUDENT, MIDDLE_SCHOOL_STUDENT, HIGH_SCHOOL_STUDENT, SCHOOL_STAFF, PARENT, GENERAL, TEACHER, PRE_SERVICE_TEACHER인 드롭다운이어야 합니다.',
     );
   });
 
@@ -158,7 +153,7 @@ describe('직업·소속 학교 필드 검증', () => {
       [nameField, occupationField, { ...schoolField, otherJson: null }],
     ],
     [
-      '조건이 교사만이면(학생·교직원 누락)',
+      '조건이 교사만이면(예비교사 누락)',
       [
         nameField,
         occupationField,
@@ -172,7 +167,7 @@ describe('직업·소속 학교 필드 검증', () => {
       ],
     ],
     [
-      '조건이 교사·교직원만이면(학생 누락)',
+      '조건에 교직원이 섞이면',
       [
         nameField,
         occupationField,
@@ -182,14 +177,14 @@ describe('직업·소속 학교 필드 검증', () => {
             hasEtc: false,
             conditional: {
               parentIndex: 1,
-              triggerValues: ['TEACHER', 'SCHOOL_STAFF'],
+              triggerValues: ['TEACHER', 'PRE_SERVICE_TEACHER', 'SCHOOL_STAFF'],
             },
           },
         },
       ],
     ],
     [
-      '조건에 예비교사가 섞이면',
+      '조건에 학생이 섞이면',
       [
         nameField,
         occupationField,
@@ -199,7 +194,7 @@ describe('직업·소속 학교 필드 검증', () => {
             hasEtc: false,
             conditional: {
               parentIndex: 1,
-              triggerValues: [...schoolTriggers, 'PRE_SERVICE_TEACHER'],
+              triggerValues: [...schoolTriggers, 'ELEMENTARY_STUDENT'],
             },
           },
         },
@@ -232,7 +227,7 @@ describe('직업·소속 학교 필드 검증', () => {
     ],
   ])('소속 학교 필드는 %s 거부한다', (_label, fields) => {
     expect(errorsOf(formWith(fields))).toContain(
-      '소속 학교 필드는 직업 필드가 ELEMENTARY_STUDENT, MIDDLE_SCHOOL_STUDENT, HIGH_SCHOOL_STUDENT, SCHOOL_STAFF, TEACHER 중 하나일 때만 보이는 문장형 필드여야 합니다.',
+      '소속 학교 필드는 직업 필드가 TEACHER, PRE_SERVICE_TEACHER 중 하나일 때만 보이는 문장형 필드여야 합니다.',
     );
   });
 
