@@ -102,7 +102,7 @@ export class SurveyController {
    */
   @ApiOperation({
     summary: '설문 삭제',
-    description: '설문과 딸린 문항, 현장 QR 응답을 함께 삭제한다.',
+    description: '설문과 딸린 문항, 공개 링크 응답을 함께 삭제한다.',
   })
   @ApiNoContentResponse({ description: '삭제 완료' })
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')

@@ -44,6 +44,21 @@ export class SurveyStore {
   }
 
   /**
+   * 경품 추첨 설정만 바꾼다. 순번은 건드리지 않는다 — 껐다 켜도 이어서 세고, 응답이 설문 행을 잠그고 읽는
+   * 값과 어긋나지 않게 컬럼을 지정해서만 갱신한다.
+   */
+  async updateLottery(
+    id: string,
+    enabled: boolean,
+    numbers: number[],
+  ): Promise<void> {
+    await this.surveys.update(id, {
+      lotteryEnabled: enabled,
+      lotteryNumbers: numbers,
+    });
+  }
+
+  /**
    * 같은 조합의 설문이 이미 있는지만 확인한다.
    * 중복 검사에는 엔티티 본문이 필요 없어서, 문항까지 끌고 오는 조회 대신 이쪽을 쓴다.
    */
@@ -89,12 +104,16 @@ export class SurveyStore {
    *
    * @param survey 조회해온 설문 엔티티(메타데이터는 이미 갱신된 상태)
    * @param questions 이 설문의 문항을 전부 대체할 새 문항들
+   * @param lottery 경품 추첨 옵션. 보낸 값만 바꾸고 비어 있는 값은 지금 값을 그대로 둔다
+   * @param lottery.enabled 추첨을 켤지
+   * @param lottery.numbers 당첨 번호 목록
    * @returns 갱신했으면 true, 그 사이 설문이 삭제돼 아무것도 바꾸지 않았으면 false
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithQuestions(
     survey: SurveyEntity,
     questions: DynamicSurveyEntity[],
+    lottery: { enabled?: boolean; numbers?: number[] } = {},
   ): Promise<boolean> {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, survey.expoId);
@@ -114,6 +133,13 @@ export class SurveyStore {
         title: survey.title,
         informationText: survey.informationText,
         participationType: survey.participationType,
+        // 경품 추첨 옵션은 보낸 것만 바꾼다. 읽어 온 값을 그대로 다시 쓰면 그 사이에 설정 API로 바뀐 값을 덮어쓴다.
+        ...(lottery.enabled !== undefined && {
+          lotteryEnabled: lottery.enabled,
+        }),
+        ...(lottery.numbers !== undefined && {
+          lotteryNumbers: lottery.numbers,
+        }),
       });
 
       for (const question of questions) {
@@ -143,7 +169,7 @@ export class SurveyStore {
   }
 
   /**
-   * 박람회의 설문을 모두 삭제하고 지운 개수를 돌려준다. 문항과 종이 QR 답변은 FK CASCADE로 함께
+   * 박람회의 설문을 모두 삭제하고 지운 개수를 돌려준다. 문항과 공개 링크 답변은 FK CASCADE로 함께
    * 지워진다.
    *
    * 설문 답변 접수 기록(아웃박스)은 설문 FK가 없어 여기서 직접 지운다. 남겨 두면 릴레이가 지워진
