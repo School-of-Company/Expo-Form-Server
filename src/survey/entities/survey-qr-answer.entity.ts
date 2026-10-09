@@ -2,9 +2,10 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   type Relation,
 } from 'typeorm';
 import { Occupation } from '../../common/enums/occupation.enum.js';
@@ -14,21 +15,27 @@ import { SurveyEntity } from './survey.entity.js';
 export const QR_TOKEN_MAX_LENGTH = 64;
 
 /**
- * 현장 종이 QR로 들어온 익명 설문 응답. 응답자 정보가 없어서 유저 서비스에 보낼 수 없고,
- * 묶을 사람이 없으니 답변을 이 서비스가 직접 저장한다 — "답변은 유저 서비스가 저장"
- * 원칙의 유일한 예외다.
+ * 익명 설문 응답. 현장 종이 QR로 들어온 응답과 공개 링크로 들어온 응답을 함께 담는다. 응답자 정보가
+ * 없어서 유저 서비스에 보낼 수 없고, 묶을 사람이 없으니 답변을 이 서비스가 직접 저장한다 — "답변은
+ * 유저 서비스가 저장" 원칙의 유일한 예외다.
  *
- * 토큰은 참여 서비스가 발급·소유하고 이 서비스는 발급하지 않는다. PK를 `(surveyId, token)`으로
- * 잡아, 참여 서비스가 박람회마다 같은 토큰을 다시 쓰더라도 서로 막지 않는다. 같은 설문에서
- * 같은 토큰으로 두 번 응답하면 INSERT가 유니크 위반으로 막힌다 — 응답이 있을 때만 row가 생긴다.
+ * 응답마다 생성한 `id`가 PK다. 종이 QR 응답은 토큰을 함께 저장하고, 공개 링크 응답은 토큰이 없다(null).
+ * 토큰은 참여 서비스가 발급·소유하고 이 서비스는 발급하지 않는다. 같은 설문에서 같은 토큰으로 두 번
+ * 응답하면 `(surveyId, token)` 유니크 인덱스가 INSERT를 막는다 — 참여 서비스가 박람회마다 같은 토큰을
+ * 다시 쓰더라도 서로 막지 않는다. 토큰이 null인 공개 응답은 이 인덱스에서 빠져 여러 번 응답할 수 있다.
  */
 @Entity('survey_qr_answer')
+@Index(['surveyId', 'token'], { unique: true, where: '"token" IS NOT NULL' })
 export class SurveyQrAnswerEntity {
-  @PrimaryColumn({ type: 'uuid' })
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ type: 'uuid' })
   surveyId: string;
 
-  @PrimaryColumn({ length: QR_TOKEN_MAX_LENGTH })
-  token: string;
+  /** 종이 QR 응답의 토큰. 공개 링크 응답은 null이다. */
+  @Column({ type: 'varchar', length: QR_TOKEN_MAX_LENGTH, nullable: true })
+  token: string | null;
 
   @ManyToOne(() => SurveyEntity, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'survey_id' })
