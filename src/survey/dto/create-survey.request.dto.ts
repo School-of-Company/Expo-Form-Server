@@ -6,6 +6,7 @@ import {
   jsonDataSchema,
   otherJsonSchema,
 } from '../../json/field-spec.schema.js';
+import { lotteryNumbersSchema } from './survey-lottery.dto.js';
 
 /**
  * 설문에 들어갈 문항 하나.
@@ -30,6 +31,10 @@ export const dynamicSurveyQuestionSchema = z.object({
  * `totalAnswers`는 요청으로 받지 않는다. 누적 응답 수는 응답 제출이 만들어내는 값이지
  * 설문 작성자가 정하는 값이 아니다.
  *
+ * 경품 추첨은 옵션이다. `lotteryEnabled`로 켜고 `lotteryNumbers`에 행운의 번호를 입력한다. 생성할 때 보내지
+ * 않으면 꺼진 채로 시작하고, 수정할 때 보내지 않으면 지금 값을 그대로 둔다 — 문항만 고치려다 추첨이 꺼지거나
+ * 번호가 지워지지 않게 한다. 켜고 끄는 것은 {@link updateSurveyLotterySchema}의 설정 API로도 할 수 있다.
+ *
  * `dynamicSurveyRequestDto`는 v1의 실제 필드명을 그대로 따른다 — DTO 클래스명이 필드명에
  * 그대로 남아 있어 장황하지만, 아직 연결된 클라이언트가 없는 신규 구현이라도 이 계약은
  * 일부러 v1과 어긋나게 두지 않기로 했다.
@@ -46,6 +51,8 @@ export const createSurveySchema = z
     informationText: z.string().max(500),
     participationType: z.enum(ParticipationType),
     dynamicSurveyRequestDto: z.array(dynamicSurveyQuestionSchema),
+    lotteryEnabled: z.boolean().optional(),
+    lotteryNumbers: lotteryNumbersSchema.optional(),
   })
   .superRefine((survey, ctx) => {
     // 동반자 추가와 지역은 신청 폼 전용이다. 설문 답변에는 이 개념이 없다.

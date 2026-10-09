@@ -38,6 +38,24 @@ export class SurveyEntity {
   @Column({ type: 'int', default: 0 })
   totalAnswers: number;
 
+  /**
+   * 경품 추첨을 켰는지. 박람회(설문)마다 따로 두며 기본은 꺼짐이다. 꺼져 있으면 공개 설문이 번호를 받지
+   * 않고 추첨도 하지 않는다.
+   */
+  @Column({ type: 'boolean', default: false })
+  lotteryEnabled: boolean;
+
+  /**
+   * 당첨 번호 목록. 공개 설문 응답자를 모두 센 순번({@link lotterySequence})이 이 목록에 있으면 그 응답이
+   * 당첨이다. 박람회마다 관리자가 직접 정하고, 비어 있으면 추첨하지 않는다.
+   */
+  @Column({ type: 'int', array: true, default: () => "'{}'" })
+  lotteryNumbers: number[];
+
+  /** 추첨을 켜 둔 동안 공개 설문 응답자를 모두 센 순번(전화번호와 무관). 꺼져 있는 동안은 세지 않고, 다시 켜면 이어서 센다. */
+  @Column({ type: 'int', default: 0 })
+  lotterySequence: number;
+
   /** 박람회(expo) 서비스가 소유한 리소스 — 서비스별 DB 분리 원칙에 따라 FK 없이 값으로만 보관한다. */
   @Index()
   @Column({ type: 'uuid' })

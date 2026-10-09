@@ -123,6 +123,34 @@ describe('SurveyService', () => {
       expect(saved.totalAnswers).toBe(0);
     });
 
+    it('경품 추첨을 보내지 않으면 꺼지고 번호 목록이 빈 채로 저장한다', async () => {
+      surveyStore.existsByExpoAndType.mockResolvedValue(false);
+      surveyStore.save.mockResolvedValue({ id: 'survey-1' });
+
+      await service.create(expoId, createDto);
+
+      const saved = surveyStore.save.mock.calls[0][0] as SurveyEntity;
+      expect(saved.lotteryEnabled).toBe(false);
+      expect(saved.lotteryNumbers).toEqual([]);
+      expect(saved.lotterySequence).toBe(0);
+    });
+
+    it('경품 추첨을 켜고 행운의 번호를 보내면 작은 순서로 저장한다', async () => {
+      surveyStore.existsByExpoAndType.mockResolvedValue(false);
+      surveyStore.save.mockResolvedValue({ id: 'survey-1' });
+
+      await service.create(expoId, {
+        ...createDto,
+        lotteryEnabled: true,
+        lotteryNumbers: [62, 10, 30],
+      });
+
+      const saved = surveyStore.save.mock.calls[0][0] as SurveyEntity;
+      expect(saved.lotteryEnabled).toBe(true);
+      expect(saved.lotteryNumbers).toEqual([10, 30, 62]);
+      expect(saved.lotterySequence).toBe(0);
+    });
+
     it('중복 검사 통과 후 동시 요청과 경합해 유니크 제약에 걸리면 409로 변환한다', async () => {
       surveyStore.existsByExpoAndType.mockResolvedValue(false);
       surveyStore.save.mockRejectedValue(
@@ -187,6 +215,32 @@ describe('SurveyService', () => {
       ];
       expect(questions).toHaveLength(1);
       expect(questions[0].title).toBe('만족도');
+    });
+
+    it('경품 추첨 옵션을 보내지 않으면 지금 값을 그대로 둔다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+
+      await service.update(expoId, createDto);
+
+      const lottery = (
+        surveyStore.updateWithQuestions.mock.calls[0] as unknown[]
+      )[2] as { enabled?: boolean; numbers?: number[] };
+      expect(lottery).toEqual({ enabled: undefined, numbers: undefined });
+    });
+
+    it('경품 추첨 옵션을 보내면 번호를 작은 순서로 넘겨 바꾼다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+
+      await service.update(expoId, {
+        ...createDto,
+        lotteryEnabled: true,
+        lotteryNumbers: [30, 10],
+      });
+
+      const lottery = (
+        surveyStore.updateWithQuestions.mock.calls[0] as unknown[]
+      )[2] as { enabled?: boolean; numbers?: number[] };
+      expect(lottery).toEqual({ enabled: true, numbers: [10, 30] });
     });
 
     it('누적 응답 수는 수정 요청으로 덮어쓰지 않는다', async () => {
