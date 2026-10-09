@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DeletedExpoModule } from '../deleted-expo/deleted-expo.module.js';
 import { ExpoClientModule } from '../expo-client/expo-client.module.js';
-import { ParticipationClientModule } from '../participation-client/participation-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
 import { InternalSurveyController } from './internal-survey.controller.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerController } from './survey-answer.controller.js';
@@ -15,16 +15,18 @@ import { SurveyAnswerRelayService } from './survey-answer-relay.service.js';
 import { SurveyAnswerResultConsumer } from './survey-answer-result.consumer.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
+import { SurveyDrawResultRelayService } from './survey-draw-result-relay.service.js';
+import { SurveyDrawResultStore } from './survey-draw-result.store.js';
+import { SurveyLotteryController } from './survey-lottery.controller.js';
+import { SurveyLotteryService } from './survey-lottery.service.js';
 import { SurveyPublicController } from './survey-public.controller.js';
 import { SurveyPublicService } from './survey-public.service.js';
 import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
-import { SurveyQrController } from './survey-qr.controller.js';
-import { SurveyQrService } from './survey-qr.service.js';
 import { SurveyController } from './survey.controller.js';
 import { SurveyService } from './survey.service.js';
 import { SurveyStore } from './survey.store.js';
 
-/** survey 도메인(설문 정의 + 문항 + 답변 제출 + 현장 QR·공개 링크 응답) 모듈. */
+/** survey 도메인(설문 정의 + 문항 + 답변 제출 + 공개 링크 응답 + 경품 추첨) 모듈. */
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -32,17 +34,17 @@ import { SurveyStore } from './survey.store.js';
       DynamicSurveyEntity,
       SurveyAnswerSubmissionEntity,
       SurveyQrAnswerEntity,
+      SurveyDrawResultEntity,
     ]),
     DeletedExpoModule,
     ExpoClientModule,
     UserClientModule,
-    ParticipationClientModule,
   ],
   controllers: [
     SurveyController,
     SurveyAnswerController,
-    SurveyQrController,
     SurveyPublicController,
+    SurveyLotteryController,
     InternalSurveyController,
   ],
   providers: [
@@ -53,8 +55,10 @@ import { SurveyStore } from './survey.store.js';
     SurveyAnswerRelayService,
     SurveyAnswerResultConsumer,
     SurveyAnswerReconcileService,
-    SurveyQrService,
     SurveyPublicService,
+    SurveyLotteryService,
+    SurveyDrawResultStore,
+    SurveyDrawResultRelayService,
     SurveyQrAnswerStore,
   ],
   exports: [SurveyStore],

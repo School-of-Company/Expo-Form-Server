@@ -15,14 +15,13 @@ import { SurveyEntity } from './survey.entity.js';
 export const QR_TOKEN_MAX_LENGTH = 64;
 
 /**
- * 익명 설문 응답. 현장 종이 QR로 들어온 응답과 공개 링크로 들어온 응답을 함께 담는다. 응답자 정보가
- * 없어서 유저 서비스에 보낼 수 없고, 묶을 사람이 없으니 답변을 이 서비스가 직접 저장한다 — "답변은
- * 유저 서비스가 저장" 원칙의 유일한 예외다.
+ * 공개 설문 링크로 들어온 익명 설문 응답. 응답자 정보가 없어서 유저 서비스에 보낼 수 없고, 묶을 사람이
+ * 없으니 답변을 이 서비스가 직접 저장한다 — "답변은 유저 서비스가 저장" 원칙의 유일한 예외다.
  *
- * 응답마다 생성한 `id`가 PK다. 종이 QR 응답은 토큰을 함께 저장하고, 공개 링크 응답은 토큰이 없다(null).
- * 토큰은 참여 서비스가 발급·소유하고 이 서비스는 발급하지 않는다. 같은 설문에서 같은 토큰으로 두 번
- * 응답하면 `(surveyId, token)` 유니크 인덱스가 INSERT를 막는다 — 참여 서비스가 박람회마다 같은 토큰을
- * 다시 쓰더라도 서로 막지 않는다. 토큰이 null인 공개 응답은 이 인덱스에서 빠져 여러 번 응답할 수 있다.
+ * 응답마다 생성한 `id`가 PK다. 같은 응답자가 여러 번 응답해도 막지 않는다.
+ *
+ * 테이블 이름(`survey_qr_answer`)과 `token` 컬럼은 현장 종이 QR로 응답을 받던 때의 흔적이다. 종이 QR 응답
+ * 경로는 없어졌고 새 응답의 `token`은 항상 null이다. 그때 받은 응답은 토큰이 남은 채로 보존된다.
  */
 @Entity('survey_qr_answer')
 @Index(['surveyId', 'token'], { unique: true, where: '"token" IS NOT NULL' })
@@ -33,7 +32,7 @@ export class SurveyQrAnswerEntity {
   @Column({ type: 'uuid' })
   surveyId: string;
 
-  /** 종이 QR 응답의 토큰. 공개 링크 응답은 null이다. */
+  /** 종이 QR 시절 응답의 토큰. 공개 링크 응답은 null이다. */
   @Column({ type: 'varchar', length: QR_TOKEN_MAX_LENGTH, nullable: true })
   token: string | null;
 
