@@ -6,7 +6,7 @@ import {
 } from 'typeorm';
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyNotFoundException } from '../common/exceptions/domain.exception.js';
-import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
+import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
 /** 경품 설정을 잠그고 읽은 한 줄. 컬럼 이름 그대로 돌려받는다. */
@@ -24,15 +24,14 @@ const NOT_WON: DrawOutcome = { won: false, drawNumber: null };
 
 /** 공개 링크 익명 응답의 영속성 접근을 한 곳에 모아둔 store. */
 @Injectable()
-export class SurveyQrAnswerStore {
+export class SurveyPublicAnswerStore {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
    * 응답을 저장하고 설문의 누적 응답 수를 늘린다. 경품 추첨이 켜져 있으면 같은 트랜잭션에서 이 응답의
    * 순번을 매겨 당첨인지 정한다({@link draw}).
    *
-   * 응답자를 식별하지 않아 같은 응답자의 중복을 막지 않는다. `token`은 종이 QR 시절 응답에만 남아 있는
-   * 값이라 새 응답에는 쓰지 않는다.
+   * 응답자를 식별하지 않아 같은 응답자의 중복을 막지 않는다.
    *
    * 설문 행을 먼저 잠근다 — 같은 설문의 순번이 겹치지 않게 줄 세우는 자리이고, 응답 INSERT보다 앞에 둬야
    * FK 검사의 공유 잠금과 맞물려 교착이 나지 않는다.
@@ -51,7 +50,7 @@ export class SurveyQrAnswerStore {
     return this.dataSource.transaction(async (manager) => {
       const lottery = await this.lockLottery(manager, surveyId);
 
-      await manager.insert(SurveyQrAnswerEntity, {
+      await manager.insert(SurveyPublicAnswerEntity, {
         surveyId,
         // QueryDeepPartialEntity가 Record<string, unknown>을 깊게 펼치다 타입이 어긋난다.
         // 값은 그대로 jsonb로 들어간다.

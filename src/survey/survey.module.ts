@@ -7,7 +7,7 @@ import { InternalSurveyController } from './internal-survey.controller.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
-import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
+import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerController } from './survey-answer.controller.js';
 import { SurveyAnswerReconcileService } from './survey-answer-reconcile.service.js';
@@ -21,7 +21,7 @@ import { SurveyLotteryController } from './survey-lottery.controller.js';
 import { SurveyLotteryService } from './survey-lottery.service.js';
 import { SurveyPublicController } from './survey-public.controller.js';
 import { SurveyPublicService } from './survey-public.service.js';
-import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
+import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyController } from './survey.controller.js';
 import { SurveyService } from './survey.service.js';
 import { SurveyStore } from './survey.store.js';
@@ -33,7 +33,7 @@ import { SurveyStore } from './survey.store.js';
       SurveyEntity,
       DynamicSurveyEntity,
       SurveyAnswerSubmissionEntity,
-      SurveyQrAnswerEntity,
+      SurveyPublicAnswerEntity,
       SurveyDrawResultEntity,
     ]),
     DeletedExpoModule,
@@ -59,7 +59,7 @@ import { SurveyStore } from './survey.store.js';
     SurveyLotteryService,
     SurveyDrawResultStore,
     SurveyDrawResultRelayService,
-    SurveyQrAnswerStore,
+    SurveyPublicAnswerStore,
   ],
   exports: [SurveyStore],
 })

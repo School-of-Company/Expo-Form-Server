@@ -9,7 +9,7 @@ import {
 } from '../common/exceptions/domain.exception.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyPublicService } from './survey-public.service.js';
-import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
+import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyStore } from './survey.store.js';
 
 const expoId = '11111111-1111-1111-1111-111111111111';
@@ -37,17 +37,17 @@ const answerDto = {
 
 describe('SurveyPublicService', () => {
   let surveyStore: { findByExpoAndType: Mock };
-  let qrAnswerStore: { create: Mock };
+  let answerStore: { create: Mock };
   let service: SurveyPublicService;
 
   beforeEach(() => {
     surveyStore = { findByExpoAndType: vi.fn().mockResolvedValue(survey) };
-    qrAnswerStore = {
+    answerStore = {
       create: vi.fn().mockResolvedValue({ won: false, drawNumber: null }),
     };
     service = new SurveyPublicService(
       surveyStore as unknown as SurveyStore,
-      qrAnswerStore as unknown as SurveyQrAnswerStore,
+      answerStore as unknown as SurveyPublicAnswerStore,
     );
   });
 
@@ -89,7 +89,7 @@ describe('SurveyPublicService', () => {
 
       expect(result).toEqual({ won: false, drawNumber: null });
 
-      expect(qrAnswerStore.create).toHaveBeenCalledWith(
+      expect(answerStore.create).toHaveBeenCalledWith(
         'survey-1',
         { '1': '좋았습니다' },
         Occupation.ELEMENTARY_STUDENT,
@@ -101,7 +101,7 @@ describe('SurveyPublicService', () => {
       await service.submit(expoId, answerDto);
       await service.submit(expoId, answerDto);
 
-      expect(qrAnswerStore.create).toHaveBeenCalledTimes(2);
+      expect(answerStore.create).toHaveBeenCalledTimes(2);
     });
 
     describe('경품 번호', () => {
@@ -117,7 +117,7 @@ describe('SurveyPublicService', () => {
       });
 
       it('당첨이면 몇 번째 응답이었는지 알려 준다', async () => {
-        qrAnswerStore.create.mockResolvedValue({ won: true, drawNumber: 30 });
+        answerStore.create.mockResolvedValue({ won: true, drawNumber: 30 });
 
         await expect(service.submit(expoId, answerDto)).resolves.toEqual({
           won: true,
@@ -126,11 +126,11 @@ describe('SurveyPublicService', () => {
       });
 
       it('번호 없이 당첨돼도 당첨을 알려 준다', async () => {
-        qrAnswerStore.create.mockResolvedValue({ won: true, drawNumber: 10 });
+        answerStore.create.mockResolvedValue({ won: true, drawNumber: 10 });
 
         const result = await service.submit(expoId, answerDto);
 
-        expect(qrAnswerStore.create).toHaveBeenCalledWith(
+        expect(answerStore.create).toHaveBeenCalledWith(
           'survey-1',
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
@@ -142,7 +142,7 @@ describe('SurveyPublicService', () => {
       it('추첨이 켜져 있으면 번호를 숫자만 남겨 넘긴다', async () => {
         await service.submit(expoId, consented);
 
-        expect(qrAnswerStore.create).toHaveBeenCalledWith(
+        expect(answerStore.create).toHaveBeenCalledWith(
           'survey-1',
           { '1': '좋았습니다' },
           Occupation.ELEMENTARY_STUDENT,
@@ -154,14 +154,14 @@ describe('SurveyPublicService', () => {
         await service.submit(expoId, answerDto);
         await service.submit(expoId, { ...answerDto, phoneNumber: '  ' });
 
-        expect(qrAnswerStore.create).toHaveBeenNthCalledWith(
+        expect(answerStore.create).toHaveBeenNthCalledWith(
           1,
           'survey-1',
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
           null,
         );
-        expect(qrAnswerStore.create).toHaveBeenNthCalledWith(
+        expect(answerStore.create).toHaveBeenNthCalledWith(
           2,
           'survey-1',
           expect.anything(),
@@ -178,7 +178,7 @@ describe('SurveyPublicService', () => {
           phoneNumber: 'abc',
         });
 
-        expect(qrAnswerStore.create).toHaveBeenCalledWith(
+        expect(answerStore.create).toHaveBeenCalledWith(
           'survey-1',
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
@@ -196,7 +196,7 @@ describe('SurveyPublicService', () => {
           await expect(service.submit(expoId, dto)).rejects.toBeInstanceOf(
             SurveyAnswerInvalidException,
           );
-          expect(qrAnswerStore.create).not.toHaveBeenCalled();
+          expect(answerStore.create).not.toHaveBeenCalled();
         },
       );
 
@@ -216,21 +216,21 @@ describe('SurveyPublicService', () => {
       await expect(service.submit(expoId, answerDto)).rejects.toBeInstanceOf(
         SurveyNotFoundException,
       );
-      expect(qrAnswerStore.create).not.toHaveBeenCalled();
+      expect(answerStore.create).not.toHaveBeenCalled();
     });
 
     it('답변이 문항 스펙과 맞지 않으면 400 예외를 던지고 저장하지 않는다', async () => {
       await expect(
         service.submit(expoId, { ...answerDto, answers: {} }),
       ).rejects.toBeInstanceOf(SurveyAnswerInvalidException);
-      expect(qrAnswerStore.create).not.toHaveBeenCalled();
+      expect(answerStore.create).not.toHaveBeenCalled();
     });
 
     it('저장 직전에 설문이 지워지면(외래 키 위반) 404 예외로 바꾼다', async () => {
       const fkViolation = new QueryFailedError('INSERT', [], {
         code: '23503',
       } as unknown as Error);
-      qrAnswerStore.create.mockRejectedValue(fkViolation);
+      answerStore.create.mockRejectedValue(fkViolation);
 
       await expect(service.submit(expoId, answerDto)).rejects.toBeInstanceOf(
         SurveyNotFoundException,
@@ -239,7 +239,7 @@ describe('SurveyPublicService', () => {
 
     it('알 수 없는 저장 오류는 그대로 던진다', async () => {
       const error = new Error('db down');
-      qrAnswerStore.create.mockRejectedValue(error);
+      answerStore.create.mockRejectedValue(error);
 
       await expect(service.submit(expoId, answerDto)).rejects.toBe(error);
     });
