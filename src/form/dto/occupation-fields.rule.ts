@@ -7,7 +7,10 @@ import {
   triggerValuesOf,
 } from '../../json/field-spec.schema.js';
 import { DynamicFormType } from '../entities/dynamic-form-type.enum.js';
-import { Occupation } from '../../common/enums/occupation.enum.js';
+import {
+  Occupation,
+  SCHOOL_OCCUPATIONS,
+} from '../../common/enums/occupation.enum.js';
 
 type FieldLike = {
   formType: DynamicFormFieldType;
@@ -23,17 +26,7 @@ type FormLike = {
 
 const occupationValues = Object.values(Occupation) as string[];
 
-/**
- * 소속 학교 필드를 보여 줄 직업 값. 학교에 다니는 학생과 학교에 소속된 교직원·교사다. 예비교사는
- * 아직 학교에 소속되지 않아 뺀다.
- */
-const schoolOccupations: string[] = [
-  Occupation.ELEMENTARY_STUDENT,
-  Occupation.MIDDLE_SCHOOL_STUDENT,
-  Occupation.HIGH_SCHOOL_STUDENT,
-  Occupation.SCHOOL_STAFF,
-  Occupation.TEACHER,
-];
+const schoolOccupations: string[] = [...SCHOOL_OCCUPATIONS];
 
 /**
  * 직업(`OCCUPATION`)·소속 학교(`SCHOOL`) 필드가 신청 처리 쪽이 읽을 수 있는 모양인지 검증한다.
@@ -43,7 +36,7 @@ const schoolOccupations: string[] = [
  *   조건 없이 항상 보이는 문장형 필드다 — 명찰에 소속을 찍으려면 반드시 받아야 하기 때문이다
  * - 일반 참가자 폼의 직업은 드롭다운이고 선택지 키가 {@link Occupation} 값과 정확히 같다 — 키가 고정돼야 답변 값으로
  *   학생·교사를 알아본다
- * - 일반 참가자 폼의 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 학생(초·중·고)·교직원·교사일
+ * - 일반 참가자 폼의 소속 학교는 직업 필드가 있어야 하고, 문장형이며, 직업이 교사·예비교사일
  *   때만 보이는 조건부 필드다(`otherJson.conditional.parentIndex`는 `dynamicForm` 안의 위치다)
  */
 export function checkOccupationFields(

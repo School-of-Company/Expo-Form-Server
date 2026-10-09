@@ -114,8 +114,10 @@ describe('HttpUserClient', () => {
   describe('findSurveyAnswerResult', () => {
     const eventId = '3f1c2a4e-8b7d-4c1e-9a2b-5d6e7f8a9b0c';
 
-    it('eventId를 바디로 보내고 처리 결과를 돌려준다(사유가 없으면 null)', async () => {
-      fetchMock.mockResolvedValue(jsonResponse(200, { status: 'STORED' }));
+    it('eventId를 경로에 실은 GET으로 처리 결과를 돌려준다(사유가 없으면 null)', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, { eventId, status: 'STORED' }),
+      );
 
       await expect(client.findSurveyAnswerResult(eventId)).resolves.toEqual({
         status: 'STORED',
@@ -123,9 +125,12 @@ describe('HttpUserClient', () => {
       });
       const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
       expect(url).toBe(
-        'http://user-server/internal/survey-answer-events/resolve',
+        `http://user-server/internal/survey-answer-events/${eventId}`,
       );
-      expect(JSON.parse(init.body as string)).toEqual({ eventId });
+      // 바디 없는 GET이고 내부 토큰 헤더만 싣는다
+      expect(init.method).toBeUndefined();
+      expect(init.body).toBeUndefined();
+      expect(init.headers).toMatchObject({ 'X-Internal-Token': token });
     });
 
     it('거절 사유를 그대로 돌려준다', async () => {

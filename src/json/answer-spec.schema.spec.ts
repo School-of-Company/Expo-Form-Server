@@ -108,22 +108,24 @@ describe('buildAnswerSchema', () => {
     } satisfies QuestionSpec;
     const person = (n: number) => ({
       name: `동반자${n}`,
+      occupation: 'TEACHER',
+      region: 'GWANGJU',
       school: '○○초등학교',
     });
     const people = (count: number) =>
       Array.from({ length: count }, (_, index) => person(index + 1));
 
-    it('이름과 학교가 있는 동반자 목록을 받는다', () => {
+    it('이름·구분·지역이 있는 동반자 목록을 받는다', () => {
       const schema = buildAnswerSchema([companionQuestion]);
 
       expect(schema.safeParse({ '5': people(2) }).success).toBe(true);
     });
 
-    it('최대 5명까지 받고 6명부터는 거부한다', () => {
+    it('최대 4명까지 받고 5명부터는 거부한다', () => {
       const schema = buildAnswerSchema([companionQuestion]);
 
-      expect(schema.safeParse({ '5': people(5) }).success).toBe(true);
-      expect(schema.safeParse({ '5': people(6) }).success).toBe(false);
+      expect(schema.safeParse({ '5': people(4) }).success).toBe(true);
+      expect(schema.safeParse({ '5': people(5) }).success).toBe(false);
     });
 
     it('otherJson.maxSelection이 있으면 그 인원까지만 받는다', () => {
@@ -135,18 +137,29 @@ describe('buildAnswerSchema', () => {
       expect(schema.safeParse({ '5': people(3) }).success).toBe(false);
     });
 
-    it('maxSelection이 상한보다 커도 5명을 넘을 수 없다', () => {
+    it('maxSelection이 상한보다 커도 4명을 넘을 수 없다', () => {
       const schema = buildAnswerSchema([
         { ...companionQuestion, otherJson: { hasEtc: false, maxSelection: 9 } },
       ]);
 
-      expect(schema.safeParse({ '5': people(6) }).success).toBe(false);
+      expect(schema.safeParse({ '5': people(5) }).success).toBe(false);
     });
 
     it.each([
-      ['이름이 비면', { name: '  ', school: '○○초등학교' }],
-      ['학교가 빠지면', { name: '홍길동' }],
-      ['이름이 10자를 넘으면', { name: '가'.repeat(11), school: '○○초등학교' }],
+      ['이름이 비면', { ...person(1), name: '  ' }],
+      ['구분이 빠지면', { ...person(1), occupation: undefined }],
+      ['모르는 구분이면', { ...person(1), occupation: 'ALIEN' }],
+      ['지역이 빠지면', { ...person(1), region: undefined }],
+      ['모르는 지역이면', { ...person(1), region: '서울' }],
+      ['이름이 10자를 넘으면', { ...person(1), name: '가'.repeat(11) }],
+      [
+        '소속이 필요한 구분인데 소속이 없으면',
+        { ...person(1), school: undefined },
+      ],
+      [
+        '소속이 필요 없는 구분인데 소속을 보내면',
+        { ...person(1), occupation: 'PARENT' },
+      ],
     ])('동반자의 %s 거부한다', (_label, companion) => {
       const schema = buildAnswerSchema([companionQuestion]);
 
@@ -165,10 +178,71 @@ describe('buildAnswerSchema', () => {
       expect(required.safeParse({ '5': people(1) }).success).toBe(true);
     });
 
+    it.each([
+      'KINDERGARTEN_STUDENT',
+      'ELEMENTARY_STUDENT',
+      'MIDDLE_SCHOOL_STUDENT',
+      'HIGH_SCHOOL_STUDENT',
+      'SCHOOL_STAFF',
+      'PARENT',
+      'GENERAL',
+    ])('소속이 필요 없는 구분(%s)은 소속 없이 받는다', (occupation) => {
+      const schema = buildAnswerSchema([companionQuestion]);
+      const companion = { ...person(1), occupation, school: undefined };
+
+      expect(schema.safeParse({ '5': [companion] }).success).toBe(true);
+    });
+
+    it.each(['TEACHER', 'PRE_SERVICE_TEACHER'])(
+      '소속이 필요한 구분(%s)은 소속이 있어야 한다',
+      (occupation) => {
+        const schema = buildAnswerSchema([companionQuestion]);
+
+        expect(
+          schema.safeParse({ '5': [{ ...person(1), occupation }] }).success,
+        ).toBe(true);
+        expect(
+          schema.safeParse({
+            '5': [{ ...person(1), occupation, school: undefined }],
+          }).success,
+        ).toBe(false);
+      },
+    );
+
     it('목록이 아닌 값은 거부한다', () => {
       const schema = buildAnswerSchema([companionQuestion]);
 
       expect(schema.safeParse({ '5': '홍길동' }).success).toBe(false);
+    });
+  });
+
+  describe('지역(REGION)', () => {
+    const regionQuestion = {
+      id: 7,
+      formType: DynamicFormFieldType.REGION,
+      requiredStatus: true,
+      jsonData: {},
+      otherJson: null,
+    } satisfies QuestionSpec;
+
+    it.each(['GWANGJU', 'JEONNAM', 'OTHER'])('%s를 받는다', (region) => {
+      const schema = buildAnswerSchema([regionQuestion]);
+
+      expect(schema.safeParse({ '7': region }).success).toBe(true);
+    });
+
+    it.each(['광주', 'SEOUL', '', 1])('%s는 거부한다', (value) => {
+      const schema = buildAnswerSchema([regionQuestion]);
+
+      expect(schema.safeParse({ '7': value }).success).toBe(false);
+    });
+
+    it('필수가 아니면 생략할 수 있다', () => {
+      const schema = buildAnswerSchema([
+        { ...regionQuestion, requiredStatus: false },
+      ]);
+
+      expect(schema.safeParse({}).success).toBe(true);
     });
   });
 });

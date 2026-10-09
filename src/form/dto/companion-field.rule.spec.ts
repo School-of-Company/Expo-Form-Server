@@ -20,7 +20,7 @@ const companionField = {
   formType: DynamicFormFieldType.COMPANION,
   requiredStatus: false,
   jsonData: {},
-  otherJson: { hasEtc: false, maxSelection: 5 },
+  otherJson: { hasEtc: false, maxSelection: 4 },
   dynamicFormType: DynamicFormType.DEFAULT,
 };
 
@@ -45,7 +45,7 @@ const errorsOf = (input: unknown) => {
 };
 
 describe('동반자 추가 필드 검증', () => {
-  it('일반 참가자 폼에서 최대 5명까지 동반자를 받는 필드를 받는다', () => {
+  it('일반 참가자 폼에서 최대 4명까지 동반자를 받는 필드를 받는다', () => {
     expect(errorsOf(formWith([nameField, companionField]))).toEqual([]);
   });
 
@@ -73,15 +73,15 @@ describe('동반자 추가 필드 검증', () => {
     ).toContain('동반자 필드는 폼에 하나만 둘 수 있습니다.');
   });
 
-  it('최대 인원이 5명을 넘으면 거부한다', () => {
+  it('최대 인원이 4명을 넘으면 거부한다', () => {
     expect(
       errorsOf(
         formWith([
           nameField,
-          { ...companionField, otherJson: { hasEtc: false, maxSelection: 6 } },
+          { ...companionField, otherJson: { hasEtc: false, maxSelection: 5 } },
         ]),
       ),
-    ).toContain('동반자는 최대 5명까지 추가할 수 있습니다.');
+    ).toContain('동반자는 최대 4명까지 추가할 수 있습니다.');
   });
 
   it('선택지(jsonData)가 있으면 거부한다', () => {

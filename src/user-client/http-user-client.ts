@@ -6,7 +6,7 @@ import {
   ParticipantAmbiguousException,
 } from '../common/exceptions/domain.exception.js';
 import { ExternalServiceError } from '../common/http/external-service.error.js';
-import { postJson } from '../common/http/fetch-json.util.js';
+import { fetchJson, postJson } from '../common/http/fetch-json.util.js';
 import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
 import type {
@@ -33,11 +33,11 @@ const surveyAnswerEventResultSchema = z.object({
  *
  * 계약
  * - 응답자 조회: Expo-User-Server#23의 `POST /internal/participants/resolve`
- * - 접수 이벤트 처리 결과(잠정, Expo-User-Server#11이 이에 맞춤): `POST /internal/survey-answer-events/resolve`에
- *   `{eventId}` → `200 {status, reason}`, 처리한 적 없으면 `404`
+ * - 접수 이벤트 처리 결과(Expo-User-Server PR #39): `GET /internal/survey-answer-events/{eventId}`
+ *   → `200 {eventId, status, reason}`, 처리한 적 없으면 `404`
  *
  * 서비스 간 호출은 Gateway를 거치지 않으므로 `X-Internal-Token`으로 인증하고, 전화번호는
- * URL·접근 로그에 남지 않도록 바디로만 보낸다.
+ * URL·접근 로그에 남지 않도록 바디로만 보낸다. `eventId`는 개인정보가 아닌 UUID라 경로에 실어도 된다.
  */
 export class HttpUserClient implements UserClient {
   private readonly logger = new Logger(HttpUserClient.name);
@@ -59,10 +59,10 @@ export class HttpUserClient implements UserClient {
   async findSurveyAnswerResult(
     eventId: string,
   ): Promise<SurveyAnswerEventResult | null> {
-    const result = await this.post(
-      '/internal/survey-answer-events/resolve',
-      { eventId },
-      surveyAnswerEventResultSchema,
+    const result = await this.request(
+      `/internal/survey-answer-events/${encodeURIComponent(eventId)}`,
+      async (url, headers) =>
+        fetchJson(url, surveyAnswerEventResultSchema, { headers }),
     );
 
     return result === null
@@ -70,22 +70,35 @@ export class HttpUserClient implements UserClient {
       : { status: result.status, reason: result.reason ?? null };
   }
 
+  /** 바디로 보내는 내부 API 호출. 실패 처리는 {@link request}와 같다. */
+  private async post<T>(
+    path: string,
+    body: unknown,
+    schema: z.ZodType<T>,
+    options: { conflict?: () => Error } = {},
+  ): Promise<T | null> {
+    return this.request(
+      path,
+      async (url, headers) => postJson(url, body, schema, { headers }),
+      options,
+    );
+  }
+
   /**
    * 내부 API를 호출한다. 404는 null이고, 그 외 실패는 모두 서비스 장애로 바꿔 던진다 —
    * 장애를 "없음"으로 돌려보내면 호출부가 잘못된 결론을 내린다. 409에 따로 뜻이 있는 API는
    * `conflict`로 던질 예외를 정한다.
    */
-  private async post<T>(
+  private async request<T>(
     path: string,
-    body: unknown,
-    schema: z.ZodType<T>,
+    send: (url: string, headers: Record<string, string>) => Promise<T | null>,
     { conflict }: { conflict?: () => Error } = {},
   ): Promise<T | null> {
     const url = `${this.options.baseUrl}${path}`;
 
     try {
-      return await postJson(url, body, schema, {
-        headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+      return await send(url, {
+        [INTERNAL_TOKEN_HEADER]: this.options.internalToken,
       });
     } catch (error) {
       if (
