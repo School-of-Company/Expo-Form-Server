@@ -6,6 +6,7 @@ import {
 } from '../common/exceptions/domain.exception.js';
 import { isForeignKeyViolation } from '../common/exceptions/postgres-error.util.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
+import { PublicSurveyAnswerResponseDto } from './dto/public-survey-answer.response.dto.js';
 import { SubmitPublicSurveyAnswerRequestDto } from './dto/submit-public-survey-answer.request.dto.js';
 import {
   PublicSurveyResponseDto,
@@ -13,7 +14,10 @@ import {
 } from './dto/public-survey.response.dto.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { normalizeLotteryPhone } from './lottery-phone.js';
-import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
+import {
+  SurveyQrAnswerStore,
+  type DrawOutcome,
+} from './survey-qr-answer.store.js';
 import { SurveyStore } from './survey.store.js';
 
 /**
@@ -50,7 +54,7 @@ export class SurveyPublicService {
   async submit(
     expoId: string,
     dto: SubmitPublicSurveyAnswerRequestDto,
-  ): Promise<void> {
+  ): Promise<PublicSurveyAnswerResponseDto> {
     const survey = await this.findPublicSurvey(expoId);
 
     const schema = buildAnswerSchema(survey.dynamicSurveys);
@@ -61,8 +65,9 @@ export class SurveyPublicService {
 
     const lotteryPhoneNumber = this.resolveLotteryPhone(survey, dto);
 
+    let outcome: DrawOutcome;
     try {
-      await this.qrAnswerStore.create(
+      outcome = await this.qrAnswerStore.create(
         survey.id,
         result.data,
         dto.occupation,
@@ -78,11 +83,13 @@ export class SurveyPublicService {
     }
 
     this.logger.log(`공개 설문 답변 저장 완료: surveyId=${survey.id}`);
+
+    return { won: outcome.won, drawNumber: outcome.drawNumber };
   }
 
   /**
-   * 경품 추첨에 쓸 번호를 정한다. 추첨이 꺼져 있거나 번호를 보내지 않았으면 `null`이다 — 꺼진 설문에 보낸
-   * 번호는 저장하지 않고 응답만 받는다. 번호가 있으면 개인정보 수집 동의가 있어야 하고 문자를 보낼 수 있는
+   * 당첨됐을 때 문자를 보낼 번호를 정한다. 추첨이 꺼져 있거나 번호를 보내지 않았으면 `null`이다 — 꺼진 설문에
+   * 보낸 번호는 저장하지 않고 응답만 받고, 번호가 없어도 응답과 추첨에는 영향이 없다. 번호가 있으면 개인정보 수집 동의가 있어야 하고 문자를 보낼 수 있는
    * 모양이어야 한다. 번호는 개인정보라 오류 메시지와 로그에 담지 않는다.
    */
   private resolveLotteryPhone(

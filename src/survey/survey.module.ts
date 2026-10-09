@@ -7,7 +7,6 @@ import { InternalSurveyController } from './internal-survey.controller.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
-import { SurveyLotteryEntryEntity } from './entities/survey-lottery-entry.entity.js';
 import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerController } from './survey-answer.controller.js';
@@ -35,7 +34,6 @@ import { SurveyStore } from './survey.store.js';
       DynamicSurveyEntity,
       SurveyAnswerSubmissionEntity,
       SurveyQrAnswerEntity,
-      SurveyLotteryEntryEntity,
       SurveyDrawResultEntity,
     ]),
     DeletedExpoModule,

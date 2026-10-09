@@ -104,12 +104,16 @@ export class SurveyStore {
    *
    * @param survey 조회해온 설문 엔티티(메타데이터는 이미 갱신된 상태)
    * @param questions 이 설문의 문항을 전부 대체할 새 문항들
+   * @param lottery 경품 추첨 옵션. 보낸 값만 바꾸고 비어 있는 값은 지금 값을 그대로 둔다
+   * @param lottery.enabled 추첨을 켤지
+   * @param lottery.numbers 당첨 번호 목록
    * @returns 갱신했으면 true, 그 사이 설문이 삭제돼 아무것도 바꾸지 않았으면 false
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithQuestions(
     survey: SurveyEntity,
     questions: DynamicSurveyEntity[],
+    lottery: { enabled?: boolean; numbers?: number[] } = {},
   ): Promise<boolean> {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, survey.expoId);
@@ -129,6 +133,13 @@ export class SurveyStore {
         title: survey.title,
         informationText: survey.informationText,
         participationType: survey.participationType,
+        // 경품 추첨 옵션은 보낸 것만 바꾼다. 읽어 온 값을 그대로 다시 쓰면 그 사이에 설정 API로 바뀐 값을 덮어쓴다.
+        ...(lottery.enabled !== undefined && {
+          lotteryEnabled: lottery.enabled,
+        }),
+        ...(lottery.numbers !== undefined && {
+          lotteryNumbers: lottery.numbers,
+        }),
       });
 
       for (const question of questions) {

@@ -8,14 +8,10 @@ import {
   ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
-import {
-  ApiNoContentResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
 import { PublicSurveyResponseDto } from './dto/public-survey.response.dto.js';
+import { PublicSurveyAnswerResponseDto } from './dto/public-survey-answer.response.dto.js';
 import { SubmitPublicSurveyAnswerRequestDto } from './dto/submit-public-survey-answer.request.dto.js';
 import { SurveyPublicService } from './survey-public.service.js';
 
@@ -47,9 +43,9 @@ export class SurveyPublicController {
   @ApiOperation({
     summary: '공개 설문 답변 제출',
     description:
-      '익명 답변을 문항 스펙으로 검증해 저장한다. 응답자를 식별하지 않아 같은 사람이 여러 번 응답할 수 있다. 경품 추첨이 켜져 있으면 선택으로 `phoneNumber`와 개인정보 수집 동의(`personalInformationStatus`)를 함께 받는다.',
+      '익명 답변을 문항 스펙으로 검증해 저장한다. 응답자를 식별하지 않아 같은 사람이 여러 번 응답할 수 있다. 경품 추첨이 켜져 있으면 응답자를 모두 세어 이 응답이 당첨인지(`won`, `drawNumber`)를 돌려주고, 전화번호와 상관없이 당첨 화면을 띄울 수 있다. 선택으로 `phoneNumber`와 개인정보 수집 동의(`personalInformationStatus`)를 보내면 당첨됐을 때 그 번호로 문자도 보낸다.',
   })
-  @ApiNoContentResponse({ description: '저장 완료' })
+  @ApiOkResponse({ type: PublicSurveyAnswerResponseDto })
   @ApiErrorResponse(
     400,
     '답변이 문항 스펙과 맞지 않거나 경품 번호 형식이 틀리거나 동의 없이 번호를 보냄 (SURVEY_ANSWER_INVALID)',
@@ -59,11 +55,11 @@ export class SurveyPublicController {
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
   )
   @Post('answer/public/:expoId')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async submit(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: SubmitPublicSurveyAnswerRequestDto,
-  ): Promise<void> {
+  ): Promise<PublicSurveyAnswerResponseDto> {
     return this.surveyPublicService.submit(expoId, dto);
   }
 }

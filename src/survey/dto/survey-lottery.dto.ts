@@ -5,17 +5,22 @@ import { z } from 'zod';
 export const LOTTERY_NUMBERS_MAX_COUNT = 100;
 
 /**
- * 경품 추첨 설정 변경 요청. `numbers`는 당첨 번호 목록으로 1 이상의 정수이고 중복이 없어야 하며,
- * 비워 두면 추첨하지 않는다. 진행 중에 바꿔도 이미 지나간 순번은 다시 오지 않는다.
+ * 당첨 번호(행운의 번호) 목록. 1 이상의 정수이고 중복이 없어야 하며, 비워 두면 추첨하지 않는다. 설문을 만들 때와
+ * 추첨 설정을 바꿀 때 같은 규칙을 쓴다.
+ */
+export const lotteryNumbersSchema = z
+  .array(z.int().min(1))
+  .max(LOTTERY_NUMBERS_MAX_COUNT)
+  .refine((numbers) => new Set(numbers).size === numbers.length, {
+    message: '당첨 번호는 중복될 수 없습니다.',
+  });
+
+/**
+ * 경품 추첨 설정 변경 요청. 진행 중에 목록을 바꿔도 이미 지나간 순번은 다시 오지 않는다.
  */
 export const updateSurveyLotterySchema = z.object({
   enabled: z.boolean(),
-  numbers: z
-    .array(z.int().min(1))
-    .max(LOTTERY_NUMBERS_MAX_COUNT)
-    .refine((numbers) => new Set(numbers).size === numbers.length, {
-      message: '당첨 번호는 중복될 수 없습니다.',
-    }),
+  numbers: lotteryNumbersSchema,
 });
 
 export class UpdateSurveyLotteryRequestDto extends createZodDto(

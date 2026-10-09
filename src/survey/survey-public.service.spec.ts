@@ -42,7 +42,9 @@ describe('SurveyPublicService', () => {
 
   beforeEach(() => {
     surveyStore = { findByExpoAndType: vi.fn().mockResolvedValue(survey) };
-    qrAnswerStore = { create: vi.fn() };
+    qrAnswerStore = {
+      create: vi.fn().mockResolvedValue({ won: false, drawNumber: null }),
+    };
     service = new SurveyPublicService(
       surveyStore as unknown as SurveyStore,
       qrAnswerStore as unknown as SurveyQrAnswerStore,
@@ -82,8 +84,10 @@ describe('SurveyPublicService', () => {
   });
 
   describe('submit', () => {
-    it('답변을 저장한다', async () => {
-      await service.submit(expoId, answerDto);
+    it('답변을 저장하고 당첨이 아니라고 알려 준다', async () => {
+      const result = await service.submit(expoId, answerDto);
+
+      expect(result).toEqual({ won: false, drawNumber: null });
 
       expect(qrAnswerStore.create).toHaveBeenCalledWith(
         'survey-1',
@@ -110,6 +114,29 @@ describe('SurveyPublicService', () => {
 
       beforeEach(() => {
         surveyStore.findByExpoAndType.mockResolvedValue(lotterySurvey);
+      });
+
+      it('당첨이면 몇 번째 응답이었는지 알려 준다', async () => {
+        qrAnswerStore.create.mockResolvedValue({ won: true, drawNumber: 30 });
+
+        await expect(service.submit(expoId, answerDto)).resolves.toEqual({
+          won: true,
+          drawNumber: 30,
+        });
+      });
+
+      it('번호 없이 당첨돼도 당첨을 알려 준다', async () => {
+        qrAnswerStore.create.mockResolvedValue({ won: true, drawNumber: 10 });
+
+        const result = await service.submit(expoId, answerDto);
+
+        expect(qrAnswerStore.create).toHaveBeenCalledWith(
+          'survey-1',
+          expect.anything(),
+          Occupation.ELEMENTARY_STUDENT,
+          null,
+        );
+        expect(result.won).toBe(true);
       });
 
       it('추첨이 켜져 있으면 번호를 숫자만 남겨 넘긴다', async () => {
