@@ -19,8 +19,7 @@ import { SurveyStore } from './survey.store.js';
  * 공개 설문 링크를 담당한다. 대상은 박람회 일반 참가자 설문 하나뿐이다.
  *
  * 입장 QR과 무관하게 `expoId`만으로 누구나(동행자 포함) 응답한다. 응답자를 식별하지 않아서 같은 사람이
- * 여러 번 응답해도 막지 않고, 종이 QR 응답과 같은 테이블에 토큰 없이 직접 저장한다 — 유저 서비스로 보내지
- * 않는다.
+ * 여러 번 응답해도 막지 않고, 답변을 이 서비스가 직접 저장한다 — 유저 서비스로 보내지 않는다.
  */
 @Injectable()
 export class SurveyPublicService {
@@ -59,12 +58,7 @@ export class SurveyPublicService {
     }
 
     try {
-      await this.qrAnswerStore.create(
-        survey.id,
-        null,
-        result.data,
-        dto.occupation,
-      );
+      await this.qrAnswerStore.create(survey.id, result.data, dto.occupation);
     } catch (error) {
       // 설문을 확인한 뒤 저장하기 전에 박람회 삭제로 설문이 지워진 경우다.
       if (isForeignKeyViolation(error)) {

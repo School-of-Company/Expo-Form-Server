@@ -69,12 +69,11 @@ describe('SurveyPublicService', () => {
   });
 
   describe('submit', () => {
-    it('답변을 토큰 없이 저장한다', async () => {
+    it('답변을 저장한다', async () => {
       await service.submit(expoId, answerDto);
 
       expect(qrAnswerStore.create).toHaveBeenCalledWith(
         'survey-1',
-        null,
         { '1': '좋았습니다' },
         Occupation.ELEMENTARY_STUDENT,
       );
