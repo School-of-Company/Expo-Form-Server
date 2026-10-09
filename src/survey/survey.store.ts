@@ -44,6 +44,21 @@ export class SurveyStore {
   }
 
   /**
+   * 경품 추첨 설정만 바꾼다. 순번은 건드리지 않는다 — 껐다 켜도 이어서 세고, 응답이 설문 행을 잠그고 읽는
+   * 값과 어긋나지 않게 컬럼을 지정해서만 갱신한다.
+   */
+  async updateLottery(
+    id: string,
+    enabled: boolean,
+    numbers: number[],
+  ): Promise<void> {
+    await this.surveys.update(id, {
+      lotteryEnabled: enabled,
+      lotteryNumbers: numbers,
+    });
+  }
+
+  /**
    * 같은 조합의 설문이 이미 있는지만 확인한다.
    * 중복 검사에는 엔티티 본문이 필요 없어서, 문항까지 끌고 오는 조회 대신 이쪽을 쓴다.
    */
