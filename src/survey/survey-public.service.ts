@@ -15,9 +15,9 @@ import {
 import { SurveyEntity } from './entities/survey.entity.js';
 import { normalizeLotteryPhone } from './lottery-phone.js';
 import {
-  SurveyQrAnswerStore,
+  SurveyPublicAnswerStore,
   type DrawOutcome,
-} from './survey-qr-answer.store.js';
+} from './survey-public-answer.store.js';
 import { SurveyStore } from './survey.store.js';
 
 /**
@@ -32,7 +32,7 @@ export class SurveyPublicService {
 
   constructor(
     private readonly surveyStore: SurveyStore,
-    private readonly qrAnswerStore: SurveyQrAnswerStore,
+    private readonly answerStore: SurveyPublicAnswerStore,
   ) {}
 
   /**
@@ -67,7 +67,7 @@ export class SurveyPublicService {
 
     let outcome: DrawOutcome;
     try {
-      outcome = await this.qrAnswerStore.create(
+      outcome = await this.answerStore.create(
         survey.id,
         result.data,
         dto.occupation,
