@@ -15,6 +15,8 @@ import { SurveyAnswerRelayService } from './survey-answer-relay.service.js';
 import { SurveyAnswerResultConsumer } from './survey-answer-result.consumer.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
+import { SurveyPublicController } from './survey-public.controller.js';
+import { SurveyPublicService } from './survey-public.service.js';
 import { SurveyQrAnswerStore } from './survey-qr-answer.store.js';
 import { SurveyQrController } from './survey-qr.controller.js';
 import { SurveyQrService } from './survey-qr.service.js';
@@ -22,7 +24,7 @@ import { SurveyController } from './survey.controller.js';
 import { SurveyService } from './survey.service.js';
 import { SurveyStore } from './survey.store.js';
 
-/** survey 도메인(설문 정의 + 문항 + 답변 제출 + 현장 QR 응답) 모듈. */
+/** survey 도메인(설문 정의 + 문항 + 답변 제출 + 현장 QR·공개 링크 응답) 모듈. */
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -40,6 +42,7 @@ import { SurveyStore } from './survey.store.js';
     SurveyController,
     SurveyAnswerController,
     SurveyQrController,
+    SurveyPublicController,
     InternalSurveyController,
   ],
   providers: [
@@ -51,6 +54,7 @@ import { SurveyStore } from './survey.store.js';
     SurveyAnswerResultConsumer,
     SurveyAnswerReconcileService,
     SurveyQrService,
+    SurveyPublicService,
     SurveyQrAnswerStore,
   ],
   exports: [SurveyStore],
