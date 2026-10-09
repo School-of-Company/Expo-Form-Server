@@ -5,7 +5,7 @@ import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyQrAnswerEntity } from './entities/survey-qr-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
-/** 현장 종이 QR 응답의 영속성 접근을 한 곳에 모아둔 store. */
+/** 익명(종이 QR·공개 링크) 응답의 영속성 접근을 한 곳에 모아둔 store. */
 @Injectable()
 export class SurveyQrAnswerStore {
   constructor(
@@ -22,13 +22,13 @@ export class SurveyQrAnswerStore {
   /**
    * 응답을 저장하고 설문의 누적 응답 수를 늘린다.
    *
-   * `save`가 아니라 `insert`를 쓴다 — `(surveyId, token)`이 PK라 `save`는 이미 있는 row를
-   * UPDATE로 덮어써 버린다. `insert`여야 같은 토큰의 두 번째 응답이 유니크 위반으로 막히고, 그 위반은 그대로
-   * 던지므로 호출부가 409로 변환해야 한다. 위반 시 트랜잭션이 롤백되어 카운트도 늘지 않는다.
+   * `token`이 있으면(종이 QR) `(surveyId, token)` 유니크 인덱스가 같은 토큰의 두 번째 응답을 막고, 그
+   * 위반은 그대로 던지므로 호출부가 409로 변환해야 한다. 위반 시 트랜잭션이 롤백되어 카운트도 늘지 않는다.
+   * `token`이 null이면(공개 링크) 인덱스에서 빠지므로 막히지 않는다.
    */
   async create(
     surveyId: string,
-    token: string,
+    token: string | null,
     answers: Record<string, unknown>,
     occupation: Occupation,
   ): Promise<void> {
