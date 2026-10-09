@@ -15,8 +15,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
-import { SubmitSurveyQrAnswerRequestDto } from './dto/submit-survey-qr-answer.request.dto.js';
-import { SurveyResponseDto } from './dto/survey.response.dto.js';
+import { PublicSurveyResponseDto } from './dto/public-survey.response.dto.js';
+import { SubmitPublicSurveyAnswerRequestDto } from './dto/submit-public-survey-answer.request.dto.js';
 import { SurveyPublicService } from './survey-public.service.js';
 
 /** 공개 설문 링크 HTTP 엔트리포인트 — 응답자의 설문 조회와 익명 답변 제출. */
@@ -29,9 +29,9 @@ export class SurveyPublicController {
   @ApiOperation({
     summary: '공개 설문 조회',
     description:
-      '박람회 일반 참가자 설문(문항 포함)을 입장 확인 없이 조회한다. 응답자를 식별하지 않는다.',
+      '박람회 일반 참가자 설문(문항 포함)을 입장 확인 없이 조회한다. 응답자를 식별하지 않는다. `lotteryEnabled`가 true일 때만 경품 번호 입력을 보여 준다.',
   })
-  @ApiOkResponse({ type: SurveyResponseDto })
+  @ApiOkResponse({ type: PublicSurveyResponseDto })
   @ApiErrorResponse(
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
@@ -39,7 +39,7 @@ export class SurveyPublicController {
   @Get('public/:expoId')
   async findSurvey(
     @Param('expoId', ParseUUIDPipe) expoId: string,
-  ): Promise<SurveyResponseDto> {
+  ): Promise<PublicSurveyResponseDto> {
     return this.surveyPublicService.findSurvey(expoId);
   }
 
@@ -47,10 +47,13 @@ export class SurveyPublicController {
   @ApiOperation({
     summary: '공개 설문 답변 제출',
     description:
-      '익명 답변을 문항 스펙으로 검증해 저장한다. 응답자를 식별하지 않아 같은 사람이 여러 번 응답할 수 있다.',
+      '익명 답변을 문항 스펙으로 검증해 저장한다. 응답자를 식별하지 않아 같은 사람이 여러 번 응답할 수 있다. 경품 추첨이 켜져 있으면 선택으로 `phoneNumber`와 개인정보 수집 동의(`personalInformationStatus`)를 함께 받는다.',
   })
   @ApiNoContentResponse({ description: '저장 완료' })
-  @ApiErrorResponse(400, '답변이 문항 스펙과 맞지 않음 (SURVEY_ANSWER_INVALID)')
+  @ApiErrorResponse(
+    400,
+    '답변이 문항 스펙과 맞지 않거나 경품 번호 형식이 틀리거나 동의 없이 번호를 보냄 (SURVEY_ANSWER_INVALID)',
+  )
   @ApiErrorResponse(
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
@@ -59,7 +62,7 @@ export class SurveyPublicController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async submit(
     @Param('expoId', ParseUUIDPipe) expoId: string,
-    @Body() dto: SubmitSurveyQrAnswerRequestDto,
+    @Body() dto: SubmitPublicSurveyAnswerRequestDto,
   ): Promise<void> {
     return this.surveyPublicService.submit(expoId, dto);
   }

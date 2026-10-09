@@ -29,11 +29,17 @@ type SurveyFields = Omit<SurveyEntity, 'id' | 'createdAt' | 'updatedAt'>;
 /**
  * 수정 요청으로 바꿀 수 있는 설문 메타데이터. 소속 박람회와 문항 목록은 여기 포함되지 않고,
  * `totalAnswers`도 빠진다 — 누적 응답 수는 응답 제출이 만들어내는 값이지 설문 작성자가
- * 요청으로 덮어쓸 값이 아니다.
+ * 요청으로 덮어쓸 값이 아니다. 경품 추첨 설정과 순번(`lottery*`)도 설문 수정이 아니라 별도 설정 API가
+ * 다룬다.
  */
 type UpdatableSurveyFields = Omit<
   SurveyFields,
-  'expoId' | 'dynamicSurveys' | 'totalAnswers'
+  | 'expoId'
+  | 'dynamicSurveys'
+  | 'totalAnswers'
+  | 'lotteryEnabled'
+  | 'lotteryNumbers'
+  | 'lotterySequence'
 >;
 
 /** 문항을 새로 만들 때 채워야 하는 값들 — 부모 관계(`survey`)는 저장 시점에 TypeORM이 연결한다. */
@@ -96,6 +102,10 @@ export class SurveyService {
       // 컬럼 default(0)에 맡기지 않고 명시한다. SurveyFields에서 빼버리면 위의 안전망에 구멍이
       // 생기고, 저장 직전 엔티티의 totalAnswers가 number 타입인 채 undefined가 된다.
       totalAnswers: 0,
+      // 경품 추첨은 꺼진 채로 시작한다. 켜고 번호 목록을 정하는 것은 별도 설정 API다.
+      lotteryEnabled: false,
+      lotteryNumbers: [],
+      lotterySequence: 0,
       dynamicSurveys: dynamicSurveyRequestDto.map((question) =>
         this.toQuestionEntity(question),
       ),
