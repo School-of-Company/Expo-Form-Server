@@ -199,7 +199,7 @@ export class FormService {
     const forms = await this.formStore.findSummariesByExpoIds(expoIds);
     return forms.map(({ expoId, participationType, applicationType }) => ({
       expoId,
-      participationType,
+      participationType: requireParticipationType(participationType),
       applicationType: requireApplicationType(applicationType),
     }));
   }
@@ -395,7 +395,7 @@ export class FormService {
       expoId: form.expoId,
       title: form.title,
       informationText: form.informationText,
-      participantType: form.participationType,
+      participantType: requireParticipationType(form.participationType),
       applicationType: requireApplicationType(form.applicationType),
       startDate: form.startDate,
       endDate: form.endDate,
@@ -444,4 +444,15 @@ function requireApplicationType(
   }
 
   return applicationType;
+}
+
+/** 등록용 폼의 참여자군을 꺼낸다. 등록용 폼은 항상 참여자군이 있어서 null이면 데이터가 깨진 것이다. */
+function requireParticipationType(
+  participationType: ParticipationType | null,
+): ParticipationType {
+  if (participationType === null) {
+    throw new Error('등록용 폼에 참여자군이 없습니다.');
+  }
+
+  return participationType;
 }

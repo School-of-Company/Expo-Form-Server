@@ -12,12 +12,12 @@ import { ProgramFormResponseDto } from './dto/program-form.response.dto.js';
 import { FormService } from './form.service.js';
 
 /**
- * 다른 서비스가 부르는 `/internal/program-forms` 엔트리포인트. Gateway를 거치지 않고 `X-Internal-Token`으로만
+ * 다른 서비스가 부르는 `/internal/forms/by-id` 엔트리포인트. Gateway를 거치지 않고 `X-Internal-Token`으로만
  * 인증한다({@link InternalTokenGuard}). 신청 서비스가 프로그램 신청 답변을 검증할 때 폼 정의를 읽는다.
  */
 @ApiTags('internal')
 @UseGuards(InternalTokenGuard)
-@Controller('internal/program-forms')
+@Controller('internal/forms')
 export class InternalProgramFormController {
   constructor(private readonly formService: FormService) {}
 
@@ -28,7 +28,7 @@ export class InternalProgramFormController {
   })
   @ApiOkResponse({ type: ProgramFormResponseDto })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
-  @Get(':formId')
+  @Get('by-id/:formId')
   async findOne(
     @Param('formId', ParseUUIDPipe) formId: string,
   ): Promise<ProgramFormResponseDto> {

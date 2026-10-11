@@ -238,6 +238,23 @@ describe('FormService', () => {
         '2': '오프라인',
       });
     });
+
+    it('등록용 폼에 참여자군이 없으면 데이터가 깨진 것이라 조용히 넘기지 않고 오류를 던진다', async () => {
+      formStore.findByExpoAndTypes.mockResolvedValue({
+        ...createDto,
+        id: 'form-1',
+        expoId,
+        participationType: null,
+        dynamicForms: [],
+      });
+
+      await expect(
+        service.findOne(expoId, {
+          type: createDto.participantType,
+          applicationType: createDto.applicationType,
+        }),
+      ).rejects.toThrow('등록용 폼에 참여자군이 없습니다.');
+    });
   });
 
   describe('summarize', () => {

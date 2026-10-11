@@ -128,6 +128,21 @@ describe('FormService 프로그램용 폼', () => {
       expect(saved.dynamicForms).toHaveLength(1);
     });
 
+    it('참여자군 없이도(null) 저장한다', async () => {
+      formStore.save.mockImplementation(async (form: FormEntity) =>
+        Object.assign(form, { id: formId, version: 1 }),
+      );
+
+      await service.createProgram(expoId, {
+        ...createDto,
+        participantType: null,
+      });
+
+      const [saved] = formStore.save.mock.calls[0] as [FormEntity];
+      expect(saved.participationType).toBeNull();
+      expect(saved.purpose).toBe(FormPurpose.PROGRAM);
+    });
+
     it('같은 박람회에 같은 제목이 있어 유니크 제약에 걸리면 409로 변환한다', async () => {
       formStore.save.mockRejectedValue(uniqueViolation());
 
@@ -187,6 +202,20 @@ describe('FormService 프로그램용 폼', () => {
           dynamicFormType: DynamicFormType.DEFAULT,
         },
       ]);
+    });
+  });
+
+  describe('findProgram 참여자군', () => {
+    it('참여자군이 없는 폼(null)도 응답 계약을 지킨다', async () => {
+      formStore.findProgramById.mockResolvedValue({
+        ...existingForm(),
+        participationType: null,
+      });
+
+      const response = await service.findProgram(formId);
+
+      expect(response.participantType).toBeNull();
+      expect(programFormResponseSchema.safeParse(response).success).toBe(true);
     });
   });
 

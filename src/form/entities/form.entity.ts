@@ -55,9 +55,12 @@ export class FormEntity {
   @Column({ length: 500 })
   informationText: string;
 
-  /** 이 폼이 대상으로 하는 참여자군 (교육생 / 일반 참가자). */
-  @Column({ type: 'enum', enum: ParticipationType })
-  participationType: ParticipationType;
+  /**
+   * 이 폼이 대상으로 하는 참여자군 (교육생 / 일반 참가자). 등록용 폼은 항상 값이 있다. 프로그램용 폼은 null일 수
+   * 있다 — 프로그램의 대상 역할은 박람회 서비스 회차의 `allowedOccupations`가 정하기 때문이다.
+   */
+  @Column({ type: 'enum', enum: ParticipationType, nullable: true })
+  participationType: ParticipationType | null;
 
   /**
    * 사전 등록(PRE)인지 현장 등록(FIELD)인지 — 같은 expo·참여자군이어도 신청 방식별로 폼이 갈린다.
