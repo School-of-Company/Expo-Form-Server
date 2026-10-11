@@ -49,6 +49,30 @@ describe('프로그램용 폼 요청 검증', () => {
     expect(result.data).not.toHaveProperty('applicationType');
   });
 
+  it('participantType을 생략하거나 null로 보내면 대상을 정하지 않는다(null)', () => {
+    const { participantType: _omitted, ...withoutType } = formWith([]);
+
+    expect(
+      createProgramFormSchema.parse(withoutType).participantType,
+    ).toBeNull();
+    expect(
+      createProgramFormSchema.parse({ ...withoutType, participantType: null })
+        .participantType,
+    ).toBeNull();
+    expect(createProgramFormSchema.parse(formWith([])).participantType).toBe(
+      ParticipationType.STANDARD,
+    );
+  });
+
+  it('알 수 없는 participantType은 거부한다', () => {
+    expect(
+      createProgramFormSchema.safeParse({
+        ...formWith([]),
+        participantType: 'ADMIN',
+      }).success,
+    ).toBe(false);
+  });
+
   it('필드가 하나도 없어도 받는다', () => {
     expect(errorsOf(formWith([]))).toEqual([]);
   });

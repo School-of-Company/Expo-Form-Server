@@ -29,11 +29,13 @@ import {
 import { FormService } from './form.service.js';
 
 /**
- * `/program-forms` HTTP 엔트리포인트. 프로그램 신청에 쓰는 폼이다. 등록용 폼(`/forms`)과 달리 박람회당 여러 개를
- * 만들 수 있고 formId로 식별한다.
+ * 프로그램용 폼 HTTP 엔트리포인트. 프로그램 신청에 쓰는 폼이다. 등록용 폼과 달리 박람회당 여러 개를 만들 수 있고
+ * formId로 식별한다. 경로는 모두 `/forms` 아래에 두되 등록용 경로(`GET /forms/:expoId`,
+ * `DELETE /forms/:expoId/:participationType/:applicationType` 등)와 겹치지 않게 `expos/…/program-forms`와
+ * `by-id/:formId` 하위 경로를 쓴다.
  */
 @ApiTags('program-forms')
-@Controller('program-forms')
+@Controller('forms')
 export class ProgramFormController {
   constructor(private readonly formService: FormService) {}
 
@@ -53,7 +55,7 @@ export class ProgramFormController {
     503,
     '박람회 서비스에 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
-  @Post(':expoId')
+  @Post('expos/:expoId/program-forms')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
     @Body() dto: CreateProgramFormRequestDto,
@@ -68,7 +70,7 @@ export class ProgramFormController {
   })
   @ApiOkResponse({ type: ProgramFormResponseDto })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
-  @Get(':formId')
+  @Get('by-id/:formId')
   async findOne(
     @Param('formId', ParseUUIDPipe) formId: string,
   ): Promise<ProgramFormResponseDto> {
@@ -87,7 +89,7 @@ export class ProgramFormController {
     'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 또는 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING)',
   )
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
-  @Patch(':formId')
+  @Patch('by-id/:formId')
   async update(
     @Param('formId', ParseUUIDPipe) formId: string,
     @Body() dto: UpdateProgramFormRequestDto,
@@ -106,7 +108,7 @@ export class ProgramFormController {
     409,
     '참조 보호가 연결되기 전이라 삭제할 수 없음 (PROGRAM_FORM_PROTECTION_PENDING)',
   )
-  @Delete(':formId')
+  @Delete('by-id/:formId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('formId', ParseUUIDPipe) formId: string): Promise<void> {
     return this.formService.deleteProgram(formId);

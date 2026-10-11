@@ -30,7 +30,8 @@ export const programFormFieldSchema = dynamicFormFieldSchema.extend({
 const programFormFieldsSchema = z.object({
   title: z.string().min(1).max(100),
   informationText: z.string().max(500),
-  participantType: z.enum(ParticipationType),
+  // 프로그램의 대상 역할은 박람회 서비스 회차의 `allowedOccupations`가 정한다. 생략하거나 null이면 대상을 정하지 않는다.
+  participantType: z.enum(ParticipationType).nullable().default(null),
   startDate: dateTimeRequestSchema(),
   endDate: dateTimeRequestSchema(),
   dynamicForm: z.array(programFormFieldSchema),
