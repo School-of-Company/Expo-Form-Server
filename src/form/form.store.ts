@@ -5,6 +5,7 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { ApplicationType } from './entities/application-type.enum.js';
+import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 
 /**
@@ -38,7 +39,12 @@ export class FormStore {
     applicationType: ApplicationType,
   ): Promise<FormEntity | null> {
     return this.forms.findOne({
-      where: { expoId, participationType, applicationType },
+      where: {
+        expoId,
+        participationType,
+        applicationType,
+        purpose: FormPurpose.REGISTRATION,
+      },
       relations: { dynamicForms: true },
       order: DYNAMIC_FORM_ORDER,
     });
@@ -53,7 +59,12 @@ export class FormStore {
     participationType: ParticipationType,
     applicationType: ApplicationType,
   ): Promise<boolean> {
-    return this.forms.existsBy({ expoId, participationType, applicationType });
+    return this.forms.existsBy({
+      expoId,
+      participationType,
+      applicationType,
+      purpose: FormPurpose.REGISTRATION,
+    });
   }
 
   /**
@@ -96,12 +107,16 @@ export class FormStore {
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id },
-        select: { id: true },
+        select: { id: true, version: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
         return false;
       }
+
+      // 폼을 읽은 뒤 다른 요청이 먼저 고쳤다면 `form.version`은 낡은 값이다. 그대로 저장한 뒤 +1 하면
+      // 버전이 거꾸로 가므로, 잠근 뒤 읽은 현재 값으로 맞춘 다음 올린다.
+      form.version = locked.version;
 
       await manager.delete(DynamicFormEntity, { form: { id: form.id } });
 
@@ -109,6 +124,7 @@ export class FormStore {
       // dynamicForms의 cascade가 옛 필드를 그대로 되살려버린다.
       form.dynamicForms = fields;
       await manager.save(FormEntity, form);
+      await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
       return true;
     });
@@ -127,7 +143,7 @@ export class FormStore {
   > {
     return this.forms.find({
       select: { expoId: true, participationType: true, applicationType: true },
-      where: { expoId: In(expoIds) },
+      where: { expoId: In(expoIds), purpose: FormPurpose.REGISTRATION },
     });
   }
 
