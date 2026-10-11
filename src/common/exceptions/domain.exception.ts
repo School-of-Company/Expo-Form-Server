@@ -57,6 +57,21 @@ export class FormVersionConflictException extends DomainException {
   }
 }
 
+/**
+ * 프로그램용 폼을 삭제하거나 적용 기간을 줄이려 할 때. 회차가 이 폼을 쓰고 있는지 확인하는 보호(박람회 서비스의
+ * 참조 검사와 변경 예약)가 아직 연결되지 않았다. 접수 중인 회차의 폼이 지워지거나 모집 기간 밖으로 줄면 신청자가
+ * 폼 정의를 읽지 못하므로, 보호가 연결되기 전에는 이 두 변경을 안전하게 거절한다.
+ */
+export class ProgramFormProtectionPendingException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.PROGRAM_FORM_PROTECTION_PENDING,
+      '회차가 이 폼을 쓰는지 확인하는 보호가 아직 연결되지 않아 프로그램용 폼을 삭제하거나 기간을 줄일 수 없습니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
 /** 같은 박람회에 같은 제목의 프로그램용 폼을 또 만들거나 제목을 겹치게 바꾸려 할 때. */
 export class ProgramFormTitleDuplicatedException extends DomainException {
   constructor() {

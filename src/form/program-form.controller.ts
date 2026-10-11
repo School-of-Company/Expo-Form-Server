@@ -78,13 +78,13 @@ export class ProgramFormController {
   @ApiOperation({
     summary: '프로그램용 폼 수정',
     description:
-      '폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. 바디의 expectedVersion이 현재 버전과 같을 때만 바뀌고, 성공하면 version이 1 오른다.',
+      '폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. 바디의 expectedVersion이 현재 버전과 같을 때만 바뀌고, 성공하면 version이 1 오른다. 회차 참조 보호가 연결되기 전에는 적용 기간을 줄이는 수정을 거절한다.',
   })
   @ApiOkResponse({ type: ProgramFormVersionResponseDto })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @ApiErrorResponse(
     409,
-    'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 또는 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED)',
+    'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 또는 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING)',
   )
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @Patch(':formId')
@@ -97,10 +97,15 @@ export class ProgramFormController {
 
   @ApiOperation({
     summary: '프로그램용 폼 삭제',
-    description: '폼과 딸린 입력 필드를 함께 삭제한다.',
+    description:
+      '회차가 이 폼을 쓰는지 확인하는 보호(박람회 서비스 참조 검사와 변경 예약)가 연결되기 전에는 삭제를 거절한다.',
   })
   @ApiNoContentResponse({ description: '삭제 완료' })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
+  @ApiErrorResponse(
+    409,
+    '참조 보호가 연결되기 전이라 삭제할 수 없음 (PROGRAM_FORM_PROTECTION_PENDING)',
+  )
   @Delete(':formId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('formId', ParseUUIDPipe) formId: string): Promise<void> {

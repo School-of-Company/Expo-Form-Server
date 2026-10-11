@@ -15,7 +15,17 @@ export class AddProgramFormSupport1791710000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // 되돌리기 전에 프로그램용 폼(신청 방식이 null)을 먼저 지워야 한다 — 남아 있으면 NOT NULL 복원이 실패한다.
+    // 프로그램용 폼(신청 방식이 null)이 남아 있으면 NOT NULL을 복원할 수 없다. 폼을 대신 지우면 데이터가 사라지므로
+    // 지우지 않고, 원인을 알 수 있는 메시지로 멈춘다. 운영자가 폼을 정리한 뒤 다시 되돌린다.
+    const [{ count }] = (await queryRunner.query(
+      `SELECT count(*)::int AS "count" FROM "form" WHERE "application_type" IS NULL`,
+    )) as Array<{ count: number }>;
+    if (count > 0) {
+      throw new Error(
+        `프로그램용 폼 ${count}개가 남아 있어 되돌릴 수 없습니다. 폼을 먼저 정리해 주세요.`,
+      );
+    }
+
     await queryRunner.query(
       `DROP INDEX "public"."IDX_7df050275d01f25f756c158ee3"`,
     );

@@ -6,6 +6,7 @@ import {
   ExpoNotFoundException,
   FormNotFoundException,
   FormVersionConflictException,
+  ProgramFormProtectionPendingException,
   ProgramFormTitleDuplicatedException,
 } from '../common/exceptions/domain.exception.js';
 import {
@@ -13,13 +14,14 @@ import {
   UpdateProgramFormRequestDto,
 } from './dto/program-form.request.dto.js';
 import { DynamicFormType } from './entities/dynamic-form-type.enum.js';
+import { programFormResponseSchema } from './dto/program-form.response.dto.js';
 import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormService } from './form.service.js';
 import { FormStore } from './form.store.js';
 
-const expoId = '11111111-1111-1111-1111-111111111111';
-const formId = '22222222-2222-2222-2222-222222222222';
+const expoId = '11111111-1111-4111-8111-111111111111';
+const formId = '22222222-2222-4222-8222-222222222222';
 
 const createDto = {
   title: 'AI 체험 프로그램',
@@ -160,10 +162,20 @@ describe('FormService 프로그램용 폼', () => {
       expect(response).toMatchObject({
         id: formId,
         expoId,
+        purpose: FormPurpose.PROGRAM,
         version: 3,
         participantType: ParticipationType.STANDARD,
       });
       expect(response).not.toHaveProperty('applicationType');
+
+      // 박람회 서비스가 응답을 읽는 계약: purpose는 필수이고 'PROGRAM'이어야 한다
+      expect(programFormResponseSchema.safeParse(response).success).toBe(true);
+      expect(
+        programFormResponseSchema.safeParse({
+          ...response,
+          purpose: FormPurpose.REGISTRATION,
+        }).success,
+      ).toBe(false);
       expect(response.dynamicForm).toEqual([
         {
           id: 7,
@@ -229,6 +241,42 @@ describe('FormService 프로그램용 폼', () => {
       );
     });
 
+    it.each([
+      ['시작일을 늦추면', { startDate: new Date('2026-01-05T00:00:00Z') }],
+      ['종료일을 앞당기면', { endDate: new Date('2026-01-20T00:00:00Z') }],
+    ])(
+      '적용 기간을 줄이는 수정(%s)은 저장소를 부르지 않고 거절한다',
+      async (_label, period) => {
+        formStore.findProgramById.mockResolvedValue(existingForm());
+
+        await expect(
+          service.updateProgram(formId, { ...updateDto, ...period }),
+        ).rejects.toThrow(ProgramFormProtectionPendingException);
+        expect(formStore.updateProgramWithFields).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      ['기간이 그대로인 수정', {}],
+      [
+        '기간을 늘리는 수정',
+        {
+          startDate: new Date('2025-12-01T00:00:00Z'),
+          endDate: new Date('2026-02-28T00:00:00Z'),
+        },
+      ],
+    ])('%s은 허용한다', async (_label, period) => {
+      formStore.findProgramById.mockResolvedValue(existingForm());
+      formStore.updateProgramWithFields.mockResolvedValue({
+        status: 'UPDATED',
+        version: 4,
+      });
+
+      await expect(
+        service.updateProgram(formId, { ...updateDto, ...period }),
+      ).resolves.toEqual({ id: formId, version: 4 });
+    });
+
     it('바꾼 제목이 다른 프로그램용 폼과 겹치면 409로 변환한다', async () => {
       formStore.findProgramById.mockResolvedValue(existingForm());
       formStore.updateProgramWithFields.mockRejectedValue(uniqueViolation());
@@ -240,19 +288,21 @@ describe('FormService 프로그램용 폼', () => {
   });
 
   describe('deleteProgram', () => {
-    it('없으면 예외를 던진다', async () => {
-      formStore.deleteProgramById.mockResolvedValue(false);
+    it('없으면 404 예외를 던진다', async () => {
+      formStore.findProgramById.mockResolvedValue(null);
 
       await expect(service.deleteProgram(formId)).rejects.toThrow(
         FormNotFoundException,
       );
     });
 
-    it('지웠으면 아무것도 돌려주지 않는다', async () => {
-      formStore.deleteProgramById.mockResolvedValue(true);
+    it('참조 보호가 연결되기 전에는 있어도 삭제하지 않고 거절한다', async () => {
+      formStore.findProgramById.mockResolvedValue(existingForm());
 
-      await expect(service.deleteProgram(formId)).resolves.toBeUndefined();
-      expect(formStore.deleteProgramById).toHaveBeenCalledWith(formId);
+      await expect(service.deleteProgram(formId)).rejects.toThrow(
+        ProgramFormProtectionPendingException,
+      );
+      expect(formStore.deleteProgramById).not.toHaveBeenCalled();
     });
   });
 });

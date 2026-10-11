@@ -5,6 +5,7 @@ import {
   FormAlreadyExistsException,
   FormNotFoundException,
   FormVersionConflictException,
+  ProgramFormProtectionPendingException,
   ProgramFormTitleDuplicatedException,
 } from '../common/exceptions/domain.exception.js';
 import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
@@ -289,7 +290,12 @@ export class FormService {
    * 프로그램용 폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. `expectedVersion`이 현재 버전과 같아야
    * 하며, 성공하면 버전이 1 오른다. 필드 id는 보존되지 않는다(등록용과 같다).
    *
+   * 적용 기간(`startDate`~`endDate`)을 줄이는 수정은 거절한다. 회차 모집 기간이 폼 기간 안에 있어야 하는데 어느
+   * 회차가 이 폼을 쓰는지는 박람회 서비스가 안다. 그 확인과 변경 예약이 연결되기 전에는 늘리거나 그대로 두는
+   * 수정만 허용한다.
+   *
    * @throws {FormNotFoundException} 프로그램용 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
+   * @throws {ProgramFormProtectionPendingException} 적용 기간을 줄이려 할 때
    * @throws {FormVersionConflictException} `expectedVersion`이 현재 버전과 다를 때
    * @throws {ProgramFormTitleDuplicatedException} 바꾼 제목이 같은 박람회의 다른 프로그램용 폼과 겹칠 때
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
@@ -304,6 +310,11 @@ export class FormService {
     }
 
     const { dynamicForm, participantType, expectedVersion, ...meta } = dto;
+    // 기간이 줄어드는지는 덮어쓰기 전의 값과 비교해야 한다.
+    if (meta.startDate > form.startDate || meta.endDate < form.endDate) {
+      throw new ProgramFormProtectionPendingException();
+    }
+
     Object.assign(form, {
       ...meta,
       participationType: participantType,
@@ -344,17 +355,20 @@ export class FormService {
   /**
    * 프로그램용 폼을 삭제한다. 딸린 입력 필드는 DB의 FK CASCADE로 함께 지워진다.
    *
-   * 폼을 가리키는 회차가 있는지는 박람회 서비스가 알고 있다. 그 확인(참조 중이면 삭제를 막는 보호)은 박람회
-   * 서비스에 참조 조회 API가 생긴 뒤에 붙인다.
+   * 폼을 가리키는 회차가 있는지는 박람회 서비스가 알고 있다. 그 확인과 변경 예약(조회만 붙이면 조회 직후 회차가
+   * 새로 연결되는 경합이 남아서, 연결·삭제·기간 축소가 같은 예약 계약을 써야 한다)이 연결되기 전에는 삭제를
+   * 거절한다. 접수 중인 회차의 폼이 지워지면 신청자가 폼 정의를 읽지 못하기 때문이다. 박람회 서비스 계약이
+   * 정해지면 이 거절을 참조 확인으로 바꾼다.
    *
    * @throws {FormNotFoundException} 프로그램용 폼이 없을 때
+   * @throws {ProgramFormProtectionPendingException} 프로그램용 폼이 있을 때(보호가 연결되기 전)
    */
   async deleteProgram(formId: string): Promise<void> {
-    if (!(await this.formStore.deleteProgramById(formId))) {
+    if (!(await this.formStore.findProgramById(formId))) {
       throw new FormNotFoundException();
     }
 
-    this.logger.log(`프로그램용 폼 삭제 완료: formId=${formId}`);
+    throw new ProgramFormProtectionPendingException();
   }
 
   /**
@@ -394,6 +408,7 @@ export class FormService {
     return {
       id: form.id,
       expoId: form.expoId,
+      purpose: FormPurpose.PROGRAM,
       version: form.version,
       title: form.title,
       informationText: form.informationText,
