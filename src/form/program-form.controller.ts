@@ -42,9 +42,13 @@ export class ProgramFormController {
   @ApiOperation({
     summary: '프로그램용 폼 생성',
     description:
-      '박람회에 프로그램 신청용 폼과 입력 필드를 함께 만든다. 같은 박람회에서 제목이 겹치면 안 되고, 이름·직업 같은 특정 필드를 강제하지 않는다.',
+      '박람회에 프로그램 신청용 폼과 입력 필드를 함께 만든다. 같은 박람회에서 제목이 겹치면 안 되고, 이름·직업 같은 특정 필드를 강제하지 않는다. 이미지(IMAGE)·동반자(COMPANION)·지역(REGION) 필드와 기타 입력(otherJson.hasEtc)은 프로그램용 폼에서 쓸 수 없다(400). 답변 값 규칙은 docs/program-form-answer-contract.md.',
   })
   @ApiCreatedResponse({ type: ProgramFormVersionResponseDto })
+  @ApiErrorResponse(
+    400,
+    '요청이 규칙에 맞지 않음 (필드 제목 중복, 쓸 수 없는 필드 유형·기타 입력, 선택지 누락, 잘못된 기간 등)',
+  )
   @ApiErrorResponse(404, '박람회가 없음 (EXPO_NOT_FOUND)')
   @ApiErrorResponse(
     409,
@@ -80,9 +84,13 @@ export class ProgramFormController {
   @ApiOperation({
     summary: '프로그램용 폼 수정',
     description:
-      '폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. 바디의 expectedVersion이 현재 버전과 같을 때만 바뀌고, 성공하면 version이 1 오른다. 회차 참조 보호가 연결되기 전에는 적용 기간을 줄이는 수정을 거절한다.',
+      '폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. 바디의 expectedVersion이 현재 버전과 같을 때만 바뀌고, 성공하면 version이 1 오른다. 회차 참조 보호가 연결되기 전에는 적용 기간을 줄이는 수정을 거절한다. 입력 필드 규칙은 생성과 같다(이미지·동반자·지역 필드와 기타 입력은 400).',
   })
   @ApiOkResponse({ type: ProgramFormVersionResponseDto })
+  @ApiErrorResponse(
+    400,
+    '요청이 규칙에 맞지 않음 (expectedVersion 누락, 쓸 수 없는 필드 유형·기타 입력 등)',
+  )
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @ApiErrorResponse(
     409,
