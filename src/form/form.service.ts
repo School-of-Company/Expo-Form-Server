@@ -18,14 +18,21 @@ import { FormResponseDto } from './dto/form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
+import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormStore } from './form.store.js';
 
 /** 폼을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
-type FormFields = Omit<FormEntity, 'id' | 'createdAt' | 'updatedAt'>;
+type FormFields = Omit<
+  FormEntity,
+  'id' | 'version' | 'createdAt' | 'updatedAt'
+>;
 
 /** 수정 요청으로 바꿀 수 있는 폼 메타데이터. 소속 박람회와 필드 목록은 여기 포함되지 않는다. */
-type UpdatableFormFields = Omit<FormFields, 'expoId' | 'dynamicForms'>;
+type UpdatableFormFields = Omit<
+  FormFields,
+  'expoId' | 'purpose' | 'dynamicForms'
+>;
 
 /** 입력 필드를 새로 만들 때 채워야 하는 값들 — 부모 관계(`form`)는 저장 시점에 TypeORM이 연결한다. */
 type DynamicFormFields = Omit<
@@ -85,6 +92,7 @@ export class FormService {
     const form = Object.assign(new FormEntity(), {
       ...meta,
       participationType: participantType,
+      purpose: FormPurpose.REGISTRATION,
       expoId,
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
