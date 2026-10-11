@@ -47,7 +47,7 @@ describe('SurveyService', () => {
     deleteById: Mock;
     findSummariesByExpoIds: Mock;
   };
-  let expoClient: { exists: Mock };
+  let expoClient: { exists: Mock; findPeriod: Mock };
   let service: SurveyService;
 
   beforeEach(() => {
@@ -59,7 +59,10 @@ describe('SurveyService', () => {
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
     };
-    expoClient = { exists: vi.fn().mockResolvedValue(true) };
+    expoClient = {
+      exists: vi.fn().mockResolvedValue(true),
+      findPeriod: vi.fn(),
+    };
     service = new SurveyService(
       surveyStore as unknown as SurveyStore,
       expoClient,
