@@ -163,7 +163,12 @@ describe('LotteryPhoneRetentionService', () => {
 
     expect(store.clearPhoneNumbers).toHaveBeenCalledTimes(1);
     expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoB);
-    expect(summary).toMatchObject({ skippedExpos: 1, clearedPhoneNumbers: 1 });
+    expect(summary).toEqual({
+      checkedExpos: 2,
+      purgedExpos: 1,
+      clearedPhoneNumbers: 1,
+      skippedExpos: 1,
+    });
   });
 
   it('이전 정리가 아직 돌고 있으면 겹쳐 돌지 않는다', async () => {
