@@ -86,7 +86,7 @@ describe('FormService 프로그램용 폼', () => {
     updateProgramWithFields: Mock;
     deleteProgramById: Mock;
   };
-  let expoClient: { exists: Mock };
+  let expoClient: { exists: Mock; findPeriod: Mock };
   let service: FormService;
 
   beforeEach(() => {
@@ -96,7 +96,10 @@ describe('FormService 프로그램용 폼', () => {
       updateProgramWithFields: vi.fn(),
       deleteProgramById: vi.fn(),
     };
-    expoClient = { exists: vi.fn().mockResolvedValue(true) };
+    expoClient = {
+      exists: vi.fn().mockResolvedValue(true),
+      findPeriod: vi.fn(),
+    };
     service = new FormService(formStore as unknown as FormStore, expoClient);
   });
 
