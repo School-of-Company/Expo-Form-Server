@@ -18,11 +18,16 @@ import { FormPurpose } from './form-purpose.enum.js';
  *
  * 등록용 폼은 `(expoId, participationType, applicationType)`이 폼을 유일하게 식별하는 조합이라
  * DB 유니크 제약으로 막는다 — 애플리케이션 레벨 중복 검사만으로는 동시 요청을 걸러내지 못한다.
- * 이 제약은 등록용에만 걸린다(부분 인덱스). 프로그램용은 같은 유형이어도 여러 개 만들 수 있다.
+ * 이 제약은 등록용에만 걸린다(부분 인덱스). 프로그램용은 같은 유형이어도 여러 개 만들 수 있고, 대신 같은
+ * 박람회 안에서 제목이 겹치지 않아야 한다(아래 두 번째 부분 인덱스).
  */
 @Index(['expoId', 'participationType', 'applicationType'], {
   unique: true,
   where: `"purpose" = 'REGISTRATION'`,
+})
+@Index(['expoId', 'title'], {
+  unique: true,
+  where: `"purpose" = 'PROGRAM'`,
 })
 @Entity('form')
 export class FormEntity {
@@ -54,9 +59,12 @@ export class FormEntity {
   @Column({ type: 'enum', enum: ParticipationType })
   participationType: ParticipationType;
 
-  /** 사전 등록(PRE)인지 현장 등록(FIELD)인지 — 같은 expo·참여자군이어도 신청 방식별로 폼이 갈린다. */
-  @Column({ type: 'enum', enum: ApplicationType })
-  applicationType: ApplicationType;
+  /**
+   * 사전 등록(PRE)인지 현장 등록(FIELD)인지 — 같은 expo·참여자군이어도 신청 방식별로 폼이 갈린다.
+   * 신청 방식이 없는 프로그램용 폼은 null이다. 등록용 폼은 항상 값이 있다.
+   */
+  @Column({ type: 'enum', enum: ApplicationType, nullable: true })
+  applicationType: ApplicationType | null;
 
   @Column({ type: 'timestamptz' })
   startDate: Date;

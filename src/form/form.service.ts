@@ -4,6 +4,9 @@ import {
   ExpoNotFoundException,
   FormAlreadyExistsException,
   FormNotFoundException,
+  FormVersionConflictException,
+  ProgramFormProtectionPendingException,
+  ProgramFormTitleDuplicatedException,
 } from '../common/exceptions/domain.exception.js';
 import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import {
@@ -15,6 +18,14 @@ import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
 import { FormSummaryDto } from './dto/form-summary.response.dto.js';
 import { FormResponseDto } from './dto/form.response.dto.js';
+import {
+  CreateProgramFormRequestDto,
+  UpdateProgramFormRequestDto,
+} from './dto/program-form.request.dto.js';
+import {
+  ProgramFormResponseDto,
+  ProgramFormVersionResponseDto,
+} from './dto/program-form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
@@ -189,7 +200,7 @@ export class FormService {
     return forms.map(({ expoId, participationType, applicationType }) => ({
       expoId,
       participationType,
-      applicationType,
+      applicationType: requireApplicationType(applicationType),
     }));
   }
 
@@ -217,6 +228,150 @@ export class FormService {
   }
 
   /**
+   * 프로그램용 폼과 그 입력 필드를 함께 생성한다. 같은 박람회 안에서 제목이 겹치면 안 되고, 같은 유형의 폼을
+   * 여러 개 만들 수 있다. 등록용과 달리 신청 방식이 없고 특정 필드를 강제하지 않는다.
+   *
+   * @throws {ExpoNotFoundException} 박람회 서비스에 없는 박람회일 때
+   * @throws {ExternalServiceUnavailableException} 박람회 서비스에 확인할 수 없을 때
+   * @throws {ProgramFormTitleDuplicatedException} 같은 박람회에 같은 제목의 프로그램용 폼이 이미 있을 때
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
+   */
+  async createProgram(
+    expoId: string,
+    dto: CreateProgramFormRequestDto,
+  ): Promise<ProgramFormVersionResponseDto> {
+    if (!(await this.expoClient.exists(expoId))) {
+      throw new ExpoNotFoundException();
+    }
+
+    const { dynamicForm, participantType, ...meta } = dto;
+    const form = Object.assign(new FormEntity(), {
+      ...meta,
+      participationType: participantType,
+      purpose: FormPurpose.PROGRAM,
+      applicationType: null,
+      expoId,
+      dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
+    } satisfies FormFields);
+
+    let saved: FormEntity;
+    try {
+      saved = await this.formStore.save(form);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ProgramFormTitleDuplicatedException();
+      }
+
+      throw error;
+    }
+
+    this.logger.log(
+      `프로그램용 폼 생성 완료: formId=${saved.id}, expoId=${expoId}`,
+    );
+
+    return { id: saved.id, version: saved.version };
+  }
+
+  /**
+   * formId로 프로그램용 폼 하나를 입력 필드 스펙과 `version`까지 담아 조회한다.
+   *
+   * @throws {FormNotFoundException} 프로그램용 폼이 없을 때(등록용 폼의 id도 여기서는 없는 것이다)
+   */
+  async findProgram(formId: string): Promise<ProgramFormResponseDto> {
+    const form = await this.formStore.findProgramById(formId);
+    if (!form) {
+      throw new FormNotFoundException();
+    }
+
+    return this.toProgramResponse(form);
+  }
+
+  /**
+   * 프로그램용 폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. `expectedVersion`이 현재 버전과 같아야
+   * 하며, 성공하면 버전이 1 오른다. 필드 id는 보존되지 않는다(등록용과 같다).
+   *
+   * 적용 기간(`startDate`~`endDate`)을 줄이는 수정은 거절한다. 회차 모집 기간이 폼 기간 안에 있어야 하는데 어느
+   * 회차가 이 폼을 쓰는지는 박람회 서비스가 안다. 그 확인과 변경 예약이 연결되기 전에는 늘리거나 그대로 두는
+   * 수정만 허용한다.
+   *
+   * @throws {FormNotFoundException} 프로그램용 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
+   * @throws {ProgramFormProtectionPendingException} 적용 기간을 줄이려 할 때
+   * @throws {FormVersionConflictException} `expectedVersion`이 현재 버전과 다를 때
+   * @throws {ProgramFormTitleDuplicatedException} 바꾼 제목이 같은 박람회의 다른 프로그램용 폼과 겹칠 때
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
+   */
+  async updateProgram(
+    formId: string,
+    dto: UpdateProgramFormRequestDto,
+  ): Promise<ProgramFormVersionResponseDto> {
+    const form = await this.formStore.findProgramById(formId);
+    if (!form) {
+      throw new FormNotFoundException();
+    }
+
+    const { dynamicForm, participantType, expectedVersion, ...meta } = dto;
+    // 기간이 줄어드는지는 덮어쓰기 전의 값과 비교해야 한다.
+    if (meta.startDate > form.startDate || meta.endDate < form.endDate) {
+      throw new ProgramFormProtectionPendingException();
+    }
+
+    Object.assign(form, {
+      ...meta,
+      participationType: participantType,
+    } satisfies Partial<FormFields>);
+
+    const fields = dynamicForm.map((field) => this.toFieldEntity(field));
+
+    let result: Awaited<ReturnType<FormStore['updateProgramWithFields']>>;
+    try {
+      result = await this.formStore.updateProgramWithFields(
+        form,
+        expectedVersion,
+        fields,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ProgramFormTitleDuplicatedException();
+      }
+
+      throw error;
+    }
+
+    if (result.status === 'NOT_FOUND') {
+      throw new FormNotFoundException();
+    }
+
+    if (result.status === 'CONFLICT') {
+      throw new FormVersionConflictException();
+    }
+
+    this.logger.log(
+      `프로그램용 폼 수정 완료: formId=${formId}, version=${result.version}, 필드 ${fields.length}개로 교체`,
+    );
+
+    return { id: formId, version: result.version };
+  }
+
+  /**
+   * 프로그램용 폼을 삭제한다. 딸린 입력 필드는 DB의 FK CASCADE로 함께 지워진다.
+   *
+   * 폼을 가리키는 회차가 있는지는 박람회 서비스가 알고 있다. 그 확인과 변경 예약(조회만 붙이면 조회 직후 회차가
+   * 새로 연결되는 경합이 남아서, 연결·삭제·기간 축소가 같은 예약 계약을 써야 한다)이 연결되기 전에는 삭제를
+   * 거절한다. 접수 중인 회차의 폼이 지워지면 신청자가 폼 정의를 읽지 못하기 때문이다. 박람회 서비스 계약이
+   * 정해지면 이 거절을 참조 확인으로 바꾼다.
+   *
+   * @throws {FormNotFoundException} 프로그램용 폼이 없을 때
+   * @throws {ProgramFormProtectionPendingException} 프로그램용 폼이 있을 때(보호가 연결되기 전)
+   */
+  async deleteProgram(formId: string): Promise<void> {
+    if (!(await this.formStore.findProgramById(formId))) {
+      throw new FormNotFoundException();
+    }
+
+    throw new ProgramFormProtectionPendingException();
+  }
+
+  /**
    * 요청 DTO의 필드 하나를 엔티티로 옮긴다.
    * id와 부모 관계(`form`)는 여기서 채우지 않는다 — 저장 시점에 TypeORM이 정한다.
    */
@@ -241,18 +396,52 @@ export class FormService {
       title: form.title,
       informationText: form.informationText,
       participantType: form.participationType,
-      applicationType: form.applicationType,
+      applicationType: requireApplicationType(form.applicationType),
       startDate: form.startDate,
       endDate: form.endDate,
-      dynamicForm: form.dynamicForms.map((field) => ({
-        id: field.id,
-        title: field.title,
-        formType: field.formType,
-        requiredStatus: field.requiredStatus,
-        jsonData: field.jsonData,
-        otherJson: field.otherJson,
-        dynamicFormType: field.dynamicFormType,
-      })),
+      dynamicForm: this.toFieldResponses(form),
     };
   }
+
+  /** 프로그램용 폼을 응답 DTO로 변환한다. 신청 방식이 없고 `version`이 더해진다. */
+  private toProgramResponse(form: FormEntity): ProgramFormResponseDto {
+    return {
+      id: form.id,
+      expoId: form.expoId,
+      purpose: FormPurpose.PROGRAM,
+      version: form.version,
+      title: form.title,
+      informationText: form.informationText,
+      participantType: form.participationType,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      dynamicForm: this.toFieldResponses(form),
+    };
+  }
+
+  private toFieldResponses(form: FormEntity): FormResponseDto['dynamicForm'] {
+    return form.dynamicForms.map((field) => ({
+      id: field.id,
+      title: field.title,
+      formType: field.formType,
+      requiredStatus: field.requiredStatus,
+      jsonData: field.jsonData,
+      otherJson: field.otherJson,
+      dynamicFormType: field.dynamicFormType,
+    }));
+  }
+}
+
+/**
+ * 등록용 폼의 신청 방식을 꺼낸다. 등록용 폼은 항상 신청 방식이 있어서 null이면 데이터가 깨진 것이다 —
+ * 프로그램용 폼만 신청 방식이 null이고, 등록용 조회·집계는 `purpose`로 걸러서 그 폼을 만나지 않는다.
+ */
+function requireApplicationType(
+  applicationType: ApplicationType | null,
+): ApplicationType {
+  if (applicationType === null) {
+    throw new Error('등록용 폼에 신청 방식이 없습니다.');
+  }
+
+  return applicationType;
 }
