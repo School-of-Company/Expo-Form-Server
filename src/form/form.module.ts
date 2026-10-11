@@ -8,6 +8,8 @@ import { FormController } from './form.controller.js';
 import { FormService } from './form.service.js';
 import { FormStore } from './form.store.js';
 import { InternalFormController } from './internal-form.controller.js';
+import { InternalProgramFormController } from './internal-program-form.controller.js';
+import { ProgramFormController } from './program-form.controller.js';
 
 /** form 도메인(폼 정의 + 입력 필드) 모듈. */
 @Module({
@@ -16,7 +18,12 @@ import { InternalFormController } from './internal-form.controller.js';
     DeletedExpoModule,
     ExpoClientModule,
   ],
-  controllers: [FormController, InternalFormController],
+  controllers: [
+    FormController,
+    ProgramFormController,
+    InternalFormController,
+    InternalProgramFormController,
+  ],
   providers: [FormService, FormStore],
   exports: [FormStore],
 })
