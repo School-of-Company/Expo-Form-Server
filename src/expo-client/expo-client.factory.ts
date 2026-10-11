@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
 import { readInternalServiceOptions } from '../common/http/internal-service.config.js';
 import type { ExpoClient } from './expo-client.interface.js';
 import { HttpExpoClient } from './http-expo-client.js';
@@ -17,6 +18,10 @@ export const EXPO_SERVICE_CONFIG_KEYS = {
 const skippingExpoClient: ExpoClient = {
   async exists() {
     return true;
+  },
+  // 기간은 건너뛸 수 없다. 모른다고 "없음"으로 답하면 기간을 보고 지우는 쪽이 잘못 지울 수 있어 장애로 던진다.
+  async findPeriod() {
+    throw new ExternalServiceUnavailableException();
   },
 };
 

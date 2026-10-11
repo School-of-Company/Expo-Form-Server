@@ -22,7 +22,8 @@ export const LOTTERY_PHONE_MAX_LENGTH = 11;
  * 때문이다. 번호 없이 당첨된 응답도 기록은 남기고 문자는 보내지 않는다(`phoneNumber`가 null).
  *
  * 같은 설문에서 같은 당첨 순번은 한 번만 만들어진다(`(surveyId, drawNumber)` 유니크). 전화번호는 개인정보라
- * 당첨된 응답의 것만 저장하고, 추첨이 끝난 뒤 보관 기간을 정해 지운다.
+ * 당첨된 응답의 것만 저장하고, 박람회가 끝난 뒤 보관 기간(`LOTTERY_PHONE_RETENTION_DAYS`, 기본 30일)이 지나면
+ * `LotteryPhoneRetentionService`가 번호만 지운다. 당첨 순번과 발행 기록은 남는다.
  */
 @Index(['surveyId', 'drawNumber'], { unique: true })
 @Entity('survey_draw_result')
