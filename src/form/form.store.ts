@@ -107,12 +107,16 @@ export class FormStore {
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id },
-        select: { id: true },
+        select: { id: true, version: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
         return false;
       }
+
+      // 폼을 읽은 뒤 다른 요청이 먼저 고쳤다면 `form.version`은 낡은 값이다. 그대로 저장한 뒤 +1 하면
+      // 버전이 거꾸로 가므로, 잠근 뒤 읽은 현재 값으로 맞춘 다음 올린다.
+      form.version = locked.version;
 
       await manager.delete(DynamicFormEntity, { form: { id: form.id } });
 
