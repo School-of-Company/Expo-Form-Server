@@ -28,11 +28,21 @@ const REGISTRATION_ONLY_TYPES: ReadonlySet<DynamicFormFieldType> = new Set([
 ]);
 
 /**
+ * 프로그램 신청 답변의 계약이 아직 정해지지 않은 유형. 이미지는 업로드를 맡는 서비스·참조 형태·검증 책임이,
+ * 기타 입력(`otherJson.hasEtc`)은 자유 입력값을 담을 모양이 정해져야 해서(Expo-Form-Server#113) 지금은
+ * 폼을 만들 때 거절한다. 만들어 놓고 제출을 막는 것보다 관리자가 바로 알 수 있다.
+ */
+const UNSUPPORTED_ANSWER_TYPES: ReadonlySet<DynamicFormFieldType> = new Set([
+  DynamicFormFieldType.IMAGE,
+]);
+
+/**
  * 프로그램용 폼의 필드 구성이 답변을 받을 수 있는 모양인지 검증한다. 등록용과 달리 특정 필드를 강제하지
  * 않고, 관리자가 정한 구성이 스스로 어긋나지 않는지만 본다.
  *
  * - 필드 제목은 폼 안에서 겹치지 않는다 — 신청 답변이 문항 제목을 키로 쓰므로 겹치면 답변이 섞인다
  * - 동반자·지역 필드는 신청 폼 전용이라 쓰지 않는다
+ * - 이미지 필드와 기타 입력(`hasEtc`)은 답변 계약이 정해지기 전까지 쓰지 않는다
  * - 드롭다운·다중 선택은 선택지가 하나 이상이고, 그 밖의 유형은 선택지(`jsonData`)를 쓰지 않는다
  * - 조건부 표시(`otherJson.conditional`)의 부모는 자기보다 앞에 있는 선택지형 필드이고, 반응하는 값은 그
  *   부모의 선택지 키여야 한다
@@ -55,6 +65,14 @@ export function checkProgramFormFields(
 
     if (REGISTRATION_ONLY_TYPES.has(field.formType)) {
       issue('동반자·지역 필드는 신청 폼에서만 쓸 수 있습니다.', index);
+    }
+
+    if (UNSUPPORTED_ANSWER_TYPES.has(field.formType)) {
+      issue('이미지 필드는 프로그램용 폼에서 아직 쓸 수 없습니다.', index);
+    }
+
+    if (field.otherJson?.hasEtc === true) {
+      issue('기타 입력은 프로그램용 폼에서 아직 쓸 수 없습니다.', index);
     }
 
     const optionCount = Object.keys(field.jsonData).length;

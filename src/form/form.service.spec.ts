@@ -52,7 +52,7 @@ describe('FormService', () => {
     deleteById: Mock;
     findSummariesByExpoIds: Mock;
   };
-  let expoClient: { exists: Mock };
+  let expoClient: { exists: Mock; findPeriod: Mock };
   let service: FormService;
 
   beforeEach(() => {
@@ -64,7 +64,10 @@ describe('FormService', () => {
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
     };
-    expoClient = { exists: vi.fn().mockResolvedValue(true) };
+    expoClient = {
+      exists: vi.fn().mockResolvedValue(true),
+      findPeriod: vi.fn(),
+    };
     service = new FormService(formStore as unknown as FormStore, expoClient);
   });
 
