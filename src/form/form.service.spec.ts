@@ -11,6 +11,7 @@ import {
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { DynamicFormType } from './entities/dynamic-form-type.enum.js';
+import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormService } from './form.service.js';
 import { FormStore } from './form.store.js';
@@ -107,6 +108,7 @@ describe('FormService', () => {
 
       const saved = formStore.save.mock.calls[0][0] as FormEntity;
       expect(saved.expoId).toBe(expoId);
+      expect(saved.purpose).toBe(FormPurpose.REGISTRATION);
       expect(saved.dynamicForms).toHaveLength(1);
       expect(saved.dynamicForms[0].jsonData).toEqual({
         '1': '온라인',

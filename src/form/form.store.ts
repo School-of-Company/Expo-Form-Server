@@ -5,6 +5,7 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { ApplicationType } from './entities/application-type.enum.js';
+import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 
 /**
@@ -12,6 +13,12 @@ import { FormEntity } from './entities/form.entity.js';
  * 명시하지 않으면 DB가 임의 순서로 돌려줄 수 있어서, 조회마다 이 정렬을 붙인다.
  */
 const DYNAMIC_FORM_ORDER = { dynamicForms: { id: 'ASC' } } as const;
+
+/** {@link FormStore.updateProgramWithFields}의 결과. */
+export type ProgramFormUpdateResult =
+  | { status: 'UPDATED'; version: number }
+  | { status: 'NOT_FOUND' }
+  | { status: 'CONFLICT' };
 
 /**
  * 폼 영속성 접근을 한 곳에 모아둔 store.
@@ -38,7 +45,12 @@ export class FormStore {
     applicationType: ApplicationType,
   ): Promise<FormEntity | null> {
     return this.forms.findOne({
-      where: { expoId, participationType, applicationType },
+      where: {
+        expoId,
+        participationType,
+        applicationType,
+        purpose: FormPurpose.REGISTRATION,
+      },
       relations: { dynamicForms: true },
       order: DYNAMIC_FORM_ORDER,
     });
@@ -53,7 +65,12 @@ export class FormStore {
     participationType: ParticipationType,
     applicationType: ApplicationType,
   ): Promise<boolean> {
-    return this.forms.existsBy({ expoId, participationType, applicationType });
+    return this.forms.existsBy({
+      expoId,
+      participationType,
+      applicationType,
+      purpose: FormPurpose.REGISTRATION,
+    });
   }
 
   /**
@@ -96,12 +113,16 @@ export class FormStore {
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id },
-        select: { id: true },
+        select: { id: true, version: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
         return false;
       }
+
+      // 폼을 읽은 뒤 다른 요청이 먼저 고쳤다면 `form.version`은 낡은 값이다. 그대로 저장한 뒤 +1 하면
+      // 버전이 거꾸로 가므로, 잠근 뒤 읽은 현재 값으로 맞춘 다음 올린다.
+      form.version = locked.version;
 
       await manager.delete(DynamicFormEntity, { form: { id: form.id } });
 
@@ -109,9 +130,73 @@ export class FormStore {
       // dynamicForms의 cascade가 옛 필드를 그대로 되살려버린다.
       form.dynamicForms = fields;
       await manager.save(FormEntity, form);
+      await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
       return true;
     });
+  }
+
+  /** formId로 프로그램용 폼 하나를 입력 필드까지 담아 조회한다. 등록용 폼의 id로는 찾지 못한다. */
+  async findProgramById(id: string): Promise<FormEntity | null> {
+    return this.forms.findOne({
+      where: { id, purpose: FormPurpose.PROGRAM },
+      relations: { dynamicForms: true },
+      order: DYNAMIC_FORM_ORDER,
+    });
+  }
+
+  /**
+   * 프로그램용 폼 메타를 갱신하면서 입력 필드를 통째로 교체한다. 폼 row를 잠근 뒤 `expectedVersion`이
+   * 현재 버전과 같을 때만 바꾸고, 바꾸면 버전을 1 올린다.
+   *
+   * 읽어온 엔티티의 `version`은 읽은 뒤 다른 요청이 바꿨을 수 있어 낡은 값일 수 있다. 그대로 저장하면
+   * 버전이 거꾸로 가므로 잠근 뒤에 읽은 현재 값으로 맞춰서 저장한다.
+   *
+   * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
+   * @param expectedVersion 수정할 때 기준으로 삼은 버전
+   * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
+   * @returns 갱신했으면 새 버전, 그 사이 삭제됐으면 `NOT_FOUND`, 버전이 다르면 `CONFLICT`
+   * @throws {ExpoDeletedException} 삭제된 박람회일 때
+   */
+  async updateProgramWithFields(
+    form: FormEntity,
+    expectedVersion: number,
+    fields: DynamicFormEntity[],
+  ): Promise<ProgramFormUpdateResult> {
+    return this.dataSource.transaction(async (manager) => {
+      await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
+
+      const locked = await manager.findOne(FormEntity, {
+        where: { id: form.id, purpose: FormPurpose.PROGRAM },
+        select: { id: true, version: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!locked) {
+        return { status: 'NOT_FOUND' };
+      }
+
+      if (locked.version !== expectedVersion) {
+        return { status: 'CONFLICT' };
+      }
+
+      await manager.delete(DynamicFormEntity, { form: { id: form.id } });
+
+      form.version = locked.version;
+      form.dynamicForms = fields;
+      await manager.save(FormEntity, form);
+      await manager.increment(FormEntity, { id: form.id }, 'version', 1);
+
+      return { status: 'UPDATED', version: locked.version + 1 };
+    });
+  }
+
+  /** 프로그램용 폼을 삭제한다. 등록용 폼의 id로는 지우지 않는다. 지웠으면 true, 없었으면 false. */
+  async deleteProgramById(id: string): Promise<boolean> {
+    const result = await this.forms.delete({
+      id,
+      purpose: FormPurpose.PROGRAM,
+    });
+    return (result.affected ?? 0) > 0;
   }
 
   /** 폼을 삭제한다. 딸린 입력 필드는 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
@@ -127,7 +212,7 @@ export class FormStore {
   > {
     return this.forms.find({
       select: { expoId: true, participationType: true, applicationType: true },
-      where: { expoId: In(expoIds) },
+      where: { expoId: In(expoIds), purpose: FormPurpose.REGISTRATION },
     });
   }
 

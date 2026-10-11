@@ -94,4 +94,47 @@ describe('HttpExpoClient', () => {
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toBe('http://expo-server/internal/expo/a%2Fb%3Fc');
   });
+
+  describe('findPeriod', () => {
+    it('박람회 기간을 돌려주고 내부 토큰을 싣는다', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          startedDay: '2026-10-01',
+          finishedDay: '2026-10-31',
+          extra: 'ignored',
+        }),
+      );
+
+      await expect(client.findPeriod(expoId)).resolves.toEqual({
+        startedDay: '2026-10-01',
+        finishedDay: '2026-10-31',
+      });
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`http://expo-server/internal/expo/${expoId}`);
+      expect(init.headers).toMatchObject({ 'X-Internal-Token': internalToken });
+    });
+
+    it('박람회가 없으면(404) null이다', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(404));
+
+      await expect(client.findPeriod(expoId)).resolves.toBeNull();
+    });
+
+    it('5xx·연결 실패·모양이 다른 응답은 없음이 아니라 장애로 던진다', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(500));
+      await expect(client.findPeriod(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await expect(client.findPeriod(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { finishedDay: 1 }));
+      await expect(client.findPeriod(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+    });
+  });
 });
