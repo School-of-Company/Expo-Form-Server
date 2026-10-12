@@ -11,6 +11,10 @@ import { FormController } from './form/form.controller.js';
 import { FormService } from './form/form.service.js';
 import { InternalProgramFormController } from './form/internal-program-form.controller.js';
 import { ProgramFormController } from './form/program-form.controller.js';
+import { SurveyPublicController } from './survey/survey-public.controller.js';
+import { SurveyPublicService } from './survey/survey-public.service.js';
+import { SurveyController } from './survey/survey.controller.js';
+import { SurveyService } from './survey/survey.service.js';
 import { SWAGGER_JSON_PATH, SWAGGER_UI_PATH, setupSwagger } from './swagger.js';
 
 const INTERNAL_PATH = '/internal/forms/by-id/{formId}';
@@ -25,8 +29,14 @@ async function createApp(
       FormController,
       ProgramFormController,
       InternalProgramFormController,
+      SurveyController,
+      SurveyPublicController,
     ],
-    providers: [{ provide: FormService, useValue: {} }],
+    providers: [
+      { provide: FormService, useValue: {} },
+      { provide: SurveyService, useValue: {} },
+      { provide: SurveyPublicService, useValue: {} },
+    ],
   })
     .overrideGuard(InternalTokenGuard)
     .useValue({ canActivate: () => true })
@@ -115,7 +125,46 @@ describe('setupSwagger', () => {
         path.startsWith('/internal/'),
       ),
     ).toEqual([]);
-    expect(document.components?.securitySchemes).toBeUndefined();
+    expect(document.components?.securitySchemes?.['internal-token']).toBe(
+      undefined,
+    );
+  });
+
+  it('게이트웨이 JWT용 bearerAuth 스키마를 선언하고 서버를 상대 경로로 둔다', async () => {
+    const created = await createApp(new Map([['SWAGGER_ENABLED', 'true']]));
+    app = created.app;
+
+    const document = await fetchDocument(app);
+
+    expect(document.components?.securitySchemes?.bearerAuth).toEqual({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+    });
+    expect(document.servers).toEqual([{ url: '/' }]);
+  });
+
+  it('JWT가 필요한 operation에만 bearerAuth를 붙이고 publicPaths 경로는 비운다', async () => {
+    const created = await createApp(new Map([['SWAGGER_ENABLED', 'true']]));
+    app = created.app;
+
+    const { paths } = await fetchDocument(app);
+    const bearer = [{ bearerAuth: [] }];
+
+    // 보호: 게이트웨이 publicPaths에 없는 경로
+    expect(paths['/forms/{expoId}'].get?.security).toEqual(bearer);
+    expect(paths['/forms/expos/{expoId}/program-forms'].post?.security).toEqual(
+      bearer,
+    );
+    expect(paths['/surveys/{expoId}'].get?.security).toEqual(bearer);
+    // 공개: `GET /forms/by-id`는 GET만 열려 있어 PATCH·DELETE는 보호된다
+    expect(paths['/forms/by-id/{formId}'].get?.security).toBeUndefined();
+    expect(paths['/forms/by-id/{formId}'].patch?.security).toEqual(bearer);
+    expect(paths['/forms/by-id/{formId}'].delete?.security).toEqual(bearer);
+    expect(paths['/surveys/public/{expoId}'].get?.security).toBeUndefined();
+    expect(
+      paths['/surveys/answer/public/{expoId}'].post?.security,
+    ).toBeUndefined();
   });
 
   it('SWAGGER_INCLUDE_INTERNAL=true이면 포함하고 X-Internal-Token 헤더 스키마만 붙인다', async () => {
@@ -138,5 +187,9 @@ describe('setupSwagger', () => {
       name: INTERNAL_TOKEN_HEADER,
     });
     expect(JSON.stringify(document)).not.toMatch(/secret|password/iu);
+    // 내부 경로에는 JWT 선언이 붙지 않는다
+    expect(document.paths[INTERNAL_PATH].get?.security).not.toContainEqual({
+      bearerAuth: [],
+    });
   });
 });
