@@ -15,6 +15,7 @@ import {
 } from './eureka/eureka-options.js';
 import { ExpoModule } from './expo/expo.module.js';
 import { FormModule } from './form/form.module.js';
+import { getMetricsRuntime } from './metrics/metrics-runtime.js';
 import { KafkaModule } from './kafka/kafka.module.js';
 import { SurveyModule } from './survey/survey.module.js';
 
@@ -44,12 +45,15 @@ import { SurveyModule } from './survey/survey.module.js';
         imports: [ConfigModule],
         inject: [ConfigService],
         useFactory: (config: ConfigService) =>
-          buildEurekaOptions({
-            serviceUrl: config.getOrThrow<string>(EUREKA_SERVICE_URL_ENV),
-            hostName: config.get<string>('INSTANCE_HOSTNAME'),
-            ipAddr: config.get<string>('INSTANCE_IP_ADDR'),
-            port: config.get<string>('PORT'),
-          }),
+          buildEurekaOptions(
+            {
+              serviceUrl: config.getOrThrow<string>(EUREKA_SERVICE_URL_ENV),
+              hostName: config.get<string>('INSTANCE_HOSTNAME'),
+              ipAddr: config.get<string>('INSTANCE_IP_ADDR'),
+              port: config.get<string>('PORT'),
+            },
+            getMetricsRuntime()?.bind,
+          ),
       }),
       EUREKA_SERVICE_URL_ENV,
     ),
