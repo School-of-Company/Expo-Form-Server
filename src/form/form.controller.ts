@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
 import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
@@ -49,6 +50,7 @@ export class FormController {
     503,
     '박람회 서비스에 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
+  @AdminChangeNotify('폼 생성')
   @Post(':expoId')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
@@ -88,6 +90,7 @@ export class FormController {
   @ApiNoContentResponse({ description: '수정 완료' })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
+  @AdminChangeNotify('폼 수정')
   @Patch(':expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async update(
@@ -107,6 +110,7 @@ export class FormController {
   })
   @ApiNoContentResponse({ description: '삭제 완료' })
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
+  @AdminChangeNotify('폼 삭제')
   @Delete(':expoId/:participationType/:applicationType')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(
