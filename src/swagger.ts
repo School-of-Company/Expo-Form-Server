@@ -17,10 +17,56 @@ export const SWAGGER_JSON_PATH = 'forms/v3/api-docs';
 
 const INTERNAL_PATH_PREFIX = '/internal/';
 const INTERNAL_TOKEN_SCHEME = 'internal-token';
+const BEARER_AUTH_SCHEME = 'bearerAuth';
+
+/**
+ * 게이트웨이 `publicPaths`(Expo-Config-Server `gateway-*.yml`)에 열려 있는 이 서비스 경로. 여기 없는 경로는
+ * 게이트웨이가 JWT를 요구하므로 문서에 `bearerAuth`를 붙인다. 접두사 항목은 하위 경로 전체, 메서드가 붙은
+ * 항목은 그 메서드만 연다. `publicPaths`가 바뀌면 함께 고친다.
+ */
+const PUBLIC_PATHS: ReadonlyArray<{ method?: string; prefix: string }> = [
+  { prefix: '/surveys/public' },
+  { prefix: '/surveys/answer/public' },
+  { method: 'get', prefix: '/forms/by-id' },
+];
+
+function isPublicOperation(path: string, method: string): boolean {
+  return PUBLIC_PATHS.some(
+    (entry) =>
+      (entry.method === undefined || entry.method === method) &&
+      (path === entry.prefix || path.startsWith(`${entry.prefix}/`)),
+  );
+}
+
+/** 서비스가 가장 앞에 두는 경로가 없는(게이트웨이로 노출되지 않는) 루트는 보안 선언 대상이 아니다. */
+function needsBearerAuth(path: string, method: string): boolean {
+  return (
+    path !== '/' &&
+    !path.startsWith(INTERNAL_PATH_PREFIX) &&
+    !isPublicOperation(path, method)
+  );
+}
 
 /** 환경 변수가 정확히 `true`일 때만 켠다. 없거나 다른 값이면 꺼진 것으로 본다. */
 function isTrue(value: string | undefined): boolean {
   return value === 'true';
+}
+
+/** operation에 필요한 보안 요구를 선언한다. 내부 경로는 내부 토큰, 보호 경로는 JWT다. */
+function declareSecurity(path: string, method: string, operation: unknown) {
+  if (typeof operation !== 'object' || operation === null) {
+    return;
+  }
+
+  if (path.startsWith(INTERNAL_PATH_PREFIX)) {
+    (operation as { security?: unknown }).security = [
+      { [INTERNAL_TOKEN_SCHEME]: [] },
+    ];
+  } else if (needsBearerAuth(path, method)) {
+    (operation as { security?: unknown }).security = [
+      { [BEARER_AUTH_SCHEME]: [] },
+    ];
+  }
 }
 
 /**
@@ -34,7 +80,14 @@ export function buildOpenApiDocument(
   const builder = new DocumentBuilder()
     .setTitle('Expo Form Server')
     .setDescription('박람회 폼·설문 서비스 API')
-    .setVersion('1.0');
+    .setVersion('1.0')
+    // 게이트웨이 뒤에서 접두사(`/forms`)가 붙은 같은 호스트로 호출되므로 서버는 상대 경로로 둔다.
+    .addServer('/')
+    // 서비스는 토큰을 검증하지 않는다(게이트웨이가 검증). 통합 문서의 Authorize·Try it out용 선언이다.
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      BEARER_AUTH_SCHEME,
+    );
   if (includeInternal) {
     builder.addApiKey(
       { type: 'apiKey', in: 'header', name: INTERNAL_TOKEN_HEADER },
@@ -51,19 +104,9 @@ export function buildOpenApiDocument(
     ),
   );
 
-  if (includeInternal) {
-    for (const [path, operations] of Object.entries(document.paths)) {
-      if (!path.startsWith(INTERNAL_PATH_PREFIX)) {
-        continue;
-      }
-
-      for (const operation of Object.values(operations)) {
-        if (typeof operation === 'object' && operation !== null) {
-          (operation as { security?: unknown }).security = [
-            { [INTERNAL_TOKEN_SCHEME]: [] },
-          ];
-        }
-      }
+  for (const [path, operations] of Object.entries(document.paths)) {
+    for (const [method, operation] of Object.entries(operations)) {
+      declareSecurity(path, method, operation);
     }
   }
 
