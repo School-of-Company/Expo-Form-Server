@@ -29,6 +29,7 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SurveyAnswerRelayService.name);
   private readonly producer: Producer;
   private readonly eventVersion: 1 | 2;
+  private running = false;
 
   constructor(
     @Inject(KAFKA_CLIENT) kafka: Kafka,
@@ -56,34 +57,50 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async relay(): Promise<void> {
-    const staleAfterMs = this.config.get<number>(
-      'SURVEY_ANSWER_STALE_MS',
-      5 * 60 * 1000,
-    );
-    const maxRetryCount = this.config.get<number>(
-      'SURVEY_ANSWER_MAX_RETRY_COUNT',
-      5,
-    );
+    // 같은 인스턴스에서 이전 실행이 아직 돌고 있으면(Kafka가 느릴 때) 겹쳐 돌지 않는다. 다른 인스턴스와의
+    // 중복은 store가 행 잠금(`SKIP LOCKED`)으로 막는다.
+    if (this.running) {
+      this.logger.warn('이전 설문 답변 발행이 끝나지 않아 건너뜁니다.');
+      return;
+    }
 
-    const [received, stalePublished] = await Promise.all([
-      this.store.findReceived(BATCH_SIZE),
-      this.store.findStalePublished(
-        new Date(Date.now() - staleAfterMs),
-        maxRetryCount,
-        BATCH_SIZE,
-      ),
-    ]);
+    this.running = true;
+    try {
+      const staleAfterMs = this.config.get<number>(
+        'SURVEY_ANSWER_STALE_MS',
+        5 * 60 * 1000,
+      );
+      const maxRetryCount = this.config.get<number>(
+        'SURVEY_ANSWER_MAX_RETRY_COUNT',
+        5,
+      );
 
-    for (const submission of [...received, ...stalePublished]) {
-      // 한 건씩 순서대로 발행한다. 실패해도 다음 건을 계속 처리하고, Kafka에 한꺼번에 몰아넣지 않는다.
-      // eslint-disable-next-line no-await-in-loop
-      await this.publishOne(submission);
+      const failures = await this.store.relayPending(
+        {
+          staleBefore: new Date(Date.now() - staleAfterMs),
+          maxRetryCount,
+          limit: BATCH_SIZE,
+        },
+        async (submission) => this.publishOne(submission),
+      );
+
+      for (const { submission, error } of failures) {
+        // 발행 실패는 표시하지 않아 다음 주기에 그대로 다시 잡힌다(RECEIVED는 계속 RECEIVED, PUBLISHED는
+        // 재시도 대상에서 빠지지 않는다). 전화번호가 실려 있는 요청 내용은 남기지 않는다.
+        this.logger.error(
+          `설문 답변 발행 실패: submissionId=${submission.id}`,
+          error,
+        );
+      }
+    } finally {
+      this.running = false;
     }
   }
 
+  /** 한 건을 발행하고 발행한 이벤트 버전을 돌려준다. 실패는 호출한 store가 건너뛰고 다시 시도하도록 던진다. */
   private async publishOne(
     submission: SurveyAnswerSubmissionEntity,
-  ): Promise<void> {
+  ): Promise<1 | 2> {
     const topic = this.config.getOrThrow<string>(
       'KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC',
     );
@@ -91,41 +108,31 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
     const version = this.versionFor(submission);
     const { questions } = submission.payload;
 
-    try {
-      await this.producer.send({
-        topic,
-        // surveyId + 전화번호로 파티션을 묶어, 같은 응답자의 이벤트가 파티션 내에서는
-        // 순서가 뒤집히지 않게 한다.
-        messages: [
-          {
-            key: `${submission.surveyId}:${submission.phoneNumber}`,
-            value: JSON.stringify({
-              eventId: submission.eventId,
-              version,
-              surveyId: submission.surveyId,
-              expoId: submission.expoId,
-              participationType: submission.participationType,
-              phoneNumber: submission.phoneNumber,
-              // 이미 검증이 끝난 값이라 유저 서비스는 해석 없이 그대로 저장만 한다.
-              answerJson: JSON.stringify(submission.payload.answers),
-              personalInformationStatus:
-                submission.payload.personalInformationStatus,
-              ...(version === 2 && { questions }),
-            }),
-          },
-        ],
-      });
+    await this.producer.send({
+      topic,
+      // surveyId + 전화번호로 파티션을 묶어, 같은 응답자의 이벤트가 파티션 내에서는
+      // 순서가 뒤집히지 않게 한다.
+      messages: [
+        {
+          key: `${submission.surveyId}:${submission.phoneNumber}`,
+          value: JSON.stringify({
+            eventId: submission.eventId,
+            version,
+            surveyId: submission.surveyId,
+            expoId: submission.expoId,
+            participationType: submission.participationType,
+            phoneNumber: submission.phoneNumber,
+            // 이미 검증이 끝난 값이라 유저 서비스는 해석 없이 그대로 저장만 한다.
+            answerJson: JSON.stringify(submission.payload.answers),
+            personalInformationStatus:
+              submission.payload.personalInformationStatus,
+            ...(version === 2 && { questions }),
+          }),
+        },
+      ],
+    });
 
-      await this.store.markPublished(submission.id, version);
-    } catch (error) {
-      // 발행 실패는 다음 주기에 그대로 재시도된다(RECEIVED는 publishedAt이 없어 계속
-      // findReceived에 잡히고, PUBLISHED로 안 바뀌었으니 재시도 대상에서 빠지지 않는다) —
-      // 여기서 던지면 같은 배치의 나머지 건 처리가 멈추니 로그만 남기고 다음 건으로 넘어간다.
-      this.logger.error(
-        `설문 답변 발행 실패: submissionId=${submission.id}`,
-        error,
-      );
-    }
+    return version;
   }
 
   /**

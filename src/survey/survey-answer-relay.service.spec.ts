@@ -45,6 +45,7 @@ describe('SurveyAnswerRelayService', () => {
     findReceived: Mock;
     findStalePublished: Mock;
     markPublished: Mock;
+    relayPending: Mock;
   };
   let service: SurveyAnswerRelayService;
 
@@ -59,7 +60,35 @@ describe('SurveyAnswerRelayService', () => {
       findReceived: vi.fn().mockResolvedValue([]),
       findStalePublished: vi.fn().mockResolvedValue([]),
       markPublished: vi.fn(),
+      relayPending: vi.fn(),
     };
+    // store가 하는 일(RECEIVED·오래된 PUBLISHED를 잠가 읽고, 건마다 publish를 부르고, 성공하면 표시한다)만 흉내
+    // 낸다. 실제 잠금은 integration 테스트가 본다.
+    store.relayPending.mockImplementation(
+      async (
+        _options: unknown,
+        publish: (s: SurveyAnswerSubmissionEntity) => Promise<1 | 2>,
+      ) => {
+        const failures: Array<{ submission: unknown; error: unknown }> = [];
+        const received = (await store.findReceived()) as unknown[];
+        const stale = (await store.findStalePublished()) as unknown[];
+        const pending = [
+          ...received,
+          ...stale,
+        ] as SurveyAnswerSubmissionEntity[];
+        for (const item of pending) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            const version = await publish(item);
+            store.markPublished(item.id, version);
+          } catch (error) {
+            failures.push({ submission: item, error });
+          }
+        }
+
+        return failures;
+      },
+    );
     service = new SurveyAnswerRelayService(
       kafka as never,
       config as never,
@@ -256,6 +285,37 @@ describe('SurveyAnswerRelayService', () => {
           'SURVEY_ANSWER_EVENT_VERSION must be 1 or 2.',
         );
       },
+    );
+  });
+
+  it('이전 실행이 아직 돌고 있으면 겹쳐 돌지 않는다', async () => {
+    let release: () => void = () => undefined;
+    store.relayPending.mockReturnValue(
+      new Promise<unknown[]>((resolve) => {
+        release = () => {
+          resolve([]);
+        };
+      }),
+    );
+
+    const first = service.relay();
+    await service.relay();
+    release();
+    await first;
+
+    expect(store.relayPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('발행 대상 조회 조건(오래된 기준·재시도 상한·배치 크기)을 store에 넘긴다', async () => {
+    await service.relay();
+
+    expect(store.relayPending).toHaveBeenCalledWith(
+      {
+        staleBefore: expect.any(Date) as Date,
+        maxRetryCount: 5,
+        limit: 100,
+      },
+      expect.any(Function),
     );
   });
 });

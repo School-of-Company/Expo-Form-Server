@@ -1,0 +1,207 @@
+import { randomUUID } from 'node:crypto';
+import process from 'node:process';
+import { DataSource } from 'typeorm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ParticipationType } from '../common/enums/participation-type.enum.js';
+import { namingStrategy } from '../database/database.config.js';
+import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
+import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
+import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyEntity } from './entities/survey.entity.js';
+import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
+import { SurveyDrawResultStore } from './survey-draw-result.store.js';
+
+/**
+ * Outbox 릴레이의 "같은 행을 두 번 발행하지 않는다"를 실제 Postgres의 `FOR UPDATE SKIP LOCKED`로 확인한다.
+ * 단위 테스트의 mock으로는 잠금이 보이지 않아서 따로 둔다. `DATABASE_URL`의 서버에 임시 DB를 만들고 끝나면 지운다.
+ *
+ * 실행: `docker compose up -d db` 후 `DATABASE_URL=... pnpm test:integration`
+ */
+const adminUrl = process.env.DATABASE_URL;
+
+describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지', () => {
+  const dbName = `relay_it_${Date.now()}`;
+  let admin: DataSource;
+  let dataSource: DataSource;
+  let drawStore: SurveyDrawResultStore;
+  let answerStore: SurveyAnswerSubmissionStore;
+  let surveyId: string;
+
+  beforeAll(async () => {
+    admin = new DataSource({ type: 'postgres', url: adminUrl });
+    await admin.initialize();
+    await admin.query(`CREATE DATABASE "${dbName}"`);
+
+    const url = new URL(adminUrl!);
+    url.pathname = `/${dbName}`;
+    dataSource = new DataSource({
+      type: 'postgres',
+      url: url.href,
+      entities: [
+        SurveyEntity,
+        DynamicSurveyEntity,
+        SurveyDrawResultEntity,
+        SurveyAnswerSubmissionEntity,
+      ],
+      namingStrategy,
+      synchronize: true,
+    });
+    await dataSource.initialize();
+
+    drawStore = new SurveyDrawResultStore(
+      dataSource.getRepository(SurveyDrawResultEntity),
+      dataSource,
+    );
+    answerStore = new SurveyAnswerSubmissionStore(
+      dataSource.getRepository(SurveyAnswerSubmissionEntity),
+      dataSource,
+    );
+
+    const survey = await dataSource.getRepository(SurveyEntity).save(
+      dataSource.getRepository(SurveyEntity).create({
+        expoId: randomUUID(),
+        title: '설문',
+        informationText: '안내',
+        participationType: ParticipationType.STANDARD,
+      }),
+    );
+    surveyId = survey.id;
+  });
+
+  afterAll(async () => {
+    await dataSource?.destroy();
+    await admin?.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
+    await admin?.destroy();
+  });
+
+  const delay = async (ms: number) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+
+  async function seedDrawResults(count: number, retryCount = 0) {
+    const repository = dataSource.getRepository(SurveyDrawResultEntity);
+    await repository.clear();
+    const rows = Array.from({ length: count }, (_, index) =>
+      repository.create({
+        surveyId,
+        eventId: randomUUID(),
+        drawNumber: index + 1,
+        phoneNumber: '01012345678',
+        retryCount,
+      }),
+    );
+    await repository.insert(rows.map((row) => ({ ...row })));
+  }
+
+  it('두 릴레이가 동시에 돌아도 당첨 결과를 한 번씩만 발행한다', async () => {
+    await seedDrawResults(6);
+    const published: string[] = [];
+    const publish = async (result: SurveyDrawResultEntity) => {
+      // 잠금을 쥔 채 오래 걸리는 발행을 흉내 낸다. 이 사이 다른 릴레이가 같은 행을 읽으면 중복이 난다.
+      await delay(150);
+      published.push(result.id);
+    };
+
+    await Promise.all([
+      drawStore.relayUnpublished(100, 100, publish),
+      drawStore.relayUnpublished(100, 100, publish),
+    ]);
+
+    expect(published).toHaveLength(6);
+    expect(new Set(published).size).toBe(6);
+    const rows = await dataSource.getRepository(SurveyDrawResultEntity).find();
+    expect(rows.every((row) => row.publishedAt !== null)).toBe(true);
+  });
+
+  it('발행에 성공하면 표시하고, 다음 실행에서는 다시 보내지 않는다', async () => {
+    await seedDrawResults(2);
+    let calls = 0;
+    const publish = async () => {
+      calls += 1;
+    };
+
+    await drawStore.relayUnpublished(100, 100, publish);
+    await drawStore.relayUnpublished(100, 100, publish);
+
+    expect(calls).toBe(2);
+  });
+
+  it('실패하면 실패 횟수를 올리고, 상한에 닿은 건은 더 읽지 않는다', async () => {
+    await seedDrawResults(1);
+    const fail = async () => {
+      throw new Error('broker unreachable');
+    };
+
+    const first = await drawStore.relayUnpublished(100, 2, fail);
+    const second = await drawStore.relayUnpublished(100, 2, fail);
+    const third = await drawStore.relayUnpublished(100, 2, fail);
+
+    expect(first.map((failure) => failure.retryCount)).toEqual([1]);
+    expect(second.map((failure) => failure.retryCount)).toEqual([2]);
+    expect(third).toEqual([]);
+  });
+
+  it('상한에 닿은 건이 배치 앞을 차지해도 뒤의 정상 건이 발행된다', async () => {
+    await seedDrawResults(3);
+    const repository = dataSource.getRepository(SurveyDrawResultEntity);
+    const [first] = await repository.find({ order: { createdAt: 'ASC' } });
+    await repository.update(first.id, { retryCount: 5 });
+    const published: string[] = [];
+
+    // 배치 크기 1이어도 포기한 건이 자리를 차지하지 않는다.
+    await drawStore.relayUnpublished(1, 5, async (result) => {
+      published.push(result.id);
+    });
+
+    expect(published).toHaveLength(1);
+    expect(published).not.toContain(first.id);
+  });
+
+  it('설문 답변 릴레이도 두 인스턴스가 같은 접수 건을 중복 발행하지 않는다', async () => {
+    const repository = dataSource.getRepository(SurveyAnswerSubmissionEntity);
+    await repository.clear();
+    for (let index = 0; index < 4; index += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await repository.insert({
+        surveyId,
+        eventId: randomUUID(),
+        expoId: randomUUID(),
+        participationType: ParticipationType.STANDARD,
+        phoneNumber: `0101234567${index}`,
+        status: SurveyAnswerSubmissionStatus.RECEIVED,
+        payload: { answers: {}, personalInformationStatus: true },
+      });
+    }
+
+    const published: string[] = [];
+    const publish = async (submission: SurveyAnswerSubmissionEntity) => {
+      await delay(150);
+      published.push(submission.id);
+      return 1 as const;
+    };
+
+    const options = {
+      staleBefore: new Date(),
+      maxRetryCount: 5,
+      limit: 100,
+    };
+
+    await Promise.all([
+      answerStore.relayPending(options, publish),
+      answerStore.relayPending(options, publish),
+    ]);
+
+    expect(published).toHaveLength(4);
+    expect(new Set(published).size).toBe(4);
+    const rows = await repository.find();
+    expect(
+      rows.every(
+        (row) => row.status === SurveyAnswerSubmissionStatus.PUBLISHED,
+      ),
+    ).toBe(true);
+    // 두 번 발행됐다면 retryCount가 2가 된다.
+    expect(rows.map((row) => row.retryCount)).toEqual([1, 1, 1, 1]);
+  });
+});
