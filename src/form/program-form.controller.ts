@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import {
   CreateProgramFormRequestDto,
   UpdateProgramFormRequestDto,
@@ -59,6 +60,7 @@ export class ProgramFormController {
     503,
     '박람회 서비스에 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
+  @AdminChangeNotify('프로그램용 폼 생성')
   @Post('expos/:expoId/program-forms')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
@@ -97,6 +99,7 @@ export class ProgramFormController {
     'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 또는 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING)',
   )
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
+  @AdminChangeNotify('프로그램용 폼 수정')
   @Patch('by-id/:formId')
   async update(
     @Param('formId', ParseUUIDPipe) formId: string,
@@ -116,6 +119,7 @@ export class ProgramFormController {
     409,
     '참조 보호가 연결되기 전이라 삭제할 수 없음 (PROGRAM_FORM_PROTECTION_PENDING)',
   )
+  @AdminChangeNotify('프로그램용 폼 삭제')
   @Delete('by-id/:formId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('formId', ParseUUIDPipe) formId: string): Promise<void> {

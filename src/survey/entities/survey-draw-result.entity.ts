@@ -54,6 +54,13 @@ export class SurveyDrawResultEntity {
   @Column({ type: 'timestamptz', nullable: true })
   publishedAt: Date | null;
 
+  /**
+   * 발행에 실패한 횟수. 상한(`SURVEY_DRAW_RESULT_MAX_RETRY_COUNT`)에 닿으면 릴레이가 더 보내지 않고 사람이 볼
+   * 대상으로 남긴다 — 계속 실패하는 건이 배치 앞을 차지해 정상 건 발행을 밀어내지 않게 하려는 것이다.
+   */
+  @Column({ type: 'int', default: 0 })
+  retryCount: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }
