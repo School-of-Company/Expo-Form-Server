@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
@@ -48,6 +49,7 @@ export class SurveyController {
     503,
     '박람회 서비스에 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
+  @AdminChangeNotify('설문 생성')
   @Post(':expoId')
   async create(
     @Param('expoId', ParseUUIDPipe) expoId: string,
@@ -87,6 +89,7 @@ export class SurveyController {
   @ApiNoContentResponse({ description: '수정 완료' })
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
+  @AdminChangeNotify('설문 수정')
   @Patch(':expoId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async update(
@@ -106,6 +109,7 @@ export class SurveyController {
   })
   @ApiNoContentResponse({ description: '삭제 완료' })
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
+  @AdminChangeNotify('설문 삭제')
   @Delete(':expoId/:participationType')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(

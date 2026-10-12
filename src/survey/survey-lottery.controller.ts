@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import {
   SurveyLotteryResponseDto,
   UpdateSurveyLotteryRequestDto,
@@ -47,6 +48,7 @@ export class SurveyLotteryController {
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
   )
+  @AdminChangeNotify('설문 추첨 설정 수정')
   @Patch(':expoId/lottery')
   async update(
     @Param('expoId', ParseUUIDPipe) expoId: string,
