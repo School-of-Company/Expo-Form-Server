@@ -1,4 +1,6 @@
+import { isIP } from 'node:net';
 import type { EurekaModuleOptions } from '@school-of-company/nestjs-eureka';
+import type { MetricsBind } from '../metrics/metrics.config.js';
 
 /** Gateway 설정(`gateway-*.yml`)의 `/forms`, `/surveys`가 이 이름으로 라우팅된다. */
 export const FORM_EUREKA_APP_NAME = 'expo-form-server';
@@ -25,7 +27,10 @@ export type EurekaEnv = {
  * - `registrationMode: 'background'`: Eureka가 잠시 내려가 있어도 앱은 뜨고, 등록은 하트비트마다 다시 시도한다.
  *   Form 서버는 직접 들어오는 요청(예: 내부 API)도 받으므로 Eureka 장애로 기동까지 막을 이유가 없다.
  */
-export function buildEurekaOptions(env: EurekaEnv): EurekaModuleOptions {
+export function buildEurekaOptions(
+  env: EurekaEnv,
+  metricsBind?: MetricsBind,
+): EurekaModuleOptions {
   const serviceUrls = env.serviceUrl
     .split(',')
     .map((url) => url.trim())
@@ -58,6 +63,32 @@ export function buildEurekaOptions(env: EurekaEnv): EurekaModuleOptions {
       hostName: env.hostName,
       ipAddr: env.ipAddr,
       port,
+      ...(isMetricsReachable(metricsBind, env.ipAddr) && {
+        metadata: {
+          'prometheus.scrape': 'true',
+          'prometheus.port': String(metricsBind.port),
+          'prometheus.path': '/metrics',
+        },
+      }),
     },
   };
+}
+
+/**
+ * Prometheus는 `<인스턴스 IP>:<prometheus.port>`로 수집하러 온다. 실제로 열린 listener가 그 IP로 닿을 때만
+ * metadata를 싣는다 — loopback에만 열려 있으면 등록해도 수집이 실패하므로 등록하지 않는다.
+ */
+function isMetricsReachable(
+  bind: MetricsBind | undefined,
+  ipAddr: string | undefined,
+): bind is MetricsBind {
+  if (bind === undefined || ipAddr === undefined) {
+    return false;
+  }
+
+  return (
+    bind.host === ipAddr ||
+    (bind.host === '0.0.0.0' && isIP(ipAddr) === 4) ||
+    (bind.host === '::' && isIP(ipAddr) > 0)
+  );
 }
