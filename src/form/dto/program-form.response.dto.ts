@@ -32,3 +32,17 @@ export const programFormVersionResponseSchema = z.object({
 export class ProgramFormVersionResponseDto extends createZodDto(
   programFormVersionResponseSchema,
 ) {}
+
+/** 프로그램용 폼 목록의 한 항목. 문항(`dynamicForm`)은 담지 않는다. */
+export const programFormListItemSchema = programFormResponseSchema.pick({
+  id: true,
+  title: true,
+  participantType: true,
+  startDate: true,
+  endDate: true,
+  version: true,
+});
+
+export class ProgramFormListItemResponseDto extends createZodDto(
+  programFormListItemSchema,
+) {}
