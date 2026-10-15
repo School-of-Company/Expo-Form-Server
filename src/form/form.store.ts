@@ -145,6 +145,14 @@ export class FormStore {
     });
   }
 
+  /** 박람회의 프로그램용 폼을 생성순으로 모두 조회한다. 입력 필드는 불러오지 않는다. */
+  async findProgramsByExpoId(expoId: string): Promise<FormEntity[]> {
+    return this.forms.find({
+      where: { expoId, purpose: FormPurpose.PROGRAM },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+  }
+
   /**
    * 프로그램용 폼 메타를 갱신하면서 입력 필드를 통째로 교체한다. 폼 row를 잠근 뒤 `expectedVersion`이
    * 현재 버전과 같을 때만 바꾸고, 바꾸면 버전을 1 올린다.

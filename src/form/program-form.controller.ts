@@ -24,6 +24,7 @@ import {
   UpdateProgramFormRequestDto,
 } from './dto/program-form.request.dto.js';
 import {
+  ProgramFormListItemResponseDto,
   ProgramFormResponseDto,
   ProgramFormVersionResponseDto,
 } from './dto/program-form.response.dto.js';
@@ -67,6 +68,19 @@ export class ProgramFormController {
     @Body() dto: CreateProgramFormRequestDto,
   ): Promise<ProgramFormVersionResponseDto> {
     return this.formService.createProgram(expoId, dto);
+  }
+
+  @ApiOperation({
+    summary: '프로그램용 폼 목록 조회',
+    description:
+      '박람회의 프로그램용 폼만 생성순으로 내려준다. 등록용 폼과 설문은 포함하지 않고, 문항(dynamicForm)은 담지 않는다. 회차 연결 여부는 담지 않는다.',
+  })
+  @ApiOkResponse({ type: [ProgramFormListItemResponseDto] })
+  @Get('expos/:expoId/program-forms')
+  async findAll(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+  ): Promise<ProgramFormListItemResponseDto[]> {
+    return this.formService.findProgramsByExpo(expoId);
   }
 
   @ApiOperation({
