@@ -23,6 +23,7 @@ import {
   UpdateProgramFormRequestDto,
 } from './dto/program-form.request.dto.js';
 import {
+  ProgramFormListItemResponseDto,
   ProgramFormResponseDto,
   ProgramFormVersionResponseDto,
 } from './dto/program-form.response.dto.js';
@@ -270,6 +271,22 @@ export class FormService {
     );
 
     return { id: saved.id, version: saved.version };
+  }
+
+  /** 박람회의 프로그램용 폼 목록을 생성순으로 조회한다. 문항은 담지 않는다. */
+  async findProgramsByExpo(
+    expoId: string,
+  ): Promise<ProgramFormListItemResponseDto[]> {
+    const forms = await this.formStore.findProgramsByExpoId(expoId);
+
+    return forms.map((form) => ({
+      id: form.id,
+      title: form.title,
+      participantType: form.participationType,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      version: form.version,
+    }));
   }
 
   /**

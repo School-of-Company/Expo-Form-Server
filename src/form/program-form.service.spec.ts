@@ -83,6 +83,7 @@ describe('FormService 프로그램용 폼', () => {
   let formStore: {
     save: Mock;
     findProgramById: Mock;
+    findProgramsByExpoId: Mock;
     updateProgramWithFields: Mock;
     deleteProgramById: Mock;
   };
@@ -93,6 +94,7 @@ describe('FormService 프로그램용 폼', () => {
     formStore = {
       save: vi.fn(),
       findProgramById: vi.fn(),
+      findProgramsByExpoId: vi.fn(),
       updateProgramWithFields: vi.fn(),
       deleteProgramById: vi.fn(),
     };
@@ -160,6 +162,32 @@ describe('FormService 프로그램용 폼', () => {
       await expect(service.createProgram(expoId, createDto)).rejects.toThrow(
         'connection lost',
       );
+    });
+  });
+
+  describe('findProgramsByExpo', () => {
+    it('문항 없이 목록 항목 필드만 담아 돌려준다', async () => {
+      formStore.findProgramsByExpoId.mockResolvedValue([existingForm()]);
+
+      const list = await service.findProgramsByExpo(expoId);
+
+      expect(formStore.findProgramsByExpoId).toHaveBeenCalledWith(expoId);
+      expect(list).toHaveLength(1);
+      expect(Object.keys(list[0]).toSorted()).toEqual([
+        'endDate',
+        'id',
+        'participantType',
+        'startDate',
+        'title',
+        'version',
+      ]);
+      expect(list[0]).toMatchObject({ id: formId, version: 3 });
+    });
+
+    it('폼이 없으면 빈 배열을 돌려준다', async () => {
+      formStore.findProgramsByExpoId.mockResolvedValue([]);
+
+      await expect(service.findProgramsByExpo(expoId)).resolves.toEqual([]);
     });
   });
 
