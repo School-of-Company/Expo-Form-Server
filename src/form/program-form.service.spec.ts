@@ -4,8 +4,10 @@ import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.en
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   ExpoNotFoundException,
+  ExternalServiceUnavailableException,
   FormNotFoundException,
   FormVersionConflictException,
+  ProgramFormGuardianPolicyInUseException,
   ProgramFormProtectionPendingException,
   ProgramFormTitleDuplicatedException,
 } from '../common/exceptions/domain.exception.js';
@@ -87,7 +89,12 @@ describe('FormService 프로그램용 폼', () => {
     updateProgramWithFields: Mock;
     deleteProgramById: Mock;
   };
-  let expoClient: { exists: Mock; findPeriod: Mock };
+  let expoClient: {
+    exists: Mock;
+    findPeriod: Mock;
+    reserveProgramFormUpdate: Mock;
+    releaseProgramFormChange: Mock;
+  };
   let service: FormService;
 
   beforeEach(() => {
@@ -101,6 +108,8 @@ describe('FormService 프로그램용 폼', () => {
     expoClient = {
       exists: vi.fn().mockResolvedValue(true),
       findPeriod: vi.fn(),
+      reserveProgramFormUpdate: vi.fn().mockResolvedValue(undefined),
+      releaseProgramFormChange: vi.fn().mockResolvedValue(undefined),
     };
     service = new FormService(formStore as unknown as FormStore, expoClient);
   });
@@ -344,6 +353,63 @@ describe('FormService 프로그램용 폼', () => {
       await expect(service.updateProgram(formId, updateDto)).rejects.toThrow(
         ProgramFormTitleDuplicatedException,
       );
+    });
+
+    it('보호자 동반 정책이 참조하지 않는 폼은 수정을 예약한 뒤 저장하고 예약을 푼다', async () => {
+      formStore.findProgramById.mockResolvedValue(existingForm());
+      formStore.updateProgramWithFields.mockResolvedValue({
+        status: 'UPDATED',
+        version: 4,
+      });
+
+      await expect(service.updateProgram(formId, updateDto)).resolves.toEqual({
+        id: formId,
+        version: 4,
+      });
+
+      const [reservedFormId, changeId] = expoClient.reserveProgramFormUpdate
+        .mock.calls[0] as [string, string];
+      expect(reservedFormId).toBe(formId);
+      expect(
+        expoClient.reserveProgramFormUpdate.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        formStore.updateProgramWithFields.mock.invocationCallOrder[0],
+      );
+      expect(expoClient.releaseProgramFormChange).toHaveBeenCalledWith(
+        formId,
+        changeId,
+      );
+    });
+
+    it.each([
+      [
+        '보호자 동반 정책이 참조하면(409)',
+        new ProgramFormGuardianPolicyInUseException(),
+      ],
+      [
+        '박람회 서비스에 확인하지 못하면(503)',
+        new ExternalServiceUnavailableException(),
+      ],
+    ])('%s 저장하지 않고 거절한다', async (_label, error) => {
+      formStore.findProgramById.mockResolvedValue(existingForm());
+      expoClient.reserveProgramFormUpdate.mockRejectedValue(error);
+
+      await expect(service.updateProgram(formId, updateDto)).rejects.toBe(
+        error,
+      );
+      expect(formStore.updateProgramWithFields).not.toHaveBeenCalled();
+      // 응답을 못 받았어도 예약이 남았을 수 있으니 푼다.
+      expect(expoClient.releaseProgramFormChange).toHaveBeenCalledOnce();
+    });
+
+    it('저장이 실패해도 예약을 푼다', async () => {
+      formStore.findProgramById.mockResolvedValue(existingForm());
+      formStore.updateProgramWithFields.mockRejectedValue(uniqueViolation());
+
+      await expect(service.updateProgram(formId, updateDto)).rejects.toThrow(
+        ProgramFormTitleDuplicatedException,
+      );
+      expect(expoClient.releaseProgramFormChange).toHaveBeenCalledOnce();
     });
   });
 

@@ -100,7 +100,7 @@ export class ProgramFormController {
   @ApiOperation({
     summary: '프로그램용 폼 수정',
     description:
-      '폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. 바디의 expectedVersion이 현재 버전과 같을 때만 바뀌고, 성공하면 version이 1 오른다. 회차 참조 보호가 연결되기 전에는 적용 기간을 줄이는 수정을 거절한다. 입력 필드 규칙은 생성과 같다(이미지·동반자·지역 필드와 기타 입력은 400).',
+      '폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다. 바디의 expectedVersion이 현재 버전과 같을 때만 바뀌고, 성공하면 version이 1 오른다. 회차 참조 보호가 연결되기 전에는 적용 기간을 줄이는 수정을 거절한다. 보호자 동반 정책이 참조하는 폼은 수정할 수 없다(새 폼을 만들어 쓴다). 박람회 서비스에 확인하지 못하면 503이다. 입력 필드 규칙은 생성과 같다(이미지·동반자·지역 필드와 기타 입력은 400).',
   })
   @ApiOkResponse({ type: ProgramFormVersionResponseDto })
   @ApiErrorResponse(
@@ -110,9 +110,13 @@ export class ProgramFormController {
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @ApiErrorResponse(
     409,
-    'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 또는 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING)',
+    'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING), 또는 보호자 동반 정책이 참조하는 폼 (PROGRAM_FORM_GUARDIAN_POLICY_IN_USE)',
   )
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
+  @ApiErrorResponse(
+    503,
+    '박람회 서비스에 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
   @AdminChangeNotify('프로그램용 폼 수정')
   @Patch('by-id/:formId')
   async update(

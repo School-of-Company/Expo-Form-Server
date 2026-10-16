@@ -23,6 +23,14 @@ const skippingExpoClient: ExpoClient = {
   async findPeriod() {
     throw new ExternalServiceUnavailableException();
   },
+  // 보호자 동반 정책 참조를 확인할 수 없으니 프로그램용 폼 수정을 막는다(fail-closed).
+  async reserveProgramFormUpdate() {
+    throw new ExternalServiceUnavailableException();
+  },
+  // 예약할 수 없었으니 풀 것도 없다.
+  async releaseProgramFormChange() {
+    return undefined;
+  },
 };
 
 /**
