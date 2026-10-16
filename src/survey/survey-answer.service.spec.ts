@@ -5,6 +5,7 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   ExternalServiceUnavailableException,
   ParticipantNotFoundException,
+  ParticipantSessionException,
   SurveyAnswerAlreadyExistsException,
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
@@ -38,8 +39,9 @@ const participant = {
   participationType: ParticipationType.TRAINEE,
 };
 
+const sessionId = 'session-1';
+
 const submitDto = {
-  phoneNumber: '010-1234-5678',
   personalInformationStatus: true,
   answers: { '1': '좋았습니다' },
 } satisfies SubmitSurveyAnswerRequestDto;
@@ -47,7 +49,11 @@ const submitDto = {
 describe('SurveyAnswerService', () => {
   let surveyStore: { findByExpoAndType: Mock };
   let submissionStore: { findActiveByKey: Mock; createReceived: Mock };
-  let userClient: { findParticipant: Mock; findSurveyAnswerResult: Mock };
+  let userClient: {
+    resolveParticipantSession: Mock;
+    findParticipant: Mock;
+    findSurveyAnswerResult: Mock;
+  };
   let service: SurveyAnswerService;
 
   beforeEach(() => {
@@ -56,7 +62,12 @@ describe('SurveyAnswerService', () => {
       findActiveByKey: vi.fn(),
       createReceived: vi.fn().mockResolvedValue(true),
     };
-    userClient = { findParticipant: vi.fn(), findSurveyAnswerResult: vi.fn() };
+    userClient = {
+      // 세션의 전화번호는 하이픈 표기로 와도 정규화해서 쓴다.
+      resolveParticipantSession: vi.fn().mockResolvedValue('010-1234-5678'),
+      findParticipant: vi.fn(),
+      findSurveyAnswerResult: vi.fn(),
+    };
     submissionStore.findActiveByKey.mockResolvedValue(null);
     service = new SurveyAnswerService(
       surveyStore as unknown as SurveyStore,
@@ -69,17 +80,61 @@ describe('SurveyAnswerService', () => {
     surveyStore.findByExpoAndType.mockResolvedValue(null);
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(SurveyNotFoundException);
     expect(userClient.findParticipant).not.toHaveBeenCalled();
   });
 
-  it('전화번호를 숫자만 남겨 정규화하고, 설문의 참여자군에서 찾는다', async () => {
+  it('세션이 없으면 유저 서비스를 부르지 않고 401로 거부한다', async () => {
+    await expect(
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        undefined,
+        submitDto,
+      ),
+    ).rejects.toThrow(ParticipantSessionException);
+    expect(userClient.resolveParticipantSession).not.toHaveBeenCalled();
+    expect(surveyStore.findByExpoAndType).not.toHaveBeenCalled();
+  });
+
+  it('세션 확인이 실패하면 설문·응답자를 조회하지 않고 그대로 전파한다', async () => {
+    userClient.resolveParticipantSession.mockRejectedValue(
+      new ParticipantSessionException(),
+    );
+
+    await expect(
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
+    ).rejects.toThrow(ParticipantSessionException);
+    expect(surveyStore.findByExpoAndType).not.toHaveBeenCalled();
+    expect(userClient.findParticipant).not.toHaveBeenCalled();
+  });
+
+  it('경로의 박람회로 세션을 확인하고, 세션 전화번호를 정규화해 설문의 참여자군에서 찾는다', async () => {
     surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findParticipant.mockResolvedValue(participant);
 
-    await service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto);
+    await service.submit(
+      survey.expoId,
+      ParticipationType.TRAINEE,
+      sessionId,
+      submitDto,
+    );
 
+    expect(userClient.resolveParticipantSession).toHaveBeenCalledWith({
+      expoId: survey.expoId,
+      sessionId,
+    });
     expect(userClient.findParticipant).toHaveBeenCalledWith({
       expoId: survey.expoId,
       phoneNumber: '01012345678',
@@ -87,12 +142,17 @@ describe('SurveyAnswerService', () => {
     });
   });
 
-  it('전화번호로 참가자를 찾지 못하면 예외를 던진다', async () => {
+  it('세션 전화번호로 참가자를 찾지 못하면 예외를 던진다', async () => {
     surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findParticipant.mockResolvedValue(null);
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(ParticipantNotFoundException);
     expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
@@ -105,7 +165,12 @@ describe('SurveyAnswerService', () => {
     });
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(ParticipantNotFoundException);
     expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
@@ -117,7 +182,12 @@ describe('SurveyAnswerService', () => {
     );
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(ExternalServiceUnavailableException);
     expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
@@ -127,7 +197,7 @@ describe('SurveyAnswerService', () => {
     userClient.findParticipant.mockResolvedValue(participant);
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, {
+      service.submit(survey.expoId, ParticipationType.TRAINEE, sessionId, {
         ...submitDto,
         answers: {},
       }),
@@ -143,7 +213,12 @@ describe('SurveyAnswerService', () => {
     });
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(SurveyAnswerAlreadyExistsException);
     expect(submissionStore.createReceived).not.toHaveBeenCalled();
   });
@@ -156,7 +231,12 @@ describe('SurveyAnswerService', () => {
     );
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(SurveyAnswerAlreadyExistsException);
   });
 
@@ -166,7 +246,12 @@ describe('SurveyAnswerService', () => {
     submissionStore.createReceived.mockResolvedValue(false);
 
     await expect(
-      service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto),
+      service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      ),
     ).rejects.toThrow(SurveyNotFoundException);
   });
 
@@ -174,7 +259,12 @@ describe('SurveyAnswerService', () => {
     surveyStore.findByExpoAndType.mockResolvedValue(survey);
     userClient.findParticipant.mockResolvedValue(participant);
 
-    await service.submit(survey.expoId, ParticipationType.TRAINEE, submitDto);
+    await service.submit(
+      survey.expoId,
+      ParticipationType.TRAINEE,
+      sessionId,
+      submitDto,
+    );
 
     const saved = submissionStore.createReceived.mock
       .calls[0][0] as SurveyAnswerSubmissionEntity;

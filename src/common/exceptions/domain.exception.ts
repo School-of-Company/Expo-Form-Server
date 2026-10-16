@@ -138,9 +138,9 @@ export class SurveyAnswerAlreadyExistsException extends DomainException {
 }
 
 /**
- * 전화번호로 응답자를 찾지 못했을 때. 해당 박람회에 등록되지 않았거나, 등록은 됐지만
- * 참여자군이 설문 대상과 달라 자격이 없는 경우도 같은 예외로 다룬다 — 둘을 구분해서 알려주면
- * 등록 여부 자체가 노출되기 때문이다.
+ * 참가자 세션의 전화번호로 응답자를 찾지 못했을 때. 해당 박람회에 등록되지 않았거나, 등록은 됐지만
+ * 참여자군이 설문 대상과 달라 자격이 없는 경우도 같은 예외로 다룬다. 세션을 거친 뒤에만 나오므로
+ * 이 응답은 SMS로 인증한 본인 번호에 대해서만 받는다(#147).
  */
 export class ParticipantNotFoundException extends DomainException {
   constructor() {
@@ -163,6 +163,27 @@ export class ParticipantAmbiguousException extends DomainException {
       ErrorCode.PARTICIPANT_AMBIGUOUS,
       '전화번호로 응답자를 하나로 특정할 수 없습니다. 운영자에게 문의해 주세요.',
       HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/**
+ * 참가자 세션(SMS 인증 후 유저 서비스가 발급하는 `PARTICIPANT_SESSION` 쿠키)이 없거나, 다른 행사의 것이거나,
+ * 만료됐을 때. 코드는 유저·신청 서비스와 같은 `SESSION_REQUIRED`/`SESSION_EXPIRED`라 클라이언트가 인증 화면과
+ * 만료 안내를 같은 방식으로 가른다.
+ */
+export class ParticipantSessionException extends DomainException {
+  constructor(
+    code:
+      | ErrorCode.SESSION_REQUIRED
+      | ErrorCode.SESSION_EXPIRED = ErrorCode.SESSION_REQUIRED,
+  ) {
+    super(
+      code,
+      code === ErrorCode.SESSION_EXPIRED
+        ? '인증 세션이 만료되었습니다.'
+        : '전화 인증이 필요합니다.',
+      HttpStatus.UNAUTHORIZED,
     );
   }
 }

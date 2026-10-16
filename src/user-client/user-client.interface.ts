@@ -21,6 +21,12 @@ export type ParticipantLookupResult = {
   participationType: ParticipationType;
 };
 
+/** 참가자 세션을 확인할 때 넘기는 값. `sessionId`는 `PARTICIPANT_SESSION` 쿠키 값이다. */
+export type ParticipantSessionInput = {
+  expoId: string;
+  sessionId: string;
+};
+
 /**
  * 유저 서비스가 설문 답변 접수 이벤트를 처리한 결과. Kafka 결과 이벤트(`STORED`/`REJECTED`)와
  * 같은 값이다 — 결과 이벤트가 유실됐을 때 같은 결과를 조회로 다시 받기 위한 것이다.
@@ -49,6 +55,15 @@ export interface UserClient {
   findParticipant(
     input: ParticipantLookupInput,
   ): Promise<ParticipantLookupResult | null>;
+
+  /**
+   * 참가자 세션을 확인하고 SMS로 검증된 전화번호를 돌려준다(Expo-User-Server
+   * `POST /internal/participant-sessions/resolve`, 신청 서비스와 같은 계약).
+   *
+   * @throws {ParticipantSessionException} 세션이 없거나 다른 행사의 것이거나 만료됐을 때(401)
+   * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했거나 응답이 계약과 다를 때
+   */
+  resolveParticipantSession(input: ParticipantSessionInput): Promise<string>;
 
   /**
    * 설문 답변 접수 이벤트(`eventId`)를 유저 서비스가 처리했는지 조회한다. 처리한 적이 없으면 null.
