@@ -1,7 +1,15 @@
 import { Logger } from '@nestjs/common';
 import { z } from 'zod';
-import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
-import { fetchJson } from '../common/http/fetch-json.util.js';
+import {
+  ExternalServiceUnavailableException,
+  ProgramFormGuardianPolicyInUseException,
+} from '../common/exceptions/domain.exception.js';
+import { ExternalServiceError } from '../common/http/external-service.error.js';
+import {
+  deleteRequest,
+  fetchJson,
+  putJson,
+} from '../common/http/fetch-json.util.js';
 import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
 import type { ExpoClient, ExpoPeriod } from './expo-client.interface.js';
@@ -61,5 +69,58 @@ export class HttpExpoClient implements ExpoClient {
       this.logger.error(`박람회 서비스 기간 조회 실패: ${url}`, error);
       throw new ExternalServiceUnavailableException();
     }
+  }
+
+  /**
+   * `PUT /internal/forms/by-id/{formId}/changes/{changeId}`에 `kind=UPDATE`를 보낸다. 409는 보호자 동반 정책이
+   * 폼을 쓰고 있다는 거절이고, 404를 포함한 그 밖의 실패는 확인하지 못한 것이므로 503으로 막는다.
+   */
+  async reserveProgramFormUpdate(
+    formId: string,
+    changeId: string,
+  ): Promise<void> {
+    const url = this.programFormChangeUrl(formId, changeId);
+
+    let result: unknown;
+    try {
+      result = await putJson(url, { kind: 'UPDATE' }, expoResponseSchema, {
+        headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+      });
+    } catch (error) {
+      if (error instanceof ExternalServiceError && error.status === 409) {
+        throw new ProgramFormGuardianPolicyInUseException();
+      }
+
+      this.logger.error(`박람회 서비스 폼 수정 예약 실패: ${url}`, error);
+      throw new ExternalServiceUnavailableException();
+    }
+
+    if (result !== null) {
+      return;
+    }
+
+    this.logger.error(`박람회 서비스 폼 수정 예약 실패(404): ${url}`);
+    throw new ExternalServiceUnavailableException();
+  }
+
+  /** `DELETE .../changes/{changeId}`. 반복·미등록 해제도 204라 재시도해도 안전하다. */
+  async releaseProgramFormChange(
+    formId: string,
+    changeId: string,
+  ): Promise<void> {
+    const url = this.programFormChangeUrl(formId, changeId);
+
+    try {
+      await deleteRequest(url, {
+        headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+      });
+    } catch (error) {
+      // ponytail: 한 번만 시도한다. 풀리지 않은 예약은 박람회 서비스에서 수동으로 해제해야 한다.
+      this.logger.error(`박람회 서비스 폼 변경 예약 해제 실패: ${url}`, error);
+    }
+  }
+
+  private programFormChangeUrl(formId: string, changeId: string): string {
+    return `${this.options.baseUrl}/internal/forms/by-id/${encodeURIComponent(formId)}/changes/${encodeURIComponent(changeId)}`;
   }
 }

@@ -41,7 +41,12 @@ describe('LotteryPhoneRetentionService', () => {
   const now = new Date('2026-12-15T03:00:00Z');
 
   let store: { findExpoIdsWithPhoneNumbers: Mock; clearPhoneNumbers: Mock };
-  let expoClient: { exists: Mock; findPeriod: Mock };
+  let expoClient: {
+    exists: Mock;
+    findPeriod: Mock;
+    reserveProgramFormUpdate: Mock;
+    releaseProgramFormChange: Mock;
+  };
   let configValue: string | undefined;
   let service: LotteryPhoneRetentionService;
 
@@ -51,7 +56,12 @@ describe('LotteryPhoneRetentionService', () => {
       findExpoIdsWithPhoneNumbers: vi.fn().mockResolvedValue([]),
       clearPhoneNumbers: vi.fn().mockResolvedValue(0),
     };
-    expoClient = { exists: vi.fn(), findPeriod: vi.fn() };
+    expoClient = {
+      exists: vi.fn(),
+      findPeriod: vi.fn(),
+      reserveProgramFormUpdate: vi.fn(),
+      releaseProgramFormChange: vi.fn(),
+    };
     const config = {
       get: vi.fn(() => configValue),
     } as unknown as ConfigService;

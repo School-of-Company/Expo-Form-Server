@@ -37,10 +37,46 @@ export async function postJson<T>(
   url: string,
   body: unknown,
   schema: z.ZodType<T>,
+  options: JsonRequestOptions = {},
+): Promise<T | null> {
+  return sendJson(url, { method: 'POST', body }, schema, options);
+}
+
+/** 외부 서비스에 JSON 바디로 PUT 요청을 보내고 응답을 파싱한다. 응답 처리 규칙은 {@link fetchJson}과 같다. */
+export async function putJson<T>(
+  url: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+  options: JsonRequestOptions = {},
+): Promise<T | null> {
+  return sendJson(url, { method: 'PUT', body }, schema, options);
+}
+
+/** 외부 서비스에 DELETE 요청을 보낸다. 응답 바디는 읽지 않고, 2xx가 아니면 {@link ExternalServiceError}를 던진다. */
+export async function deleteRequest(
+  url: string,
   { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions = {},
+): Promise<void> {
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  await discardBody(response);
+
+  if (!response.ok) {
+    throw new ExternalServiceError(url, response.status);
+  }
+}
+
+async function sendJson<T>(
+  url: string,
+  { method, body }: { method: 'POST' | 'PUT'; body: unknown },
+  schema: z.ZodType<T>,
+  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions,
 ): Promise<T | null> {
   const response = await fetch(url, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),

@@ -72,6 +72,20 @@ export class ProgramFormProtectionPendingException extends DomainException {
   }
 }
 
+/**
+ * 박람회 서비스가 프로그램용 폼 수정 예약을 409로 거절했을 때. 보호자 동반 정책이 폼 `version`과 문항 id를
+ * 그대로 저장하므로, 수정하면 그 회차의 신청이 모두 막힌다. 문항을 바꾸려면 새 폼을 만들어 써야 한다.
+ */
+export class ProgramFormGuardianPolicyInUseException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.PROGRAM_FORM_GUARDIAN_POLICY_IN_USE,
+      '보호자 동반 정책에서 사용 중인 폼은 수정할 수 없습니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
 /** 같은 박람회에 같은 제목의 프로그램용 폼을 또 만들거나 제목을 겹치게 바꾸려 할 때. */
 export class ProgramFormTitleDuplicatedException extends DomainException {
   constructor() {
