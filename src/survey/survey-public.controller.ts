@@ -43,7 +43,7 @@ export class SurveyPublicController {
   @ApiOperation({
     summary: '공개 설문 답변 제출',
     description:
-      '익명 답변을 문항 스펙으로 검증해 저장한다. 응답자를 식별하지 않아 같은 사람이 여러 번 응답할 수 있다. 경품 추첨이 켜져 있으면 응답자를 모두 세어 이 응답이 당첨인지(`won`, `drawNumber`)를 돌려주고, 전화번호와 상관없이 당첨 화면을 띄울 수 있다. 선택으로 `phoneNumber`와 개인정보 수집 동의(`personalInformationStatus`)를 보내면 당첨됐을 때 그 번호로 문자도 보낸다.',
+      '익명 답변을 문항 스펙으로 검증해 저장한다. 중복 응답은 허용하고, 추첨 순번은 공개하지 않으며 당첨 여부(`won`)만 돌려준다. 경품 추첨이 켜져 있으면 모든 응답이 순번을 소비한다. 같은 설문에서 이미 당첨된 정규화 전화번호는 다시 당첨되지 않는다. 전화번호 없이도 당첨될 수 있다. 선택으로 `phoneNumber`와 개인정보 수집 동의(`personalInformationStatus`)를 보내면 당첨됐을 때 그 번호로 문자도 보낸다.',
   })
   @ApiOkResponse({ type: PublicSurveyAnswerResponseDto })
   @ApiErrorResponse(
