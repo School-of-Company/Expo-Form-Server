@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   ParticipantNotFoundException,
+  ParticipantSessionException,
   SurveyAnswerAlreadyExistsException,
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
@@ -46,15 +47,21 @@ export class SurveyAnswerService {
   ) {}
 
   /**
-   * 전화번호로 응답자를 확인하고, 저장된 문항 스펙으로 답변을 검증한 뒤 접수 기록을 남긴다.
+   * 참가자 세션으로 응답자를 확인하고, 저장된 문항 스펙으로 답변을 검증한 뒤 접수 기록을 남긴다.
    * 접수 시점에 설문의 누적 응답 수를 늘린다 — 유저 서비스가 나중에 거절하면
    * {@link SurveyAnswerResultConsumer}가 되돌린다.
+   *
+   * 응답자는 본문의 전화번호가 아니라 세션의 검증된 전화번호로 정한다(#147). 본문 번호를 믿으면
+   * 토큰 없이 남의 번호로 대신 제출하거나, 404/400 차이로 번호의 등록 여부를 알아낼 수 있다.
+   * 세션 확인을 가장 먼저 해서 인증되지 않은 요청은 다른 결과 없이 401만 받는다. `sessionId`는
+   * `PARTICIPANT_SESSION` 쿠키 값이고, 없으면 undefined다.
    *
    * 대상 설문은 (박람회, 참여자군) 조합으로 식별한다 — standard/trainee 제출 라우트가
    * 각각 자신의 참여자군을 고정해서 넘긴다.
    *
+   * @throws {ParticipantSessionException} 세션이 없거나 다른 행사의 것이거나 만료됐을 때(401)
    * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
-   * @throws {ParticipantNotFoundException} 이 설문의 참여자군에서 그 전화번호로 등록된 응답자를
+   * @throws {ParticipantNotFoundException} 이 설문의 참여자군에서 세션의 전화번호로 등록된 응답자를
    *   찾을 수 없을 때
    * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙(필수 여부·선택지·최대 선택 개수)과
@@ -65,8 +72,17 @@ export class SurveyAnswerService {
   async submit(
     expoId: string,
     participationType: ParticipationType,
+    sessionId: string | undefined,
     dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {
+    if (sessionId === undefined) {
+      throw new ParticipantSessionException();
+    }
+
+    const phoneNumber = normalizePhoneNumber(
+      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
+    );
+
     const survey = await this.surveyStore.findByExpoAndType(
       expoId,
       participationType,
@@ -75,18 +91,15 @@ export class SurveyAnswerService {
       throw new SurveyNotFoundException();
     }
 
-    const phoneNumber = normalizePhoneNumber(dto.phoneNumber);
-
     // 이 설문의 참여자군 테이블에서만 찾는다. 다른 참여자군으로 등록된 번호도 "없음"으로 돌아오므로,
-    // 등록되지 않은 경우와 참여자군이 안 맞는 경우가 같은 예외로 묶인다 — 둘을 구분해서 알려주면
-    // 그 전화번호의 등록 여부 자체가 노출된다.
+    // 등록되지 않은 경우와 참여자군이 안 맞는 경우가 같은 예외로 묶인다.
     const participant = await this.userClient.findParticipant({
       expoId: survey.expoId,
       phoneNumber,
       participationType: survey.participationType,
     });
     // 요청한 참여자군과 다른 응답은 계약 위반이지만, 다른 참여자군의 응답자가 답변하게 두지 않도록
-    // 여기서도 한 번 더 막는다. 없는 경우와 같은 예외로 묶어 등록 여부를 드러내지 않는다.
+    // 여기서도 한 번 더 막는다.
     if (participant?.participationType !== survey.participationType) {
       throw new ParticipantNotFoundException();
     }
