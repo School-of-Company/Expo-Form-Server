@@ -8,8 +8,6 @@ import { z } from 'zod';
 export const publicSurveyAnswerResponseSchema = z.object({
   /** 이 응답이 경품에 당첨됐는지. */
   won: z.boolean(),
-  /** 당첨된 순번(몇 번째 응답). 당첨이 아니면 null이다. */
-  drawNumber: z.int().positive().nullable(),
 });
 
 export class PublicSurveyAnswerResponseDto extends createZodDto(

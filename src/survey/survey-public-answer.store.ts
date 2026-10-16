@@ -7,6 +7,7 @@ import {
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyNotFoundException } from '../common/exceptions/domain.exception.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
+import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
 /** 경품 설정을 잠그고 읽은 한 줄. 컬럼 이름 그대로 돌려받는다. */
@@ -36,8 +37,8 @@ export class SurveyPublicAnswerStore {
    * 설문 행을 먼저 잠근다 — 같은 설문의 순번이 겹치지 않게 줄 세우는 자리이고, 응답 INSERT보다 앞에 둬야
    * FK 검사의 공유 잠금과 맞물려 교착이 나지 않는다.
    *
-   * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고, 당첨 여부와 순번은
-   * 번호와 무관하다.
+   * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고 번호 없이도 추첨한다.
+   * 같은 설문에서 이미 당첨된 번호는 다시 당첨시키지 않는다.
    *
    * @throws {SurveyNotFoundException} 설문 행을 잠그는 순간 설문이 이미 지워졌을 때
    */
@@ -104,6 +105,17 @@ export class SurveyPublicAnswerStore {
     );
 
     if (!lottery.lottery_numbers.includes(sequence)) {
+      return NOT_WON;
+    }
+
+    // 설문 행 락을 쥔 채 검사하고 저장하므로 동시 제출도 이전 당첨을 확인한다. 순번은 모두 소비한다.
+    if (
+      phoneNumber !== null &&
+      (await manager.existsBy(SurveyDrawResultEntity, {
+        surveyId,
+        phoneNumber,
+      }))
+    ) {
       return NOT_WON;
     }
 

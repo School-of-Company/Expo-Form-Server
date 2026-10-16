@@ -84,7 +84,7 @@ export class SurveyPublicService {
 
     this.logger.log(`공개 설문 답변 저장 완료: surveyId=${survey.id}`);
 
-    return { won: outcome.won, drawNumber: outcome.drawNumber };
+    return { won: outcome.won };
   }
 
   /**
