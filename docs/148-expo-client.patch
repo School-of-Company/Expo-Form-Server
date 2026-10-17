@@ -1,0 +1,17 @@
+diff --git a/src/entities/survey/model/types.ts b/src/entities/survey/model/types.ts
+--- a/src/entities/survey/model/types.ts
++++ b/src/entities/survey/model/types.ts
+@@ -66,4 +66,3 @@
+ export interface PublicSurveyAnswerResponseDto {
+   won: boolean;
+-  drawNumber: number | null;
+ }
+diff --git a/src/features/survey-answer/ui/PublicSurveyContainer/index.tsx b/src/features/survey-answer/ui/PublicSurveyContainer/index.tsx
+--- a/src/features/survey-answer/ui/PublicSurveyContainer/index.tsx
++++ b/src/features/survey-answer/ui/PublicSurveyContainer/index.tsx
+@@ -104,4 +104,3 @@
+             <p className="text-center text-h2b text-main-600 mobile:text-body1b">
+-              축하합니다! {result.drawNumber}번째 응답으로 경품에
+-              당첨되었습니다.
++              축하합니다! 경품에 당첨되었습니다.
+             </p>

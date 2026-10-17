@@ -18,4 +18,16 @@ export interface ExpoClient {
    * @throws {ExternalServiceUnavailableException} 박람회 서비스에 확인할 수 없을 때 — "없음"과 다르다
    */
   findPeriod(expoId: string): Promise<ExpoPeriod | null>;
+
+  /**
+   * 프로그램용 폼 수정을 박람회 서비스에 예약한다(`kind=UPDATE`). 예약이 끝나면 커밋·실패와 상관없이
+   * {@link releaseProgramFormChange}로 풀어야 한다 — 풀지 않으면 그 폼의 연결·변경이 계속 막힌다.
+   *
+   * @throws {ProgramFormGuardianPolicyInUseException} 박람회 서비스가 거절했을 때(409)
+   * @throws {ExternalServiceUnavailableException} 그 밖의 실패 — 확인 못 하면 수정을 막는다(fail-closed)
+   */
+  reserveProgramFormUpdate(formId: string, changeId: string): Promise<void>;
+
+  /** 폼 변경 예약을 푼다. 실패는 로그만 남긴다 — 이미 끝난 수정의 결과를 바꾸지 않는다. */
+  releaseProgramFormChange(formId: string, changeId: string): Promise<void>;
 }

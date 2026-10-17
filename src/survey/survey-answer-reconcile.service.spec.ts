@@ -46,7 +46,11 @@ const dataset = (count: number): Row[] =>
 
 describe('SurveyAnswerReconcileService', () => {
   let store: { findExhausted: Mock; markFinal: Mock };
-  let userClient: { findParticipant: Mock; findSurveyAnswerResult: Mock };
+  let userClient: {
+    resolveParticipantSession: Mock;
+    findParticipant: Mock;
+    findSurveyAnswerResult: Mock;
+  };
   let dicoshot: { sendCustom: Mock };
   let service: SurveyAnswerReconcileService;
   let errorLog: MockInstance<Logger['error']>;
@@ -80,7 +84,11 @@ describe('SurveyAnswerReconcileService', () => {
       findExhausted: vi.fn().mockResolvedValue([]),
       markFinal: vi.fn().mockResolvedValue(true),
     };
-    userClient = { findParticipant: vi.fn(), findSurveyAnswerResult: vi.fn() };
+    userClient = {
+      resolveParticipantSession: vi.fn(),
+      findParticipant: vi.fn(),
+      findSurveyAnswerResult: vi.fn(),
+    };
     dicoshot = { sendCustom: vi.fn().mockResolvedValue(true) };
     errorLog = vi
       .spyOn(Logger.prototype, 'error')

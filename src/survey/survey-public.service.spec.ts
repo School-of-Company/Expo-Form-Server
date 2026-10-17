@@ -87,7 +87,7 @@ describe('SurveyPublicService', () => {
     it('답변을 저장하고 당첨이 아니라고 알려 준다', async () => {
       const result = await service.submit(expoId, answerDto);
 
-      expect(result).toEqual({ won: false, drawNumber: null });
+      expect(result).toEqual({ won: false });
 
       expect(answerStore.create).toHaveBeenCalledWith(
         'survey-1',
@@ -116,12 +116,11 @@ describe('SurveyPublicService', () => {
         surveyStore.findByExpoAndType.mockResolvedValue(lotterySurvey);
       });
 
-      it('당첨이면 몇 번째 응답이었는지 알려 준다', async () => {
+      it('당첨 여부만 알리고 추첨 순번은 노출하지 않는다', async () => {
         answerStore.create.mockResolvedValue({ won: true, drawNumber: 30 });
 
         await expect(service.submit(expoId, answerDto)).resolves.toEqual({
           won: true,
-          drawNumber: 30,
         });
       });
 

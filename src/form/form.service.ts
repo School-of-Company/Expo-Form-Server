@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
@@ -311,8 +312,13 @@ export class FormService {
    * 회차가 이 폼을 쓰는지는 박람회 서비스가 안다. 그 확인과 변경 예약이 연결되기 전에는 늘리거나 그대로 두는
    * 수정만 허용한다.
    *
+   * 저장 전에 박람회 서비스에 수정을 예약한다. 보호자 동반 정책이 폼 `version`과 문항 id를 저장하고 있어서, 그 정책이
+   * 참조하는 폼을 고치면 회차 신청이 모두 막힌다(#146). 예약은 저장 결과와 상관없이 마지막에 푼다.
+   *
    * @throws {FormNotFoundException} 프로그램용 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
    * @throws {ProgramFormProtectionPendingException} 적용 기간을 줄이려 할 때
+   * @throws {ProgramFormGuardianPolicyInUseException} 보호자 동반 정책이 이 폼을 참조할 때
+   * @throws {ExternalServiceUnavailableException} 박람회 서비스에 예약하지 못했을 때
    * @throws {FormVersionConflictException} `expectedVersion`이 현재 버전과 다를 때
    * @throws {ProgramFormTitleDuplicatedException} 바꾼 제목이 같은 박람회의 다른 프로그램용 폼과 겹칠 때
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
@@ -339,8 +345,11 @@ export class FormService {
 
     const fields = dynamicForm.map((field) => this.toFieldEntity(field));
 
+    // 예약 응답이 타임아웃이어도 박람회 서비스에는 예약이 남았을 수 있어서, 예약 실패도 해제한다(미등록 키 해제는 204).
+    const changeId = randomUUID();
     let result: Awaited<ReturnType<FormStore['updateProgramWithFields']>>;
     try {
+      await this.expoClient.reserveProgramFormUpdate(formId, changeId);
       result = await this.formStore.updateProgramWithFields(
         form,
         expectedVersion,
@@ -352,6 +361,8 @@ export class FormService {
       }
 
       throw error;
+    } finally {
+      await this.expoClient.releaseProgramFormChange(formId, changeId);
     }
 
     if (result.status === 'NOT_FOUND') {

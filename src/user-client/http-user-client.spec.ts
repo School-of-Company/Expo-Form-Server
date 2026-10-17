@@ -11,6 +11,7 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   ExternalServiceUnavailableException,
   ParticipantAmbiguousException,
+  ParticipantSessionException,
 } from '../common/exceptions/domain.exception.js';
 import { HttpUserClient } from './http-user-client.js';
 
@@ -109,6 +110,79 @@ describe('HttpUserClient', () => {
     await expect(client.findParticipant(input)).rejects.toThrow(
       ExternalServiceUnavailableException,
     );
+  });
+
+  describe('resolveParticipantSession', () => {
+    const sessionInput = { expoId: input.expoId, sessionId: 'sid' };
+    const later = (ms: number) =>
+      new Date(Date.now() + ms).toISOString().slice(0, 19);
+
+    it('세션 ID는 바디로 보내고 검증된 전화번호를 돌려준다', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          expoId: input.expoId,
+          phoneNumber: '01012345678',
+          expiresAt: later(60_000),
+        }),
+      );
+
+      await expect(
+        client.resolveParticipantSession(sessionInput),
+      ).resolves.toBe('01012345678');
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(
+        'http://user-server/internal/participant-sessions/resolve',
+      );
+      expect(JSON.parse(init.body as string)).toEqual(sessionInput);
+    });
+
+    it.each(['SESSION_REQUIRED', 'SESSION_EXPIRED'])(
+      '401 %s는 같은 코드의 세션 예외(401)로 던진다',
+      async (code) => {
+        fetchMock.mockResolvedValue(jsonResponse(401, { code }));
+
+        await expect(
+          client.resolveParticipantSession(sessionInput),
+        ).rejects.toMatchObject({
+          constructor: ParticipantSessionException,
+          errorCode: code,
+        });
+      },
+    );
+
+    it.each([
+      ['코드 없는 401(내부 토큰 불일치 등)', () => jsonResponse(401, {})],
+      [
+        '다른 행사의 세션 응답',
+        () =>
+          jsonResponse(200, {
+            expoId: '22222222-2222-2222-2222-222222222222',
+            phoneNumber: '01012345678',
+            expiresAt: later(60_000),
+          }),
+      ],
+      ['404(라우트 없음)', () => jsonResponse(404)],
+    ])('%s는 세션 문제가 아니라 서비스 장애로 던진다', async (_l, response) => {
+      fetchMock.mockResolvedValue(response());
+
+      await expect(
+        client.resolveParticipantSession(sessionInput),
+      ).rejects.toThrow(ExternalServiceUnavailableException);
+    });
+
+    it('응답의 만료 시각이 이미 지났으면 SESSION_EXPIRED', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          expoId: input.expoId,
+          phoneNumber: '01012345678',
+          expiresAt: later(-1000),
+        }),
+      );
+
+      await expect(
+        client.resolveParticipantSession(sessionInput),
+      ).rejects.toMatchObject({ errorCode: 'SESSION_EXPIRED' });
+    });
   });
 
   describe('findSurveyAnswerResult', () => {
