@@ -27,6 +27,7 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
   let drawStore: SurveyDrawResultStore;
   let answerStore: SurveyAnswerSubmissionStore;
   let surveyId: string;
+  const expoId = randomUUID();
 
   beforeAll(async () => {
     admin = new DataSource({ type: 'postgres', url: adminUrl });
@@ -60,7 +61,7 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
 
     const survey = await dataSource.getRepository(SurveyEntity).save(
       dataSource.getRepository(SurveyEntity).create({
-        expoId: randomUUID(),
+        expoId,
         title: '설문',
         informationText: '안내',
         participationType: ParticipationType.STANDARD,
@@ -157,6 +158,40 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
 
     expect(published).toHaveLength(1);
     expect(published).not.toContain(first.id);
+  });
+
+  it('발행할 결과에 설문의 박람회 id를 함께 싣는다', async () => {
+    await seedDrawResults(1);
+    const expoIds: string[] = [];
+
+    await drawStore.relayUnpublished(100, 100, async (result) => {
+      expoIds.push(result.survey.expoId);
+    });
+
+    expect(expoIds).toEqual([expoId]);
+  });
+
+  it('설문 행이 다른 트랜잭션에 잠겨 있어도 그 설문의 결과를 건너뛰지 않는다', async () => {
+    await seedDrawResults(1);
+    const runner = dataSource.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      // 공개 답변 제출이 당첨 판정 동안 설문 행을 잠그는 상황을 흉내 낸다.
+      await runner.query('SELECT id FROM survey WHERE id = $1 FOR UPDATE', [
+        surveyId,
+      ]);
+      let calls = 0;
+
+      await drawStore.relayUnpublished(100, 100, async () => {
+        calls += 1;
+      });
+
+      expect(calls).toBe(1);
+    } finally {
+      await runner.rollbackTransaction();
+      await runner.release();
+    }
   });
 
   it('설문 답변 릴레이도 두 인스턴스가 같은 접수 건을 중복 발행하지 않는다', async () => {

@@ -112,7 +112,7 @@ export class SurveyDrawResultRelayService
     }
   }
 
-  /** 한 건을 발행한다. 실패는 호출한 store가 실패 횟수로 기록하므로 여기서 삼키지 않는다. */
+  /** 한 건을 발행한다. `result.survey`는 store가 함께 읽어 둔다. 실패는 호출한 store가 실패 횟수로 기록하므로 여기서 삼키지 않는다. */
   private async publishOne(result: SurveyDrawResultEntity): Promise<void> {
     const topic = this.config.get<string>(
       'KAFKA_SMS_REQUESTED_TOPIC',
@@ -130,6 +130,8 @@ export class SurveyDrawResultRelayService
             version: 1,
             phoneNumber: result.phoneNumber,
             drawNumber: result.drawNumber,
+            // 알림톡 문구의 행사명을 찾는 데 쓴다. 필드 추가만 했으므로 버전은 그대로 1이다.
+            expoId: result.survey.expoId,
           }),
         },
       ],
