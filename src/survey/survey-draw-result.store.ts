@@ -23,7 +23,7 @@ export class SurveyDrawResultStore {
 
   /**
    * 아직 발행하지 않았고 문자를 보낼 번호가 있는 결과를 오래된 순서로 잠가서 `publish`로 하나씩 발행한다.
-   * 번호 없이 당첨된 기록과, 실패가 `maxRetryCount`에 닿아 포기한 기록은 제외한다.
+   * 결과에는 설문(`survey`)이 함께 실려 있다. 번호 없이 당첨된 기록과, 실패가 `maxRetryCount`에 닿아 포기한 기록은 제외한다.
    *
    * 조회와 발행·표시를 한 트랜잭션에 두고 행을 `FOR UPDATE SKIP LOCKED`로 잡는다. 인스턴스가 여러 대여도 같은
    * 행을 둘이 동시에 읽지 못하므로 같은 당첨 문자를 두 번 보내지 않는다. 발행 도중 프로세스가 죽으면 잠금이 풀려
@@ -42,7 +42,10 @@ export class SurveyDrawResultStore {
     return this.dataSource.transaction(async (manager) => {
       const results = await manager
         .createQueryBuilder(SurveyDrawResultEntity, 'result')
-        .setLock('pessimistic_write')
+        // 이벤트에 박람회 id를 싣기 위해 설문을 함께 읽는다. 잠금은 결과 행에만 건다 — 설문 행은 공개 답변 제출이
+        // 당첨 판정 동안 잠그므로, 같이 잠그면 제출이 몰릴 때 릴레이가 그 설문의 결과를 건너뛰게 된다.
+        .innerJoinAndSelect('result.survey', 'survey')
+        .setLock('pessimistic_write', undefined, ['result'])
         .setOnLocked('skip_locked')
         .where('result.publishedAt IS NULL')
         .andWhere('result.phoneNumber IS NOT NULL')
