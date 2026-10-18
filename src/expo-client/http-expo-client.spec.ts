@@ -10,6 +10,7 @@ import {
 import {
   ExternalServiceUnavailableException,
   ProgramFormGuardianPolicyInUseException,
+  ProgramFormReservationUnavailableException,
 } from '../common/exceptions/domain.exception.js';
 import { HttpExpoClient } from './http-expo-client.js';
 
@@ -170,7 +171,7 @@ describe('HttpExpoClient', () => {
       ['404', jsonResponse(404)],
       ['5xx', jsonResponse(500)],
       ['연결 실패', new TypeError('fetch failed')],
-    ])('%s는 수정을 막도록 장애로 던진다', async (_label, outcome) => {
+    ])('%s는 수정을 막고 예약 불가 오류로 던진다', async (_label, outcome) => {
       if (outcome instanceof Response) {
         fetchMock.mockResolvedValue(outcome);
       } else {
@@ -179,7 +180,7 @@ describe('HttpExpoClient', () => {
 
       await expect(
         client.reserveProgramFormUpdate(formId, changeId),
-      ).rejects.toThrow(ExternalServiceUnavailableException);
+      ).rejects.toThrow(ProgramFormReservationUnavailableException);
     });
 
     it('예약 해제는 DELETE로 보내고, 실패해도 던지지 않는다', async () => {

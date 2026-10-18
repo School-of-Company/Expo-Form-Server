@@ -2,6 +2,7 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
+import { ProgramFormReservationUnavailableException } from '../common/exceptions/domain.exception.js';
 import { EXPO_CLIENT, type ExpoClient } from './expo-client.interface.js';
 import { ExpoClientModule } from './expo-client.module.js';
 import { HttpExpoClient } from './http-expo-client.js';
@@ -35,6 +36,15 @@ describe('ExpoClientModule', () => {
     const client = moduleRef.get<ExpoClient>(EXPO_CLIENT);
 
     await expect(client.exists('any-expo-id')).resolves.toBe(true);
+  });
+
+  it('설정이 없으면 프로그램용 폼 수정은 예약 불가 오류로 막는다(재시도로 풀리지 않는 설정 문제를 알린다)', async () => {
+    const moduleRef = await compileWith({});
+    const client = moduleRef.get<ExpoClient>(EXPO_CLIENT);
+
+    await expect(
+      client.reserveProgramFormUpdate('form-1', 'change-1'),
+    ).rejects.toThrow(ProgramFormReservationUnavailableException);
   });
 
   it('주소만 있거나 토큰이 짧으면 설정 실수이므로 부팅 단계에서 실패한다', async () => {
