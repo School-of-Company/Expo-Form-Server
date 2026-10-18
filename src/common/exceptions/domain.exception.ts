@@ -86,6 +86,24 @@ export class ProgramFormGuardianPolicyInUseException extends DomainException {
   }
 }
 
+/**
+ * 프로그램용 폼을 고치기 전에 박람회 서비스에 변경을 예약하지 못했을 때. 보호자 동반 정책이 이 폼을 쓰는지
+ * 확인할 수 없으니 안전하게 수정을 막는다(fail-closed).
+ *
+ * `EXTERNAL_SERVICE_UNAVAILABLE`과 따로 두는 이유: 그 코드는 "잠시 후 다시 시도"를 뜻하지만, 이 실패는
+ * 박람회 서비스 설정이 없거나 변경 예약 API가 아직 배포되지 않은 경우처럼 재시도로 풀리지 않을 수 있다.
+ * 관리자가 재시도만 반복하지 않도록 문구에 그 가능성을 밝힌다.
+ */
+export class ProgramFormReservationUnavailableException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.PROGRAM_FORM_RESERVATION_UNAVAILABLE,
+      '박람회 서비스에서 이 폼의 사용 여부를 확인하지 못해 수정할 수 없습니다. 계속되면 운영진에게 문의해 주세요.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+}
+
 /** 같은 박람회에 같은 제목의 프로그램용 폼을 또 만들거나 제목을 겹치게 바꾸려 할 때. */
 export class ProgramFormTitleDuplicatedException extends DomainException {
   constructor() {
