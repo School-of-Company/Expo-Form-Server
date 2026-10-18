@@ -1,6 +1,9 @@
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
-import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
+import {
+  ExternalServiceUnavailableException,
+  ProgramFormReservationUnavailableException,
+} from '../common/exceptions/domain.exception.js';
 import { readInternalServiceOptions } from '../common/http/internal-service.config.js';
 import type { ExpoClient } from './expo-client.interface.js';
 import { HttpExpoClient } from './http-expo-client.js';
@@ -25,7 +28,11 @@ const skippingExpoClient: ExpoClient = {
   },
   // 보호자 동반 정책 참조를 확인할 수 없으니 프로그램용 폼 수정을 막는다(fail-closed).
   async reserveProgramFormUpdate() {
-    throw new ExternalServiceUnavailableException();
+    // 부팅 때 한 번 남기는 경고는 묻히기 쉬워서, 막을 때마다 원인을 남긴다.
+    new Logger('ExpoClient').error(
+      '박람회 서비스 설정(EXPO_SERVICE_URL, EXPO_SERVICE_INTERNAL_TOKEN)이 없어 프로그램용 폼 수정을 막았습니다.',
+    );
+    throw new ProgramFormReservationUnavailableException();
   },
   // 예약할 수 없었으니 풀 것도 없다.
   async releaseProgramFormChange() {

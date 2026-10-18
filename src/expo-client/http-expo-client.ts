@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   ExternalServiceUnavailableException,
   ProgramFormGuardianPolicyInUseException,
+  ProgramFormReservationUnavailableException,
 } from '../common/exceptions/domain.exception.js';
 import { ExternalServiceError } from '../common/http/external-service.error.js';
 import {
@@ -72,7 +73,7 @@ export class HttpExpoClient implements ExpoClient {
   }
 
   /**
-   * `PUT /internal/forms/by-id/{formId}/changes/{changeId}`에 `kind=UPDATE`를 보낸다. 409는 보호자 동반 정책이
+   * `PUT /internal/forms/by-id/:formId/changes/:changeId`에 `kind=UPDATE`를 보낸다. 409는 보호자 동반 정책이
    * 폼을 쓰고 있다는 거절이고, 404를 포함한 그 밖의 실패는 확인하지 못한 것이므로 503으로 막는다.
    */
   async reserveProgramFormUpdate(
@@ -92,15 +93,18 @@ export class HttpExpoClient implements ExpoClient {
       }
 
       this.logger.error(`박람회 서비스 폼 수정 예약 실패: ${url}`, error);
-      throw new ExternalServiceUnavailableException();
+      throw new ProgramFormReservationUnavailableException();
     }
 
     if (result !== null) {
       return;
     }
 
-    this.logger.error(`박람회 서비스 폼 수정 예약 실패(404): ${url}`);
-    throw new ExternalServiceUnavailableException();
+    // 404는 폼이 없다는 뜻이 아니라(폼은 이 서비스에 있다) 박람회 서비스에 변경 예약 API가 없다는 뜻일 가능성이 크다.
+    this.logger.error(
+      `박람회 서비스 폼 수정 예약 실패(404): ${url} — 박람회 서비스에 변경 예약 API(PUT /internal/forms/by-id/:formId/changes/:changeId)가 배포됐는지 확인하세요.`,
+    );
+    throw new ProgramFormReservationUnavailableException();
   }
 
   /** `DELETE .../changes/{changeId}`. 반복·미등록 해제도 204라 재시도해도 안전하다. */
