@@ -13,6 +13,7 @@ import {
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
+import { SurveyAnswerCountResponseDto } from './dto/survey-answer-count.response.dto.js';
 import { SurveySummaryDto } from './dto/survey-summary.response.dto.js';
 import {
   SurveyResponseDto,
@@ -228,6 +229,24 @@ export class SurveyService {
     }
 
     return toSurveyResponse(survey);
+  }
+
+  /**
+   * (박람회, 참여자군) 조합 설문의 누적 응답 수를 조회한다. 관리자 화면이 응답이 쌓였는지 보여 줄 때 쓴다.
+   *
+   * @throws {SurveyNotFoundException} 조건에 맞는 설문이 없을 때
+   */
+  async countAnswers(
+    expoId: string,
+    dto: FindSurveyRequestDto,
+  ): Promise<SurveyAnswerCountResponseDto> {
+    const survey = await this.surveyStore.findByExpoAndType(expoId, dto.type);
+
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
+
+    return { totalAnswers: survey.totalAnswers };
   }
 
   /**

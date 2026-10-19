@@ -2,7 +2,11 @@ import { z } from 'zod';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { Region } from '../common/enums/region.enum.js';
 import { COMPANION_MAX_COUNT, companionSchema } from './companion.js';
-import type { JsonData, OtherJson } from './field-spec.schema.js';
+import {
+  triggerValuesOf,
+  type JsonData,
+  type OtherJson,
+} from './field-spec.schema.js';
 
 /**
  * 답변을 검증하는 데 필요한 문항 정보만 담은 최소 스펙.
@@ -81,7 +85,26 @@ const VALUE_SCHEMA_BUILDERS: Record<
 /** 문항 하나가 허용하는 답변 값의 형태를 문항 스펙에서 조립한다. */
 function buildValueSchema(question: QuestionSpec): z.ZodType {
   const base = VALUE_SCHEMA_BUILDERS[question.formType](question);
-  return question.requiredStatus ? base : base.optional();
+  // 조건부 문항은 보이는지 여부가 부모 답변에 달려 있어 여기서는 생략을 허용하고,
+  // 필수 여부는 `buildAnswerSchema`의 `superRefine`이 부모 답변을 보고 판정한다.
+  return question.requiredStatus &&
+    question.otherJson?.conditional === undefined
+    ? base
+    : base.optional();
+}
+
+/** 부모 문항의 답변이 `triggerValue(s)` 중 하나이면(다중 선택은 하나라도 포함하면) 보이는 것이다. */
+function matchesTrigger(parentAnswer: unknown, triggerValues: string[]) {
+  if (typeof parentAnswer === 'string') {
+    return triggerValues.includes(parentAnswer);
+  }
+
+  return (
+    Array.isArray(parentAnswer) &&
+    parentAnswer.some(
+      (value) => typeof value === 'string' && triggerValues.includes(value),
+    )
+  );
 }
 
 /**
@@ -98,6 +121,13 @@ function buildValueSchema(question: QuestionSpec): z.ZodType {
  *
  * `.strict()`로 스펙에 없는 문항 id가 섞여 들어오면 거부한다 — 알 수 없는 키를 조용히
  * 버리지 않는다.
+ *
+ * 조건부 문항(`otherJson.conditional`)은 부모 문항(`questions[parentIndex]`, 즉 문항 id 오름차순
+ * 위치) 답변이 trigger 값에 해당할 때만 보인다. 보이는데 필수인 문항이 비어 있으면 거부하고,
+ * 숨겨진 문항에 값이 와도 거부하지 않고 무시한다(값 자체의 형태 검증은 그대로 받는다) — 클라이언트는
+ * 숨겨진 문항의 옛 값을 상태에 남겨 두므로, 연쇄 조건(Q1→Q2→Q3)에서 Q1을 바꿔 Q2만 빠지고 Q3의 옛 값이
+ * 함께 오는 제출이 있을 수 있고, 이를 거부하면 이전에 통과하던 제출이 실패한다.
+ * 부모를 찾을 수 없으면(스펙 오류) 보이는 것으로 보고 기존처럼 필수 여부만 따른다.
  */
 export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
   const shape = Object.fromEntries(
@@ -107,5 +137,34 @@ export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
     ]),
   );
 
-  return z.object(shape).strict();
+  return z
+    .object(shape)
+    .strict()
+    .superRefine((answers, context) => {
+      for (const question of questions) {
+        const conditional = question.otherJson?.conditional;
+        if (conditional === undefined) {
+          continue;
+        }
+
+        const parent = questions[conditional.parentIndex];
+        const visible =
+          parent === undefined ||
+          matchesTrigger(
+            (answers as Record<string, unknown>)[String(parent.id)],
+            triggerValuesOf(conditional),
+          );
+        const answered =
+          (answers as Record<string, unknown>)[String(question.id)] !==
+          undefined;
+
+        if (!answered && visible && question.requiredStatus) {
+          context.addIssue({
+            code: 'custom',
+            path: [String(question.id)],
+            message: '필수 문항입니다.',
+          });
+        }
+      }
+    });
 }

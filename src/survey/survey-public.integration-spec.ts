@@ -184,15 +184,22 @@ describe.skipIf(adminUrl === undefined)(
       expect(responses).toEqual([{ won: true }, { won: true }]);
     });
 
-    it('번호 없는 응답은 기존처럼 각각 당첨될 수 있다', async () => {
+    it('번호 없는 응답은 당첨되지 않고 순번도 소비하지 않는다', async () => {
       const survey = await seed();
 
       const responses = await Promise.all([
         submit(survey.expoId),
         submit(survey.expoId),
       ]);
+      const withPhone = await submit(survey.expoId, '01012345678');
 
-      expect(responses).toEqual([{ won: true }, { won: true }]);
+      expect(responses).toEqual([{ won: false }, { won: false }]);
+      expect(withPhone).toEqual({ won: true });
+      expect(
+        await dataSource.getRepository(SurveyEntity).findOneByOrFail({
+          id: survey.id,
+        }),
+      ).toMatchObject({ lotterySequence: 1, totalAnswers: 3 });
     });
 
     it('추첨이 꺼져 있으면 당첨되지 않고 순번도 소비하지 않는다', async () => {

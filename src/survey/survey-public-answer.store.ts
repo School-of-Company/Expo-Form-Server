@@ -37,8 +37,8 @@ export class SurveyPublicAnswerStore {
    * 설문 행을 먼저 잠근다 — 같은 설문의 순번이 겹치지 않게 줄 세우는 자리이고, 응답 INSERT보다 앞에 둬야
    * FK 검사의 공유 잠금과 맞물려 교착이 나지 않는다.
    *
-   * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고 번호 없이도 추첨한다.
-   * 같은 설문에서 이미 당첨된 번호는 다시 당첨시키지 않는다.
+   * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고 추첨 대상에서 뺀다 —
+   * 순번도 소비하지 않고 당첨되지 않는다(#169). 같은 설문에서 이미 당첨된 번호는 다시 당첨시키지 않는다.
    *
    * @throws {SurveyNotFoundException} 설문 행을 잠그는 순간 설문이 이미 지워졌을 때
    */
@@ -65,7 +65,8 @@ export class SurveyPublicAnswerStore {
         1,
       );
 
-      return lottery.lottery_enabled
+      // 번호 없는 응답은 추첨에 넣지 않는다(#169). 같은 사람의 반복 당첨을 막을 기준이 없다.
+      return lotteryPhoneNumber !== null && lottery.lottery_enabled
         ? this.draw(manager, surveyId, lotteryPhoneNumber, lottery)
         : NOT_WON;
     });
@@ -87,15 +88,14 @@ export class SurveyPublicAnswerStore {
   }
 
   /**
-   * 이 응답에 순번을 매기고 당첨 번호 목록에 있는지 본다. 응답자는 전화번호와 상관없이 모두 센다.
+   * 이 응답에 순번을 매기고 당첨 번호 목록에 있는지 본다. 전화번호를 입력한 응답만 센다.
    *
-   * 당첨이면 기록을 같은 트랜잭션에 남긴다. 번호를 입력했다면 그 번호로 문자를 보내도록 발행 대기 상태로
-   * 남고, 입력하지 않았으면 문자 없이 기록만 남는다 — 응답 화면에는 번호와 상관없이 당첨이 나간다.
+   * 당첨이면 그 번호로 문자를 보내도록 발행 대기 상태의 기록을 같은 트랜잭션에 남긴다.
    */
   private async draw(
     manager: EntityManager,
     surveyId: string,
-    phoneNumber: string | null,
+    phoneNumber: string,
     lottery: LotteryRow,
   ): Promise<DrawOutcome> {
     const sequence = lottery.lottery_sequence + 1;
@@ -110,11 +110,7 @@ export class SurveyPublicAnswerStore {
 
     // 설문 행 락을 쥔 채 검사하고 저장하므로 동시 제출도 이전 당첨을 확인한다. 순번은 모두 소비한다.
     if (
-      phoneNumber !== null &&
-      (await manager.existsBy(SurveyDrawResultEntity, {
-        surveyId,
-        phoneNumber,
-      }))
+      await manager.existsBy(SurveyDrawResultEntity, { surveyId, phoneNumber })
     ) {
       return NOT_WON;
     }
