@@ -295,7 +295,7 @@ describe('SurveyService', () => {
       ).rejects.toThrow(SurveyNotFoundException);
     });
 
-    it('문항 스펙과 누적 응답 수를 담아서 응답으로 변환한다', async () => {
+    it('문항 스펙을 담고 누적 응답 수는 싣지 않는다', async () => {
       surveyStore.findByExpoAndType.mockResolvedValue({
         ...createDto,
         id: 'survey-1',
@@ -309,11 +309,30 @@ describe('SurveyService', () => {
       });
 
       expect(result.id).toBe('survey-1');
-      expect(result.totalAnswers).toBe(7);
+      // 인증 없이 열린 경로라 당첨 시점을 알려 주는 누적 응답 수를 싣지 않는다(#169).
+      expect(result).not.toHaveProperty('totalAnswers');
       expect(result.dynamicSurveyResponseDto[0].jsonData).toEqual({
         '1': '만족',
         '2': '불만족',
       });
+    });
+  });
+
+  describe('countAnswers', () => {
+    it('설문이 없으면 예외를 던진다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(null);
+
+      await expect(
+        service.countAnswers(expoId, { type: createDto.participationType }),
+      ).rejects.toThrow(SurveyNotFoundException);
+    });
+
+    it('누적 응답 수만 돌려준다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+
+      await expect(
+        service.countAnswers(expoId, { type: createDto.participationType }),
+      ).resolves.toEqual({ totalAnswers: 7 });
     });
   });
 

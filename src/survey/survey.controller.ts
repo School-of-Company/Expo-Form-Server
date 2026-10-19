@@ -25,6 +25,7 @@ import { AdminChangeNotify } from '../common/notification/admin-change-notify.js
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { CreateSurveyResponseDto } from './dto/create-survey.response.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
+import { SurveyAnswerCountResponseDto } from './dto/survey-answer-count.response.dto.js';
 import { SurveyResponseDto } from './dto/survey.response.dto.js';
 import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
 import { SurveyService } from './survey.service.js';
@@ -75,6 +76,25 @@ export class SurveyController {
     @Query() dto: FindSurveyRequestDto,
   ): Promise<SurveyResponseDto> {
     return this.surveyService.findOne(expoId, dto);
+  }
+
+  /**
+   * 설문의 누적 응답 수를 조회한다. 공개 제출 순번과 같이 늘어 당첨 시점을 알려 주므로 인증 없이 열린 설문
+   * 조회에서 떼어 냈다. 게이트웨이 `publicPaths`에 없어 로그인이 필요하다(#169).
+   */
+  @ApiOperation({
+    summary: '설문 누적 응답 수 조회',
+    description:
+      '(박람회, 참여자군) 설문에 쌓인 응답 수를 조회한다. 관리자 화면이 수정 전에 응답이 있는지 확인할 때 쓴다.',
+  })
+  @ApiOkResponse({ type: SurveyAnswerCountResponseDto })
+  @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
+  @Get(':expoId/answer-count')
+  async countAnswers(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Query() dto: FindSurveyRequestDto,
+  ): Promise<SurveyAnswerCountResponseDto> {
+    return this.surveyService.countAnswers(expoId, dto);
   }
 
   /**
