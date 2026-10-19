@@ -1,7 +1,11 @@
 import type { ArgumentsHost } from '@nestjs/common';
 import { DicoshotExceptionFilter } from 'dicoshot-nest';
 import { describe, expect, it, vi } from 'vitest';
-import { ExternalServiceUnavailableException } from '../exceptions/domain.exception.js';
+import {
+  ExternalServiceUnavailableException,
+  FormNotFoundException,
+  ProgramFormReservationUnavailableException,
+} from '../exceptions/domain.exception.js';
 import { dicoshotFilterOptions } from './dicoshot-filter.options.js';
 
 /** 실제 Dicoshot 필터에 우리 설정을 넣어 무엇이 Discord로 나가는지 본다. */
@@ -58,5 +62,28 @@ describe('dicoshotFilterOptions', () => {
     const sent = JSON.stringify(sendTo.mock.calls[0]);
     expect(sent).not.toContain('01012345678');
     expect(sent).not.toContain('비밀 답변');
+  });
+});
+
+describe('dicoshotFilterOptions.ignoreErrors', () => {
+  const isIgnored = (error: Error) =>
+    dicoshotFilterOptions.ignoreErrors?.some((cls) => error instanceof cls) ??
+    false;
+
+  it.each([
+    [
+      'ExternalServiceUnavailableException',
+      new ExternalServiceUnavailableException(),
+    ],
+    [
+      'ProgramFormReservationUnavailableException',
+      new ProgramFormReservationUnavailableException(),
+    ],
+  ])('의존 서비스 장애 예외 %s는 알림에서 제외한다', (_name, error) => {
+    expect(isIgnored(error)).toBe(true);
+  });
+
+  it('의존 서비스 장애가 아닌 도메인 예외는 제외하지 않는다', () => {
+    expect(isIgnored(new FormNotFoundException())).toBe(false);
   });
 });
