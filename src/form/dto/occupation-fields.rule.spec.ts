@@ -102,6 +102,22 @@ describe('직업·소속 학교 필드 검증', () => {
     expect(errorsOf(formWith([nameField, occupationField]))).toEqual([]);
   });
 
+  it('교직원(SCHOOL_STAFF) 키를 생략한 8개 키 직업 필드도 받는다', () => {
+    const withoutStaff = {
+      ...occupationField,
+      jsonData: Object.fromEntries(
+        Object.entries(occupationField.jsonData).filter(
+          ([key]) => key !== 'SCHOOL_STAFF',
+        ),
+      ),
+    };
+
+    expect(Object.keys(withoutStaff.jsonData)).toHaveLength(8);
+    expect(errorsOf(formWith([nameField, withoutStaff, schoolField]))).toEqual(
+      [],
+    );
+  });
+
   it('교원연수자 폼에서는 직업 필드를 쓸 수 없다', () => {
     expect(
       errorsOf(
@@ -125,7 +141,7 @@ describe('직업·소속 학교 필드 검증', () => {
       { ...occupationField, jsonData: { 1: '교사', 2: '학생', 3: '일반' } },
     ],
     [
-      '직업 값이 빠지면',
+      '필수 직업 값이 빠지면',
       {
         ...occupationField,
         // 교사만 빼고 나머지는 다 있는 경우
@@ -137,12 +153,19 @@ describe('직업·소속 학교 필드 검증', () => {
       },
     ],
     [
+      '알 수 없는 키가 있으면',
+      {
+        ...occupationField,
+        jsonData: { ...occupationField.jsonData, unknown: '알 수 없음' },
+      },
+    ],
+    [
       '드롭다운이 아니면',
       { ...occupationField, formType: DynamicFormFieldType.MULTIPLE },
     ],
   ])('직업 필드는 %s 거부한다', (_label, field) => {
     expect(errorsOf(formWith([nameField, field])).join('\n')).toContain(
-      '직업 필드는 선택지 키가 KINDERGARTEN_STUDENT, ELEMENTARY_STUDENT, MIDDLE_SCHOOL_STUDENT, HIGH_SCHOOL_STUDENT, SCHOOL_STAFF, PARENT, GENERAL, TEACHER, PRE_SERVICE_TEACHER인 드롭다운이어야 합니다.',
+      '직업 필드는 선택지 키가 KINDERGARTEN_STUDENT, ELEMENTARY_STUDENT, MIDDLE_SCHOOL_STUDENT, HIGH_SCHOOL_STUDENT, PARENT, GENERAL, TEACHER, PRE_SERVICE_TEACHER(교직원 SCHOOL_STAFF은 생략 가능)인 드롭다운이어야 합니다.',
     );
   });
 
