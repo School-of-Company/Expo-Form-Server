@@ -46,6 +46,8 @@ export const createFormFieldsSchema = z.object({
   applicationType: z.enum(ApplicationType),
   startDate: dateTimeRequestSchema(),
   endDate: dateTimeRequestSchema(),
+  // 생략하면 생성은 null, 수정은 기존 값 유지. null을 보내면 해제한다.
+  occupationOpenAt: dateTimeRequestSchema().nullable().optional(),
   dynamicForm: z.array(dynamicFormFieldSchema),
 });
 
@@ -59,8 +61,33 @@ export const PERIOD_ERROR = {
   path: ['endDate'],
 };
 
+/** 직업별 오픈 시각이 있으면 접수 기간 안(양 끝 제외)에 있어야 한다. 수정에서 생략한 기존 값 검사에도 쓴다. */
+export const isOccupationOpenAtInPeriod = (
+  period: { startDate: Date; endDate: Date },
+  occupationOpenAt: Date | null | undefined,
+): boolean =>
+  occupationOpenAt === null ||
+  occupationOpenAt === undefined ||
+  (period.startDate < occupationOpenAt && occupationOpenAt < period.endDate);
+
+export const OCCUPATION_OPEN_AT_ERROR = {
+  message: '교원·예비교사 외 오픈 시각은 접수 시작일과 종료일 사이여야 합니다.',
+  path: ['occupationOpenAt'],
+};
+
+export const withValidOccupationOpenAt = <
+  T extends {
+    startDate: Date;
+    endDate: Date;
+    occupationOpenAt?: Date | null;
+  },
+>(
+  value: T,
+): boolean => isOccupationOpenAtInPeriod(value, value.occupationOpenAt);
+
 export const createFormSchema = createFormFieldsSchema
   .refine(withValidPeriod, PERIOD_ERROR)
+  .refine(withValidOccupationOpenAt, OCCUPATION_OPEN_AT_ERROR)
   .superRefine(checkNameField)
   .superRefine(checkOccupationFields)
   .superRefine(checkCompanionField)

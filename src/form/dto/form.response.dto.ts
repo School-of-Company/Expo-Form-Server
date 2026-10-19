@@ -23,6 +23,7 @@ export const formResponseSchema = z.object({
   applicationType: z.enum(ApplicationType),
   startDate: dateTimeResponseSchema(),
   endDate: dateTimeResponseSchema(),
+  occupationOpenAt: dateTimeResponseSchema().nullable(),
   dynamicForm: z.array(
     z.object({
       id: z.number().int(),
