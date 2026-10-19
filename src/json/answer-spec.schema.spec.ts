@@ -245,4 +245,113 @@ describe('buildAnswerSchema', () => {
       expect(schema.safeParse({}).success).toBe(true);
     });
   });
+
+  describe('조건부 문항(conditional)', () => {
+    const roleQuestion = {
+      id: 10,
+      formType: DynamicFormFieldType.DROPDOWN,
+      requiredStatus: true,
+      jsonData: { '1': '교사', '2': '학생' },
+      otherJson: null,
+    } satisfies QuestionSpec;
+    // questions[0]이 부모이고 '1'(교사)일 때만 보이는 필수 문항.
+    const schoolQuestion = {
+      id: 11,
+      formType: DynamicFormFieldType.SENTENCE,
+      requiredStatus: true,
+      jsonData: {},
+      otherJson: {
+        hasEtc: false,
+        conditional: { parentIndex: 0, triggerValue: '1' },
+      },
+    } satisfies QuestionSpec;
+    const schema = buildAnswerSchema([roleQuestion, schoolQuestion]);
+
+    it('부모 답변이 trigger가 아니면 숨겨진 필수 문항을 빼도 받는다', () => {
+      expect(schema.parse({ '10': '2' })).toEqual({ '10': '2' });
+    });
+
+    it('부모 답변이 trigger이면 필수 문항이 비었을 때 거부한다', () => {
+      expect(schema.safeParse({ '10': '1' }).success).toBe(false);
+    });
+
+    it('부모 답변이 trigger이면 값을 받는다', () => {
+      expect(schema.parse({ '10': '1', '11': '서울고' })).toEqual({
+        '10': '1',
+        '11': '서울고',
+      });
+    });
+
+    it('숨겨진 문항에 값이 와도 거부하지 않는다', () => {
+      expect(schema.safeParse({ '10': '2', '11': '서울고' }).success).toBe(
+        true,
+      );
+    });
+
+    it('숨겨진 문항의 값도 형태가 틀리면 거부한다', () => {
+      expect(schema.safeParse({ '10': '2', '11': '' }).success).toBe(false);
+    });
+
+    it('연쇄 조건에서 중간 문항이 빠지고 끝 문항 값이 와도 받는다', () => {
+      // Q1=A(1)이면 Q2, Q2=X(1)이면 Q3. Q1을 B로 바꿔 Q2는 빠졌지만 Q3의 옛 값이 온다.
+      const chained = buildAnswerSchema([
+        { ...roleQuestion, id: 30 },
+        {
+          ...roleQuestion,
+          id: 31,
+          otherJson: {
+            hasEtc: false,
+            conditional: { parentIndex: 0, triggerValue: '1' },
+          },
+        },
+        {
+          ...schoolQuestion,
+          id: 32,
+          otherJson: {
+            hasEtc: false,
+            conditional: { parentIndex: 1, triggerValue: '1' },
+          },
+        },
+      ]);
+
+      expect(chained.safeParse({ '30': '2', '32': '서울고' }).success).toBe(
+        true,
+      );
+    });
+
+    it('부모 답변이 없어도 숨겨진 것으로 본다', () => {
+      const optionalParent = buildAnswerSchema([
+        { ...roleQuestion, requiredStatus: false },
+        schoolQuestion,
+      ]);
+
+      expect(optionalParent.parse({})).toEqual({});
+    });
+
+    it('triggerValues 중 하나이거나 다중 선택에 포함되면 보인다', () => {
+      const multi = buildAnswerSchema([
+        { ...boundedMultipleQuestion, id: 20 },
+        {
+          ...schoolQuestion,
+          id: 21,
+          otherJson: {
+            hasEtc: false,
+            conditional: { parentIndex: 0, triggerValues: ['2', '3'] },
+          },
+        },
+      ]);
+
+      expect(multi.safeParse({ '20': ['1', '3'] }).success).toBe(false);
+      expect(multi.safeParse({ '20': ['1'] }).success).toBe(true);
+    });
+
+    it('선택 문항은 보여도 생략할 수 있다', () => {
+      const optional = buildAnswerSchema([
+        roleQuestion,
+        { ...schoolQuestion, requiredStatus: false },
+      ]);
+
+      expect(optional.parse({ '10': '1' })).toEqual({ '10': '1' });
+    });
+  });
 });
