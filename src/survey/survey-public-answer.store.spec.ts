@@ -8,7 +8,7 @@ function setup(lottery: { sequence: number; numbers: number[] }) {
       sql.startsWith('SELECT')
         ? [
             {
-              /* eslint-disable @typescript-eslint/naming-convention */
+              /* eslint-disable @typescript-eslint/naming-convention -- DB 컬럼 이름 그대로 흉내 낸다 */
               lottery_enabled: true,
               lottery_numbers: lottery.numbers,
               lottery_sequence: lottery.sequence,
