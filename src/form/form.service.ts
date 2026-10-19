@@ -5,6 +5,7 @@ import {
   ExpoNotFoundException,
   FormAlreadyExistsException,
   FormNotFoundException,
+  FormOccupationOpenAtOutOfPeriodException,
   FormVersionConflictException,
   ProgramFormProtectionPendingException,
   ProgramFormTitleDuplicatedException,
@@ -14,7 +15,10 @@ import {
   EXPO_CLIENT,
   type ExpoClient,
 } from '../expo-client/expo-client.interface.js';
-import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
+import {
+  CreateFormRequestDto,
+  isOccupationOpenAtInPeriod,
+} from './dto/create-form.request.dto.js';
 import { CreateFormResponseDto } from './dto/create-form.response.dto.js';
 import { FindFormRequestDto } from './dto/find-form.request.dto.js';
 import { FormSummaryDto } from './dto/form-summary.response.dto.js';
@@ -101,10 +105,11 @@ export class FormService {
     // dynamicForm만 엔티티로 변환이 필요하고 나머지 필드는 이름·타입이 그대로라 한 번에 옮긴다.
     // `satisfies`가 빠진 필드를 컴파일 타임에 잡아준다 — 엔티티에 컬럼이 늘면 여기서 먼저 깨진다.
     // DTO의 `participantType`은 엔티티 컬럼 `participationType`으로 이름을 맞춰 옮긴다.
-    const { dynamicForm, participantType, ...meta } = dto;
+    const { dynamicForm, participantType, occupationOpenAt, ...meta } = dto;
     const form = Object.assign(new FormEntity(), {
       ...meta,
       participationType: participantType,
+      occupationOpenAt: occupationOpenAt ?? null,
       purpose: FormPurpose.REGISTRATION,
       expoId,
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
@@ -140,7 +145,10 @@ export class FormService {
    * 그래서 기존 필드의 id는 보존되지 않는다 — 이미 제출된 응답이 옛 필드를 가리키고 있다면
    * 연결이 끊긴다. 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
    *
+   * `occupationOpenAt`을 생략하면 기존 값을 유지하고, null이면 해제한다.
+   *
    * @throws {FormNotFoundException} 해당 조합의 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
+   * @throws {FormOccupationOpenAtOutOfPeriodException} 유지한 오픈 시각이 바뀐 접수 기간을 벗어날 때
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async update(expoId: string, dto: UpdateFormRequestDto): Promise<void> {
@@ -153,10 +161,20 @@ export class FormService {
       throw new FormNotFoundException();
     }
 
-    const { dynamicForm, participantType, ...meta } = dto;
+    const {
+      dynamicForm,
+      participantType,
+      occupationOpenAt = form.occupationOpenAt,
+      ...meta
+    } = dto;
+    if (!isOccupationOpenAtInPeriod(meta, occupationOpenAt)) {
+      throw new FormOccupationOpenAtOutOfPeriodException();
+    }
+
     Object.assign(form, {
       ...meta,
       participationType: participantType,
+      occupationOpenAt,
     } satisfies UpdatableFormFields);
 
     const fields = dynamicForm.map((field) => this.toFieldEntity(field));
@@ -252,6 +270,7 @@ export class FormService {
       participationType: participantType,
       purpose: FormPurpose.PROGRAM,
       applicationType: null,
+      occupationOpenAt: null,
       expoId,
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
@@ -427,6 +446,7 @@ export class FormService {
       applicationType: requireApplicationType(form.applicationType),
       startDate: form.startDate,
       endDate: form.endDate,
+      occupationOpenAt: form.occupationOpenAt,
       dynamicForm: this.toFieldResponses(form),
     };
   }

@@ -44,6 +44,20 @@ export class FormAlreadyExistsException extends DomainException {
 }
 
 /**
+ * 폼 수정에서 `occupationOpenAt`을 생략해 기존 값을 유지하는데, 바뀐 접수 기간이 그 값을 벗어날 때.
+ * 오픈 시각을 함께 보내거나(null이면 해제) 기간을 그 값이 들어가게 잡아야 한다.
+ */
+export class FormOccupationOpenAtOutOfPeriodException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.FORM_OCCUPATION_OPEN_AT_OUT_OF_PERIOD,
+      '기존 교원·예비교사 외 오픈 시각이 접수 기간을 벗어납니다. 오픈 시각을 함께 수정해 주세요.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
+
+/**
  * 프로그램용 폼을 고칠 때 보낸 `expectedVersion`이 현재 버전과 다를 때. 다른 관리자가 먼저 고쳤거나, 폼을
  * 불러온 뒤 정의가 바뀐 것이다. 폼을 다시 읽고 고쳐서 다시 보내야 한다.
  */

@@ -75,6 +75,13 @@ export class FormEntity {
   @Column({ type: 'timestamptz' })
   endDate: Date;
 
+  /**
+   * 교원(`TEACHER`)·예비교사(`PRE_SERVICE_TEACHER`) 외 직업의 사전등록 시작 시각. 그 전에는 교원·예비교사만
+   * 신청할 수 있다(검사는 신청 서비스가 한다). null이면 직업에 따른 제한이 없다. 값이 있으면 접수 기간 안에 있다.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  occupationOpenAt: Date | null;
+
   /** 박람회(expo) 서비스가 소유한 리소스 — 서비스별 DB 분리 원칙에 따라 FK 없이 값으로만 보관한다. */
   @Index()
   @Column({ type: 'uuid' })
