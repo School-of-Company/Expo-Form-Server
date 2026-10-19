@@ -24,7 +24,7 @@ export interface ExpoClient {
    * {@link releaseProgramFormChange}로 풀어야 한다 — 풀지 않으면 그 폼의 연결·변경이 계속 막힌다.
    *
    * @throws {ProgramFormGuardianPolicyInUseException} 박람회 서비스가 거절했을 때(409)
-   * @throws {ExternalServiceUnavailableException} 그 밖의 실패 — 확인 못 하면 수정을 막는다(fail-closed)
+   * @throws {ProgramFormReservationUnavailableException} 그 밖의 실패 — 확인 못 하면 수정을 막는다(fail-closed)
    */
   reserveProgramFormUpdate(formId: string, changeId: string): Promise<void>;
 
