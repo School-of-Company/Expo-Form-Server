@@ -43,6 +43,33 @@ describe('createFormSchema', () => {
     ).toThrow();
   });
 
+  it('occupationOpenAt은 생략·null·기간 안 값을 받는다', () => {
+    expect(createFormSchema.parse(base).occupationOpenAt).toBeUndefined();
+    expect(
+      createFormSchema.parse({ ...base, occupationOpenAt: null })
+        .occupationOpenAt,
+    ).toBeNull();
+    expect(
+      createFormSchema.parse({
+        ...base,
+        occupationOpenAt: '2026-10-26T08:30:00+09:00',
+      }).occupationOpenAt,
+    ).toEqual(new Date('2026-10-25T23:30:00Z'));
+  });
+
+  it.each([
+    ['시작일과 같으면', '2026-01-01T00:00:00Z'],
+    ['종료일과 같으면', '2026-12-31T00:00:00Z'],
+    ['기간 밖이면', '2027-01-01T00:00:00Z'],
+  ])('occupationOpenAt이 %s 거부한다', (_, occupationOpenAt) => {
+    expect(() =>
+      createFormSchema.parse({ ...base, occupationOpenAt }),
+    ).toThrow();
+    expect(() =>
+      updateFormSchema.parse({ ...base, occupationOpenAt }),
+    ).toThrow();
+  });
+
   it('시작일과 종료일이 같아도 거부한다', () => {
     expect(() =>
       createFormSchema.parse({

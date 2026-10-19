@@ -7,6 +7,7 @@ import {
   ExternalServiceUnavailableException,
   FormAlreadyExistsException,
   FormNotFoundException,
+  FormOccupationOpenAtOutOfPeriodException,
 } from '../common/exceptions/domain.exception.js';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
@@ -126,6 +127,20 @@ describe('FormService', () => {
       });
     });
 
+    it('occupationOpenAt을 생략하면 null로, 보내면 그 값으로 저장한다', async () => {
+      formStore.existsByExpoAndTypes.mockResolvedValue(false);
+      formStore.save.mockResolvedValue({ id: 'form-1' });
+      const openAt = new Date('2026-01-15T00:00:00Z');
+
+      await service.create(expoId, createDto);
+      await service.create(expoId, { ...createDto, occupationOpenAt: openAt });
+
+      const saved = formStore.save.mock.calls.map(
+        ([form]) => (form as FormEntity).occupationOpenAt,
+      );
+      expect(saved).toEqual([null, openAt]);
+    });
+
     it('생성된 폼의 id를 돌려준다', async () => {
       formStore.existsByExpoAndTypes.mockResolvedValue(false);
       formStore.save.mockResolvedValue({ id: 'form-1' });
@@ -193,6 +208,47 @@ describe('FormService', () => {
     });
   });
 
+  describe('update의 occupationOpenAt', () => {
+    const storedOpenAt = new Date('2026-01-15T00:00:00Z');
+    const savedOpenAt = async (dto: CreateFormRequestDto) => {
+      formStore.findByExpoAndTypes.mockResolvedValue({
+        ...existingForm,
+        occupationOpenAt: storedOpenAt,
+      });
+      await service.update(expoId, dto);
+      const [form] = formStore.updateWithFields.mock.calls[0] as [FormEntity];
+      return form.occupationOpenAt;
+    };
+
+    it('생략하면 기존 값을 유지한다', async () => {
+      await expect(savedOpenAt(createDto)).resolves.toEqual(storedOpenAt);
+    });
+
+    it('null을 보내면 해제한다', async () => {
+      await expect(
+        savedOpenAt({ ...createDto, occupationOpenAt: null }),
+      ).resolves.toBeNull();
+    });
+
+    it('값을 보내면 그 값으로 바꾼다', async () => {
+      const openAt = new Date('2026-01-20T00:00:00Z');
+
+      await expect(
+        savedOpenAt({ ...createDto, occupationOpenAt: openAt }),
+      ).resolves.toEqual(openAt);
+    });
+
+    it('생략해 유지한 값이 바뀐 기간을 벗어나면 저장하지 않고 거부한다', async () => {
+      await expect(
+        savedOpenAt({
+          ...createDto,
+          startDate: new Date('2026-01-20T00:00:00Z'),
+        }),
+      ).rejects.toThrow(FormOccupationOpenAtOutOfPeriodException);
+      expect(formStore.updateWithFields).not.toHaveBeenCalled();
+    });
+  });
+
   describe('delete', () => {
     it('폼이 없으면 예외를 던진다', async () => {
       formStore.findByExpoAndTypes.mockResolvedValue(null);
@@ -234,6 +290,7 @@ describe('FormService', () => {
         id: 'form-1',
         expoId,
         participationType: createDto.participantType,
+        occupationOpenAt: null,
         dynamicForms: [{ ...createDto.dynamicForm[0], id: 1 }],
       });
 
@@ -243,6 +300,7 @@ describe('FormService', () => {
       });
 
       expect(result.id).toBe('form-1');
+      expect(result.occupationOpenAt).toBeNull();
       expect(result.dynamicForm[0].jsonData).toEqual({
         '1': '온라인',
         '2': '오프라인',
