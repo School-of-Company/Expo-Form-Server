@@ -124,7 +124,9 @@ function matchesTrigger(parentAnswer: unknown, triggerValues: string[]) {
  *
  * 조건부 문항(`otherJson.conditional`)은 부모 문항(`questions[parentIndex]`, 즉 문항 id 오름차순
  * 위치) 답변이 trigger 값에 해당할 때만 보인다. 보이는데 필수인 문항이 비어 있으면 거부하고,
- * 숨겨진 문항에 값이 오면 클라이언트가 숨긴 문항을 보내지 않는 계약을 어긴 것이므로 거부한다.
+ * 숨겨진 문항에 값이 와도 거부하지 않고 무시한다(값 자체의 형태 검증은 그대로 받는다) — 클라이언트는
+ * 숨겨진 문항의 옛 값을 상태에 남겨 두므로, 연쇄 조건(Q1→Q2→Q3)에서 Q1을 바꿔 Q2만 빠지고 Q3의 옛 값이
+ * 함께 오는 제출이 있을 수 있고, 이를 거부하면 이전에 통과하던 제출이 실패한다.
  * 부모를 찾을 수 없으면(스펙 오류) 보이는 것으로 보고 기존처럼 필수 여부만 따른다.
  */
 export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
@@ -161,12 +163,6 @@ export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
             code: 'custom',
             path: [String(question.id)],
             message: '필수 문항입니다.',
-          });
-        } else if (!visible && answered) {
-          context.addIssue({
-            code: 'custom',
-            path: [String(question.id)],
-            message: '조건에 해당하지 않아 숨겨진 문항에는 답할 수 없습니다.',
           });
         }
       }

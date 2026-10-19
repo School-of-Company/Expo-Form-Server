@@ -282,9 +282,40 @@ describe('buildAnswerSchema', () => {
       });
     });
 
-    it('숨겨진 문항에 값이 오면 거부한다', () => {
+    it('숨겨진 문항에 값이 와도 거부하지 않는다', () => {
       expect(schema.safeParse({ '10': '2', '11': '서울고' }).success).toBe(
-        false,
+        true,
+      );
+    });
+
+    it('숨겨진 문항의 값도 형태가 틀리면 거부한다', () => {
+      expect(schema.safeParse({ '10': '2', '11': '' }).success).toBe(false);
+    });
+
+    it('연쇄 조건에서 중간 문항이 빠지고 끝 문항 값이 와도 받는다', () => {
+      // Q1=A(1)이면 Q2, Q2=X(1)이면 Q3. Q1을 B로 바꿔 Q2는 빠졌지만 Q3의 옛 값이 온다.
+      const chained = buildAnswerSchema([
+        { ...roleQuestion, id: 30 },
+        {
+          ...roleQuestion,
+          id: 31,
+          otherJson: {
+            hasEtc: false,
+            conditional: { parentIndex: 0, triggerValue: '1' },
+          },
+        },
+        {
+          ...schoolQuestion,
+          id: 32,
+          otherJson: {
+            hasEtc: false,
+            conditional: { parentIndex: 1, triggerValue: '1' },
+          },
+        },
+      ]);
+
+      expect(chained.safeParse({ '30': '2', '32': '서울고' }).success).toBe(
+        true,
       );
     });
 
