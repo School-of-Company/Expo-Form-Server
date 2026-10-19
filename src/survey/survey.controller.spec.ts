@@ -7,6 +7,7 @@ describe('SurveyController', () => {
   let surveyService: {
     create: Mock;
     findOne: Mock;
+    countAnswers: Mock;
     update: Mock;
     delete: Mock;
   };
@@ -16,6 +17,7 @@ describe('SurveyController', () => {
     surveyService = {
       create: vi.fn(),
       findOne: vi.fn(),
+      countAnswers: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
     };
@@ -30,6 +32,14 @@ describe('SurveyController', () => {
     await controller.findOne('expo-1', query);
 
     expect(surveyService.findOne).toHaveBeenCalledWith('expo-1', query);
+  });
+
+  it('누적 응답 수 조회 요청에 경로의 expoId와 쿼리 DTO를 함께 넘긴다', async () => {
+    const query = { type: ParticipationType.STANDARD };
+
+    await controller.countAnswers('expo-1', query);
+
+    expect(surveyService.countAnswers).toHaveBeenCalledWith('expo-1', query);
   });
 
   it('수정 요청에 경로의 expoId와 바디를 함께 넘긴다', async () => {
