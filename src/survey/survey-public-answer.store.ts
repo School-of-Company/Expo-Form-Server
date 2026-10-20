@@ -7,7 +7,6 @@ import {
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyNotFoundException } from '../common/exceptions/domain.exception.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
-import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
 /** 경품 설정을 잠그고 읽은 한 줄. 컬럼 이름 그대로 돌려받는다. */
@@ -38,7 +37,7 @@ export class SurveyPublicAnswerStore {
    * FK 검사의 공유 잠금과 맞물려 교착이 나지 않는다.
    *
    * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고 추첨 대상에서 뺀다 —
-   * 순번도 소비하지 않고 당첨되지 않는다(#169). 같은 설문에서 이미 당첨된 번호는 다시 당첨시키지 않는다.
+   * 순번도 소비하지 않고 당첨되지 않는다(#169). 같은 설문에서 이미 추첨에 참여한 번호도 순번을 소비하지 않는다(#182).
    *
    * @throws {SurveyNotFoundException} 설문 행을 잠그는 순간 설문이 이미 지워졌을 때
    */
@@ -88,7 +87,9 @@ export class SurveyPublicAnswerStore {
   }
 
   /**
-   * 이 응답에 순번을 매기고 당첨 번호 목록에 있는지 본다. 전화번호를 입력한 응답만 센다.
+   * 이 응답에 순번을 매기고 당첨 번호 목록에 있는지 본다. 설문마다 번호별로 한 번만 센다(#182) — 이미 참여한
+   * 번호면 순번을 소비하지 않고 당첨되지 않는다. 설문 행 락 아래에서 참여 기록을 남기므로 같은 번호의 동시
+   * 제출도 하나만 순번을 받는다.
    *
    * 당첨이면 그 번호로 문자를 보내도록 발행 대기 상태의 기록을 같은 트랜잭션에 남긴다.
    */
@@ -98,6 +99,14 @@ export class SurveyPublicAnswerStore {
     phoneNumber: string,
     lottery: LotteryRow,
   ): Promise<DrawOutcome> {
+    const joined = await manager.query<unknown[]>(
+      `INSERT INTO survey_lottery_participant (survey_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING survey_id`,
+      [surveyId, phoneNumber],
+    );
+    if (joined.length === 0) {
+      return NOT_WON;
+    }
+
     const sequence = lottery.lottery_sequence + 1;
     await manager.query(
       `UPDATE survey SET lottery_sequence = $2 WHERE id = $1`,
@@ -105,13 +114,6 @@ export class SurveyPublicAnswerStore {
     );
 
     if (!lottery.lottery_numbers.includes(sequence)) {
-      return NOT_WON;
-    }
-
-    // 설문 행 락을 쥔 채 검사하고 저장하므로 동시 제출도 이전 당첨을 확인한다. 순번은 모두 소비한다.
-    if (
-      await manager.existsBy(SurveyDrawResultEntity, { surveyId, phoneNumber })
-    ) {
       return NOT_WON;
     }
 
