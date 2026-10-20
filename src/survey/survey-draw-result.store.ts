@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 
 /** {@link SurveyDrawResultStore.relayUnpublished}에서 발행에 실패한 건. */
 export type DrawRelayFailure = {
@@ -83,43 +84,54 @@ export class SurveyDrawResultStore {
     });
   }
 
-  /** 아직 전화번호가 남아 있는 당첨 결과가 있는 박람회 id 목록. 정리 대상 박람회를 고를 때 쓴다. */
+  /**
+   * 아직 전화번호가 남아 있는 박람회 id 목록 — 당첨 결과의 번호나 추첨 참여 번호가 있는 곳. 정리 대상 박람회를
+   * 고를 때 쓴다.
+   */
   async findExpoIdsWithPhoneNumbers(): Promise<string[]> {
-    const rows = await this.drawResults
-      .createQueryBuilder('result')
-      .innerJoin(SurveyEntity, 'survey', 'survey.id = result.surveyId')
-      .select('survey.expoId', 'expoId')
-      .where('result.phoneNumber IS NOT NULL')
-      .distinct(true)
-      .getRawMany<{ expoId: string }>();
+    const rows = await this.drawResults.query<Array<{ expoId: string }>>(
+      `SELECT DISTINCT s.expo_id AS "expoId" FROM survey s
+       WHERE EXISTS (SELECT 1 FROM survey_draw_result r WHERE r.survey_id = s.id AND r.phone_number IS NOT NULL)
+          OR EXISTS (SELECT 1 FROM survey_lottery_participant p WHERE p.survey_id = s.id)`,
+    );
 
     return rows.map((row) => row.expoId);
   }
 
   /**
-   * 박람회의 당첨 결과에서 전화번호만 지운다. 당첨 순번과 발행 기록은 남는다.
+   * 박람회의 전화번호를 지운다. 당첨 결과에서는 번호만 지워 당첨 순번과 발행 기록을 남기고, 추첨 참여 기록은
+   * 번호뿐이라 행을 지운다.
    *
-   * @returns 번호를 지운 건수
+   * @returns 지운 번호 건수(당첨 결과 + 참여 기록)
    */
   async clearPhoneNumbers(expoId: string): Promise<number> {
-    // 서브쿼리를 문자열로 직접 쓰면 `survey`가 이 엔티티의 관계 속성 이름과 같아 TypeORM이 컬럼명으로 바꿔 버린다.
-    // 엔티티로 만든 서브쿼리를 쓰면 테이블 이름이 정확히 나간다.
-    const surveyIds = this.drawResults.manager
-      .createQueryBuilder()
-      .select('survey.id')
-      .from(SurveyEntity, 'survey')
-      .where('survey.expoId = :expoId')
-      .getQuery();
+    return this.dataSource.transaction(async (manager) => {
+      // 서브쿼리를 문자열로 직접 쓰면 `survey`가 이 엔티티의 관계 속성 이름과 같아 TypeORM이 컬럼명으로 바꿔 버린다.
+      // 엔티티로 만든 서브쿼리를 쓰면 테이블 이름이 정확히 나간다.
+      const surveyIds = manager
+        .createQueryBuilder()
+        .select('survey.id')
+        .from(SurveyEntity, 'survey')
+        .where('survey.expoId = :expoId')
+        .getQuery();
 
-    const result = await this.drawResults
-      .createQueryBuilder()
-      .update(SurveyDrawResultEntity)
-      .set({ phoneNumber: null })
-      .where('phone_number IS NOT NULL')
-      .andWhere(`survey_id IN (${surveyIds})`)
-      .setParameter('expoId', expoId)
-      .execute();
+      const cleared = await manager
+        .createQueryBuilder()
+        .update(SurveyDrawResultEntity)
+        .set({ phoneNumber: null })
+        .where('phone_number IS NOT NULL')
+        .andWhere(`survey_id IN (${surveyIds})`)
+        .setParameter('expoId', expoId)
+        .execute();
+      const deleted = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(SurveyLotteryParticipantEntity)
+        .where(`survey_id IN (${surveyIds})`)
+        .setParameter('expoId', expoId)
+        .execute();
 
-    return result.affected ?? 0;
+      return (cleared.affected ?? 0) + (deleted.affected ?? 0);
+    });
   }
 }

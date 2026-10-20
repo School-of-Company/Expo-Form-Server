@@ -7,8 +7,6 @@ import {
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyNotFoundException } from '../common/exceptions/domain.exception.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
-import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
-import { SurveyEntity } from './entities/survey.entity.js';
 
 /** 경품 설정을 잠그고 읽은 한 줄. 컬럼 이름 그대로 돌려받는다. */
 type LotteryRow = {
@@ -29,8 +27,8 @@ export class SurveyPublicAnswerStore {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * 응답을 저장하고 설문의 누적 응답 수를 늘린다. 경품 추첨이 켜져 있으면 같은 트랜잭션에서 이 응답의
-   * 순번을 매겨 당첨인지 정한다({@link draw}).
+   * 응답을 저장하고 설문의 누적 응답 수를 늘린다(순번과 같은 UPDATE 한 번, #137). 경품 추첨이 켜져 있으면 같은 트랜잭션에서 이 응답의
+   * 순번을 매겨 당첨인지 정한다.
    *
    * 응답자를 식별하지 않아 같은 응답자의 중복을 막지 않는다.
    *
@@ -38,7 +36,7 @@ export class SurveyPublicAnswerStore {
    * FK 검사의 공유 잠금과 맞물려 교착이 나지 않는다.
    *
    * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고 추첨 대상에서 뺀다 —
-   * 순번도 소비하지 않고 당첨되지 않는다(#169). 같은 설문에서 이미 당첨된 번호는 다시 당첨시키지 않는다.
+   * 순번도 소비하지 않고 당첨되지 않는다(#169). 같은 설문에서 이미 추첨에 참여한 번호도 순번을 소비하지 않는다(#182).
    *
    * @throws {SurveyNotFoundException} 설문 행을 잠그는 순간 설문이 이미 지워졌을 때
    */
@@ -58,16 +56,25 @@ export class SurveyPublicAnswerStore {
         answers: answers as QueryDeepPartialEntity<Record<string, unknown>>,
         occupation,
       });
-      await manager.increment(
-        SurveyEntity,
-        { id: surveyId },
-        'totalAnswers',
-        1,
-      );
 
       // 번호 없는 응답은 추첨에 넣지 않는다(#169). 같은 사람의 반복 당첨을 막을 기준이 없다.
-      return lotteryPhoneNumber !== null && lottery.lottery_enabled
-        ? this.draw(manager, surveyId, lotteryPhoneNumber, lottery)
+      const joined =
+        lotteryPhoneNumber !== null && lottery.lottery_enabled
+          ? await this.joinLottery(manager, surveyId, lotteryPhoneNumber)
+          : false;
+
+      // 설문 행 UPDATE는 한 번이다(#137). 응답 수는 늘 1 늘고, 순번은 참여가 새로 인정된 응답만 소비한다.
+      await manager.query(
+        `UPDATE survey SET total_answers = total_answers + 1, lottery_sequence = lottery_sequence + $2 WHERE id = $1`,
+        [surveyId, joined ? 1 : 0],
+      );
+      // 행을 잠근 채 읽었으므로 이 값 + 1이 방금 UPDATE가 매긴 순번이다.
+      const sequence = lottery.lottery_sequence + 1;
+
+      return joined &&
+        lotteryPhoneNumber !== null &&
+        lottery.lottery_numbers.includes(sequence)
+        ? this.recordWin(manager, surveyId, lotteryPhoneNumber, sequence)
         : NOT_WON;
     });
   }
@@ -88,33 +95,31 @@ export class SurveyPublicAnswerStore {
   }
 
   /**
-   * 이 응답에 순번을 매기고 당첨 번호 목록에 있는지 본다. 전화번호를 입력한 응답만 센다.
-   *
-   * 당첨이면 그 번호로 문자를 보내도록 발행 대기 상태의 기록을 같은 트랜잭션에 남긴다.
+   * 이 번호를 설문의 추첨 참여로 기록한다. 설문마다 번호별로 한 번만 센다(#182) — 이미 참여한 번호면 `false`라
+   * 순번을 소비하지 않고 당첨되지 않는다. 설문 행 락 아래에서 기록하므로 같은 번호의 동시 제출도 하나만 `true`다.
    */
-  private async draw(
+  private async joinLottery(
     manager: EntityManager,
     surveyId: string,
     phoneNumber: string,
-    lottery: LotteryRow,
-  ): Promise<DrawOutcome> {
-    const sequence = lottery.lottery_sequence + 1;
-    await manager.query(
-      `UPDATE survey SET lottery_sequence = $2 WHERE id = $1`,
-      [surveyId, sequence],
+  ): Promise<boolean> {
+    const joined = await manager.query<unknown[]>(
+      `INSERT INTO survey_lottery_participant (survey_id, phone_number) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING survey_id`,
+      [surveyId, phoneNumber],
     );
 
-    if (!lottery.lottery_numbers.includes(sequence)) {
-      return NOT_WON;
-    }
+    return joined.length > 0;
+  }
 
-    // 설문 행 락을 쥔 채 검사하고 저장하므로 동시 제출도 이전 당첨을 확인한다. 순번은 모두 소비한다.
-    if (
-      await manager.existsBy(SurveyDrawResultEntity, { surveyId, phoneNumber })
-    ) {
-      return NOT_WON;
-    }
-
+  /**
+   * 당첨된 순번이면 그 번호로 문자를 보내도록 발행 대기 상태의 기록을 같은 트랜잭션에 남긴다.
+   */
+  private async recordWin(
+    manager: EntityManager,
+    surveyId: string,
+    phoneNumber: string,
+    sequence: number,
+  ): Promise<DrawOutcome> {
     await manager.query(
       `INSERT INTO survey_draw_result (event_id, survey_id, draw_number, phone_number) VALUES (uuid_generate_v4(), $1, $2, $3) ON CONFLICT (survey_id, draw_number) DO NOTHING`,
       [surveyId, sequence, phoneNumber],

@@ -8,6 +8,7 @@ import { LotteryPhoneRetentionService } from './lottery-phone-retention.service.
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerController } from './survey-answer.controller.js';
@@ -36,6 +37,7 @@ import { SurveyStore } from './survey.store.js';
       SurveyAnswerSubmissionEntity,
       SurveyPublicAnswerEntity,
       SurveyDrawResultEntity,
+      SurveyLotteryParticipantEntity,
     ]),
     DeletedExpoModule,
     ExpoClientModule,

@@ -13,8 +13,10 @@ import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { publicSurveyAnswerResponseSchema } from './dto/public-survey-answer.response.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import { SurveyDrawResultStore } from './survey-draw-result.store.js';
 import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyPublicController } from './survey-public.controller.js';
 import { SurveyPublicService } from './survey-public.service.js';
@@ -49,6 +51,7 @@ describe.skipIf(adminUrl === undefined)(
           DynamicSurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
+          SurveyLotteryParticipantEntity,
         ],
         synchronize: true,
       });
@@ -107,7 +110,7 @@ describe.skipIf(adminUrl === undefined)(
       return publicSurveyAnswerResponseSchema.strict().parse(response.body);
     }
 
-    it('동시에 같은 정규화 번호로 제출해도 한 번만 당첨되고 순번은 노출하지 않는다', async () => {
+    it('동시에 같은 정규화 번호로 제출해도 순번은 하나만 소비하고 한 번만 당첨된다', async () => {
       const survey = await seed();
 
       const responses = await Promise.all([
@@ -134,15 +137,25 @@ describe.skipIf(adminUrl === undefined)(
         await dataSource.getRepository(SurveyEntity).findOneByOrFail({
           id: survey.id,
         }),
-      ).toMatchObject({ lotterySequence: 3, totalAnswers: 3 });
+      ).toMatchObject({ lotterySequence: 1, totalAnswers: 3 });
+      expect(
+        await dataSource.getRepository(SurveyLotteryParticipantEntity).countBy({
+          surveyId: survey.id,
+        }),
+      ).toBe(1);
     });
 
-    it('기존 당첨 번호의 재당첨을 막고 소비한 순번 다음 번호는 당첨된다', async () => {
+    it('이미 당첨된 번호는 다시 제출해도 순번을 소비하지 않고 다음 번호가 다음 순번에 당첨된다', async () => {
       const survey = await seed();
       await dataSource.getRepository(SurveyDrawResultEntity).save({
         eventId: randomUUID(),
         surveyId: survey.id,
         drawNumber: 1,
+        phoneNumber: '01012345678',
+      });
+      // 마이그레이션이 기존 당첨 번호를 참여 번호로 채운 상태
+      await dataSource.getRepository(SurveyLotteryParticipantEntity).save({
+        surveyId: survey.id,
         phoneNumber: '01012345678',
       });
       await dataSource.getRepository(SurveyEntity).update(survey.id, {
@@ -159,17 +172,26 @@ describe.skipIf(adminUrl === undefined)(
           where: { surveyId: survey.id },
           order: { drawNumber: 'ASC' },
         }),
-      ).toMatchObject([{ drawNumber: 1 }, { drawNumber: 3 }]);
+      ).toMatchObject([{ drawNumber: 1 }, { drawNumber: 2 }]);
     });
 
-    it('당첨되지 않은 번호는 다음 당첨 순번에 당첨된다', async () => {
+    it('당첨되지 않은 번호도 다시 제출하면 순번을 소비하지 않고 당첨되지 않는다', async () => {
       const survey = await seed([2]);
 
       const first = await submit(survey.expoId, '01012345678');
       const second = await submit(survey.expoId, '01012345678');
+      const other = await submit(survey.expoId, '01099998888');
 
-      expect(first).toEqual({ won: false });
-      expect(second).toEqual({ won: true });
+      expect([first, second, other]).toEqual([
+        { won: false },
+        { won: false },
+        { won: true },
+      ]);
+      expect(
+        await dataSource.getRepository(SurveyEntity).findOneByOrFail({
+          id: survey.id,
+        }),
+      ).toMatchObject({ lotterySequence: 2, totalAnswers: 3 });
     });
 
     it('같은 번호도 다른 설문에서는 당첨된다', async () => {
@@ -213,6 +235,52 @@ describe.skipIf(adminUrl === undefined)(
           id: survey.id,
         }),
       ).toMatchObject({ lotterySequence: 0, totalAnswers: 1 });
+      expect(
+        await dataSource.getRepository(SurveyLotteryParticipantEntity).countBy({
+          surveyId: survey.id,
+        }),
+      ).toBe(0);
+    });
+
+    it('보관 기간 정리는 당첨 번호와 함께 추첨 참여 번호도 지운다', async () => {
+      const survey = await seed([1]);
+      await submit(survey.expoId, '01012345678');
+      await submit(survey.expoId, '01099998888');
+      const drawStore = new SurveyDrawResultStore(
+        dataSource.getRepository(SurveyDrawResultEntity),
+        dataSource,
+      );
+
+      expect(await drawStore.findExpoIdsWithPhoneNumbers()).toContain(
+        survey.expoId,
+      );
+      expect(await drawStore.clearPhoneNumbers(survey.expoId)).toBe(3);
+      expect(
+        await dataSource.getRepository(SurveyLotteryParticipantEntity).countBy({
+          surveyId: survey.id,
+        }),
+      ).toBe(0);
+      expect(
+        await dataSource.getRepository(SurveyDrawResultEntity).findOneByOrFail({
+          surveyId: survey.id,
+        }),
+      ).toMatchObject({ drawNumber: 1, phoneNumber: null });
+      expect(await drawStore.findExpoIdsWithPhoneNumbers()).not.toContain(
+        survey.expoId,
+      );
+    });
+
+    it('당첨 없이 참여 번호만 남은 박람회도 정리 대상이다', async () => {
+      const survey = await seed([5]);
+      await submit(survey.expoId, '01012345678');
+      const drawStore = new SurveyDrawResultStore(
+        dataSource.getRepository(SurveyDrawResultEntity),
+        dataSource,
+      );
+
+      expect(await drawStore.findExpoIdsWithPhoneNumbers()).toContain(
+        survey.expoId,
+      );
     });
   },
 );

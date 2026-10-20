@@ -155,6 +155,21 @@ export class SurveyAlreadyExistsException extends DomainException {
 }
 
 /**
+ * 응답이 하나라도 있는 설문의 문항을 바꾸려 할 때(#179). 문항은 수정할 때마다 새로 만들어져 id가 바뀌므로,
+ * 열어 둔 화면의 제출이 400이 되고 문항 스냅샷이 없는 공개 답변은 어느 문항의 답인지 알 수 없게 된다. 문항이
+ * 지금과 똑같으면 설문 제목·안내 문구·경품 추첨 설정은 바꿀 수 있다.
+ */
+export class SurveyAlreadyAnsweredException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.SURVEY_ALREADY_ANSWERED,
+      '응답이 있는 설문은 문항을 추가·삭제·수정하거나 순서를 바꿀 수 없습니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/**
  * 제출된 답변이 저장된 문항 스펙과 맞지 않을 때 — 필수 문항 누락, 선택지에 없는 값,
  * `maxSelection` 초과, 스펙에 없는 문항 id 등. `ZodError`를 이 예외로 옮겨 담는다.
  */

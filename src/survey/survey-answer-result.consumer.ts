@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import {
   Inject,
   Injectable,
@@ -51,7 +52,8 @@ export class SurveyAnswerResultConsumer
       fromBeginning: false,
     });
     await this.consumer.run({
-      eachMessage: async ({ message }) => this.handle(message),
+      eachMessage: async ({ topic, partition, message }) =>
+        this.handle(message, `${topic}[${partition}]@${message.offset}`),
     });
   }
 
@@ -59,14 +61,18 @@ export class SurveyAnswerResultConsumer
     await this.consumer.disconnect();
   }
 
-  private async handle(message: KafkaMessage): Promise<void> {
+  private async handle(message: KafkaMessage, origin: string): Promise<void> {
     if (!message.value) {
       return;
     }
 
-    const event = JSON.parse(
-      message.value.toString(),
-    ) as SurveyAnswerResultEvent;
+    // 깨진 메시지가 밖으로 던져지면 kafkajs가 재시도 불가 오류로 보고 이 컨슈머를 멈춘다. 재시도해도
+    // 결과가 같으므로 위치만 남기고 건너뛴다. 본문은 전화번호 등이 섞일 수 있어 남기지 않는다.
+    const event = this.parse(message.value);
+    if (event === undefined) {
+      this.logger.error(`결과 이벤트를 해석할 수 없어 건너뜁니다: ${origin}`);
+      return;
+    }
 
     if (event.status !== 'STORED' && event.status !== 'REJECTED') {
       this.logger.warn(
@@ -75,13 +81,33 @@ export class SurveyAnswerResultConsumer
       return;
     }
 
+    // 여기서부터의 오류(DB 장애 등)는 일시적일 수 있으므로 삼키지 않고 던져 재시도되게 둔다.
     const applied = await this.submissionStore.markFinal(
       event.eventId,
       SurveyAnswerSubmissionStatus[event.status],
-      event.status === 'REJECTED' ? (event.reason ?? null) : null,
+      event.status === 'REJECTED' && typeof event.reason === 'string'
+        ? event.reason
+        : null,
     );
     if (!applied) {
       this.logger.log(`이미 종결된 접수라 결과 무시: eventId=${event.eventId}`);
     }
+  }
+
+  /** JSON 객체이고 `eventId`가 비어 있지 않은 문자열이면 이벤트를, 아니면 `undefined`를 돌려준다. */
+  private parse(value: Buffer): SurveyAnswerResultEvent | undefined {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value.toString());
+    } catch {
+      return undefined;
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) {
+      return undefined;
+    }
+
+    const { eventId } = parsed as { eventId?: unknown };
+    return typeof eventId !== 'string' || eventId === '' ? undefined : (parsed as SurveyAnswerResultEvent);
   }
 }

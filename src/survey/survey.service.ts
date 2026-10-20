@@ -141,10 +141,12 @@ export class SurveyService {
    *
    * 문항은 개별로 수정/추가/삭제하는 게 아니라 **전부 지우고 새로 만든다**(폼과 동일).
    * 그래서 기존 문항의 id는 보존되지 않는다 — 이미 제출된 응답이 옛 문항을 가리키고 있다면
-   * 연결이 끊긴다. 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
+   * 연결이 끊긴다. 그래서 응답이 있는 설문은 문항을 바꿀 수 없고, 문항이 지금과 같으면 다시 만들지
+   * 않아 id가 그대로다(#179). 스펙 버저닝으로 이 문제를 해결하는 건 별도 과제로 남아 있다.
    *
    * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때(수정하는 사이 삭제된 경우 포함)
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
+   * @throws {SurveyAlreadyAnsweredException} 응답이 있는 설문의 문항을 바꾸려 할 때
    */
   async update(expoId: string, dto: UpdateSurveyRequestDto): Promise<void> {
     const survey = await this.surveyStore.findByExpoAndType(
@@ -177,7 +179,7 @@ export class SurveyService {
     }
 
     this.logger.log(
-      `설문 수정 완료: surveyId=${survey.id}, 문항 ${questions.length}개로 교체`,
+      `설문 수정 완료: surveyId=${survey.id}, 문항 ${questions.length}개`,
     );
   }
 

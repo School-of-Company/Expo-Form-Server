@@ -6,7 +6,7 @@ import {
   triggerValuesOf,
 } from '../../json/field-spec.schema.js';
 
-type FormLike = {
+export type FormLike = {
   dynamicForm: Array<{
     title: string;
     formType: DynamicFormFieldType;
@@ -88,7 +88,7 @@ export function checkProgramFormFields(
   }
 }
 
-function checkConditional(
+export function checkConditional(
   form: FormLike,
   field: FormLike['dynamicForm'][number],
   index: number,
