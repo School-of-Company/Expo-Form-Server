@@ -289,7 +289,7 @@ describe('buildAnswerSchema', () => {
     });
 
     it('숨겨진 문항의 값도 형태가 틀리면 거부한다', () => {
-      expect(schema.safeParse({ '10': '2', '11': '' }).success).toBe(false);
+      expect(schema.safeParse({ '10': '2', '11': 123 }).success).toBe(false);
     });
 
     it('연쇄 조건에서 중간 문항이 빠지고 끝 문항 값이 와도 받는다', () => {
@@ -353,5 +353,105 @@ describe('buildAnswerSchema', () => {
 
       expect(optional.parse({ '10': '1' })).toEqual({ '10': '1' });
     });
+  });
+});
+
+describe('buildAnswerSchema 답변 값 규칙', () => {
+  const requiredCheckbox = {
+    ...optionalCheckboxQuestion,
+    id: 5,
+    requiredStatus: true,
+  } satisfies QuestionSpec;
+  const optionalSentence = {
+    ...sentenceQuestion,
+    id: 6,
+    requiredStatus: false,
+  } satisfies QuestionSpec;
+  const optionalDropdown = {
+    ...dropdownQuestion,
+    id: 7,
+    requiredStatus: false,
+  } satisfies QuestionSpec;
+  const optionalMultiple = {
+    ...boundedMultipleQuestion,
+    id: 8,
+    requiredStatus: false,
+  } satisfies QuestionSpec;
+
+  it('필수 체크박스는 true만 받는다', () => {
+    const schema = buildAnswerSchema([requiredCheckbox]);
+
+    expect(schema.safeParse({ '5': true }).success).toBe(true);
+    expect(schema.safeParse({ '5': false }).success).toBe(false);
+    expect(schema.safeParse({}).success).toBe(false);
+  });
+
+  it('선택 체크박스는 false도 받는다', () => {
+    const schema = buildAnswerSchema([optionalCheckboxQuestion]);
+
+    expect(schema.safeParse({ '3': false }).success).toBe(true);
+  });
+
+  it('조건부 필수 체크박스는 보일 때만 true를 요구한다', () => {
+    const conditionalCheckbox = {
+      ...requiredCheckbox,
+      id: 9,
+      otherJson: {
+        hasEtc: false,
+        conditional: { parentIndex: 0, triggerValue: '1' },
+      },
+    } satisfies QuestionSpec;
+    const schema = buildAnswerSchema([dropdownQuestion, conditionalCheckbox]);
+
+    expect(schema.safeParse({ '2': '1', '9': false }).success).toBe(false);
+    expect(schema.safeParse({ '2': '1', '9': true }).success).toBe(true);
+    expect(schema.safeParse({ '2': '2', '9': false }).success).toBe(true);
+  });
+
+  it.each(['', null, []])('선택 문항의 빈 값(%j)은 생략과 같다', (empty) => {
+    const schema = buildAnswerSchema([
+      optionalSentence,
+      optionalDropdown,
+      optionalMultiple,
+    ]);
+    const result = schema.safeParse({ '6': empty, '7': empty, '8': empty });
+
+    expect(result.success).toBe(true);
+    expect(schema.safeParse({}).success).toBe(true);
+  });
+
+  it('필수 문항의 빈 값은 여전히 거부한다', () => {
+    expect(
+      buildAnswerSchema([sentenceQuestion]).safeParse({ '1': '' }).success,
+    ).toBe(false);
+    expect(
+      buildAnswerSchema([sentenceQuestion]).safeParse({ '1': null }).success,
+    ).toBe(false);
+    expect(
+      buildAnswerSchema([boundedMultipleQuestion]).safeParse({ '4': [] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('조건부 필수 문항이 보이는데 빈 값이면 필수 문항 오류다', () => {
+    const conditional = {
+      ...sentenceQuestion,
+      id: 10,
+      otherJson: {
+        hasEtc: false,
+        conditional: { parentIndex: 0, triggerValue: '1' },
+      },
+    } satisfies QuestionSpec;
+    const schema = buildAnswerSchema([dropdownQuestion, conditional]);
+
+    expect(schema.safeParse({ '2': '1', '10': '' }).success).toBe(false);
+    expect(schema.safeParse({ '2': '2', '10': '' }).success).toBe(true);
+  });
+
+  it('다중 선택의 중복 값은 거부한다', () => {
+    const schema = buildAnswerSchema([boundedMultipleQuestion]);
+
+    expect(schema.safeParse({ '4': ['1', '1'] }).success).toBe(false);
+    expect(schema.safeParse({ '4': ['1', '2'] }).success).toBe(true);
   });
 });
