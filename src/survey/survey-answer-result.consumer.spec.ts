@@ -38,8 +38,8 @@ describe('SurveyAnswerResultConsumer', () => {
     submissionStore = { markFinal: vi.fn() };
 
     const consumer = new SurveyAnswerResultConsumer(
-      kafka as never,
-      config as never,
+      kafka,
+      config,
       submissionStore as unknown as SurveyAnswerSubmissionStore,
     );
     await consumer.onModuleInit();
@@ -48,7 +48,7 @@ describe('SurveyAnswerResultConsumer', () => {
   it('STORED 이벤트는 사유 없이 markFinal(STORED)로 넘긴다', async () => {
     await eachMessage({
       message: toMessage({ eventId: 'event-1', status: 'STORED', reason: 'x' }),
-    } as never);
+    });
 
     expect(submissionStore.markFinal).toHaveBeenCalledWith(
       'event-1',
@@ -64,7 +64,7 @@ describe('SurveyAnswerResultConsumer', () => {
         status: 'REJECTED',
         reason: '이미 신청 마감',
       }),
-    } as never);
+    });
 
     expect(submissionStore.markFinal).toHaveBeenCalledWith(
       'event-1',
@@ -76,15 +76,58 @@ describe('SurveyAnswerResultConsumer', () => {
   it('알 수 없는 상태는 무시한다', async () => {
     await eachMessage({
       message: toMessage({ eventId: 'event-1', status: 'UNKNOWN' }),
-    } as never);
+    });
 
     expect(submissionStore.markFinal).not.toHaveBeenCalled();
+  });
+
+  it.each(['{', 'null', '[]', '"text"', '{"status":"STORED"}', '{"eventId":1,"status":"STORED"}'])(
+    '해석할 수 없는 메시지(%s)는 던지지 않고 건너뛴다',
+    async (raw) => {
+      await expect(
+        eachMessage({
+          topic: 't',
+          partition: 0,
+          message: { value: Buffer.from(raw), offset: '1' } as KafkaMessage,
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(submissionStore.markFinal).not.toHaveBeenCalled();
+    },
+  );
+
+  it('깨진 메시지 뒤의 정상 결과는 반영한다', async () => {
+    await eachMessage({
+      topic: 't',
+      partition: 0,
+      message: { value: Buffer.from('{'), offset: '1' } as KafkaMessage,
+    });
+    await eachMessage({
+      message: toMessage({ eventId: 'event-2', status: 'STORED' }),
+    });
+
+    expect(submissionStore.markFinal).toHaveBeenCalledTimes(1);
+    expect(submissionStore.markFinal).toHaveBeenCalledWith(
+      'event-2',
+      SurveyAnswerSubmissionStatus.STORED,
+      null,
+    );
+  });
+
+  it('markFinal의 일시 장애는 삼키지 않고 던져 재시도되게 한다', async () => {
+    submissionStore.markFinal.mockRejectedValue(new Error('db down'));
+
+    await expect(
+      eachMessage({
+        message: toMessage({ eventId: 'event-1', status: 'STORED' }),
+      }),
+    ).rejects.toThrow('db down');
   });
 
   it('value가 없는 메시지는 무시한다', async () => {
     await eachMessage({
       message: { value: null } as KafkaMessage,
-    } as never);
+    });
 
     expect(submissionStore.markFinal).not.toHaveBeenCalled();
   });
