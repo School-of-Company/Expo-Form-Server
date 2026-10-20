@@ -6,6 +6,7 @@ import {
   jsonDataSchema,
   otherJsonSchema,
 } from '../../json/field-spec.schema.js';
+import { checkSurveyQuestions } from './survey-fields.rule.js';
 import { lotteryNumbersSchema } from './survey-lottery.dto.js';
 
 /**
@@ -54,6 +55,7 @@ export const createSurveySchema = z
     lotteryEnabled: z.boolean().optional(),
     lotteryNumbers: lotteryNumbersSchema.optional(),
   })
+  .superRefine(checkSurveyQuestions)
   .superRefine((survey, ctx) => {
     // 동반자 추가와 지역은 신청 폼 전용이다. 설문 답변에는 이 개념이 없다.
     for (const [index, question] of survey.dynamicSurveyRequestDto.entries()) {
