@@ -27,7 +27,6 @@ function setup(lottery: {
         : [];
     }),
     insert: vi.fn().mockResolvedValue(undefined),
-    increment: vi.fn().mockResolvedValue(undefined),
   };
   const dataSource = {
     transaction: vi.fn((work: (m: typeof manager) => unknown) => work(manager)),
@@ -40,6 +39,10 @@ function setup(lottery: {
 const sqlOf = (manager: ReturnType<typeof setup>['manager']) =>
   manager.query.mock.calls.map(([sql]) => sql);
 
+/** 설문 행을 바꾸는 UPDATE 호출. 합쳐졌다면 응답당 한 번이다. */
+const surveyUpdates = (manager: ReturnType<typeof setup>['manager']) =>
+  manager.query.mock.calls.filter(([sql]) => sql.startsWith('UPDATE survey'));
+
 describe('SurveyPublicAnswerStore.create', () => {
   it('번호 없는 응답은 당첨 순번이어도 당첨되지 않고 순번을 소비하지 않는다', async () => {
     const { manager, store } = setup({ sequence: 0, numbers: [1] });
@@ -47,10 +50,9 @@ describe('SurveyPublicAnswerStore.create', () => {
     const outcome = await store.create('s', {}, Occupation.GENERAL, null);
 
     expect(outcome).toEqual({ won: false, drawNumber: null });
-    expect(manager.increment).toHaveBeenCalledOnce();
-    expect(
-      sqlOf(manager).some((sql) => sql.includes('lottery_sequence = $2')),
-    ).toBe(false);
+    expect(surveyUpdates(manager)).toHaveLength(1);
+    expect(surveyUpdates(manager)[0][0]).toContain('total_answers = total_answers + 1');
+    expect(surveyUpdates(manager)[0][1]).toEqual(['s', 0]);
     expect(
       sqlOf(manager).some((sql) => sql.includes('survey_draw_result')),
     ).toBe(false);
@@ -67,6 +69,13 @@ describe('SurveyPublicAnswerStore.create', () => {
     );
 
     expect(outcome).toEqual({ won: true, drawNumber: 1 });
+    // 순번과 응답 수가 설문 행 UPDATE 한 번에 함께 바뀐다.
+    expect(surveyUpdates(manager)).toHaveLength(1);
+    const [updateSql, params] = surveyUpdates(manager)[0];
+    expect(updateSql).toContain('total_answers = total_answers + 1');
+    expect(updateSql).toContain('lottery_sequence = lottery_sequence + $2');
+    expect(params).toEqual(['s', 1]);
+    expect(manager.insert).toHaveBeenCalledOnce();
     expect(
       sqlOf(manager).some((sql) => sql.includes('survey_draw_result')),
     ).toBe(true);
@@ -87,12 +96,34 @@ describe('SurveyPublicAnswerStore.create', () => {
     );
 
     expect(outcome).toEqual({ won: false, drawNumber: null });
-    expect(manager.increment).toHaveBeenCalledOnce();
-    expect(
-      sqlOf(manager).some((sql) => sql.includes('lottery_sequence = $2')),
-    ).toBe(false);
+    expect(surveyUpdates(manager)).toHaveLength(1);
+    expect(surveyUpdates(manager)[0][0]).toContain('total_answers = total_answers + 1');
+    expect(surveyUpdates(manager)[0][1]).toEqual(['s', 0]);
     expect(
       sqlOf(manager).some((sql) => sql.includes('survey_draw_result')),
     ).toBe(false);
+  });
+
+  it('추첨이 꺼진 설문은 순번 없이 응답 수만 한 번에 늘린다', async () => {
+    const { manager, store } = setup({ sequence: 4, numbers: [5] });
+    manager.query.mockImplementation(async (sql: string) =>
+      sql.startsWith('SELECT')
+        ? [
+            {
+              /* eslint-disable @typescript-eslint/naming-convention -- DB 컬럼 이름 */
+              lottery_enabled: false,
+              lottery_numbers: [5],
+              lottery_sequence: 4,
+              /* eslint-enable @typescript-eslint/naming-convention */
+            },
+          ]
+        : [],
+    );
+
+    const outcome = await store.create('s', {}, Occupation.GENERAL, '01012345678');
+
+    expect(outcome).toEqual({ won: false, drawNumber: null });
+    expect(surveyUpdates(manager)).toHaveLength(1);
+    expect(surveyUpdates(manager)[0][1]).toEqual(['s', 0]);
   });
 });
