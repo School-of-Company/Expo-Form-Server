@@ -8,7 +8,7 @@ function setup(lottery: {
   alreadyJoined?: boolean;
 }) {
   const manager = {
-    query: vi.fn(async (sql: string) => {
+    query: vi.fn(async (sql: string, _params?: unknown[]) => {
       if (sql.includes('survey_lottery_participant')) {
         // eslint-disable-next-line @typescript-eslint/naming-convention -- RETURNING 컬럼 이름 그대로
         return lottery.alreadyJoined === true ? [] : [{ survey_id: 's' }];
@@ -106,7 +106,7 @@ describe('SurveyPublicAnswerStore.create', () => {
 
   it('추첨이 꺼진 설문은 순번 없이 응답 수만 한 번에 늘린다', async () => {
     const { manager, store } = setup({ sequence: 4, numbers: [5] });
-    manager.query.mockImplementation(async (sql: string) =>
+    manager.query.mockImplementation(async (sql: string, _params?: unknown[]) =>
       sql.startsWith('SELECT')
         ? [
             {

@@ -68,18 +68,14 @@ export class SurveyPublicAnswerStore {
         `UPDATE survey SET total_answers = total_answers + 1, lottery_sequence = lottery_sequence + $2 WHERE id = $1`,
         [surveyId, joined ? 1 : 0],
       );
-      if (!joined || lotteryPhoneNumber === null) {
-        return NOT_WON;
-      }
+      // 행을 잠근 채 읽었으므로 이 값 + 1이 방금 UPDATE가 매긴 순번이다.
+      const sequence = lottery.lottery_sequence + 1;
 
-      return this.recordIfWon(
-        manager,
-        surveyId,
-        lotteryPhoneNumber,
-        // 행을 잠근 채 읽었으므로 이 값 + 1이 방금 UPDATE가 매긴 순번이다.
-        lottery.lottery_sequence + 1,
-        lottery.lottery_numbers,
-      );
+      return joined &&
+        lotteryPhoneNumber !== null &&
+        lottery.lottery_numbers.includes(sequence)
+        ? this.recordWin(manager, surveyId, lotteryPhoneNumber, sequence)
+        : NOT_WON;
     });
   }
 
@@ -116,19 +112,14 @@ export class SurveyPublicAnswerStore {
   }
 
   /**
-   * 매겨진 순번이 당첨 번호 목록에 있으면 그 번호로 문자를 보내도록 발행 대기 상태의 기록을 같은 트랜잭션에 남긴다.
+   * 당첨된 순번이면 그 번호로 문자를 보내도록 발행 대기 상태의 기록을 같은 트랜잭션에 남긴다.
    */
-  private async recordIfWon(
+  private async recordWin(
     manager: EntityManager,
     surveyId: string,
     phoneNumber: string,
     sequence: number,
-    winningNumbers: number[],
   ): Promise<DrawOutcome> {
-    if (!winningNumbers.includes(sequence)) {
-      return NOT_WON;
-    }
-
     await manager.query(
       `INSERT INTO survey_draw_result (event_id, survey_id, draw_number, phone_number) VALUES (uuid_generate_v4(), $1, $2, $3) ON CONFLICT (survey_id, draw_number) DO NOTHING`,
       [surveyId, sequence, phoneNumber],
