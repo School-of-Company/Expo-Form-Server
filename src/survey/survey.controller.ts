@@ -98,16 +98,20 @@ export class SurveyController {
   }
 
   /**
-   * 설문을 수정한다. 문항은 병합이 아니라 통째로 교체된다.
+   * 설문을 수정한다. 문항은 병합이 아니라 통째로 교체된다. 응답이 있는 설문은 문항을 바꾸면 409가 나간다.
    * 대상 설문은 경로의 `expoId`와 바디의 `participationType` 조합으로 식별한다.
    */
   @ApiOperation({
     summary: '설문 수정',
     description:
-      '설문 메타데이터를 갱신하고 문항을 통째로 교체한다. 문항 id가 새로 발급되므로 이미 쌓인 답변과의 연결이 끊긴다.',
+      '설문 메타데이터를 갱신하고 문항을 통째로 교체한다. 문항 id가 새로 발급되므로, 응답이 하나라도 있는 설문은 문항의 추가·삭제·순서·유형·문구·선택지·설정 변경을 409로 막는다. 문항을 지금과 똑같이 보내면 교체하지 않아 문항 id가 그대로이고, 제목·안내 문구·경품 추첨 설정만 바뀐다.',
   })
   @ApiNoContentResponse({ description: '수정 완료' })
   @ApiErrorResponse(404, '해당 설문이 없음 (SURVEY_NOT_FOUND)')
+  @ApiErrorResponse(
+    409,
+    '응답이 있는 설문의 문항을 바꾸려 함 (SURVEY_ALREADY_ANSWERED)',
+  )
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @AdminChangeNotify('설문 수정')
   @Patch(':expoId')

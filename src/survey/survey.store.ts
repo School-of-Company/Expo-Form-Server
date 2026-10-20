@@ -1,7 +1,9 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
+import { SurveyAlreadyAnsweredException } from '../common/exceptions/domain.exception.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
@@ -12,6 +14,36 @@ import { SurveyEntity } from './entities/survey.entity.js';
  * 명시하지 않으면 DB가 임의 순서로 돌려줄 수 있어서, 조회마다 이 정렬을 붙인다.
  */
 const DYNAMIC_SURVEY_ORDER = { dynamicSurveys: { id: 'ASC' } } as const;
+
+/**
+ * 답변 검증과 화면이 쓰는 문항 내용. jsonb는 키 순서를 바꿔 저장하지만 {@link isDeepStrictEqual}은 키 순서를
+ * 보지 않는다.
+ */
+function questionContent({
+  title,
+  formType,
+  requiredStatus,
+  jsonData,
+  otherJson,
+}: DynamicSurveyEntity) {
+  return { title, formType, requiredStatus, jsonData, otherJson };
+}
+
+/** 문항 수·순서·내용이 모두 같은지. 조건부 표시가 문항 위치(`parentIndex`)를 가리키므로 순서도 본다. */
+function hasSameQuestions(
+  current: DynamicSurveyEntity[],
+  next: DynamicSurveyEntity[],
+): boolean {
+  return (
+    current.length === next.length &&
+    current.every((question, index) =>
+      isDeepStrictEqual(
+        questionContent(question),
+        questionContent(next[index]),
+      ),
+    )
+  );
+}
 
 /**
  * 설문 영속성 접근을 한 곳에 모아둔 store.
@@ -89,6 +121,11 @@ export class SurveyStore {
   /**
    * 설문 메타를 갱신하면서 문항을 통째로 교체한다.
    *
+   * 문항이 지금과 똑같으면 교체하지 않는다. 다시 만들면 내용이 같아도 문항 id가 바뀌어, 열어 둔 화면의
+   * 제출이 400이 된다. 문항이 하나라도 다르면 교체하는데, 응답이 있는 설문이면 막는다(#179). 응답 여부는
+   * 누적 응답 수로 본다 — 공개 답변·로그인/SMS 답변 접수·옛 종이 QR 답변이 모두 같은 트랜잭션에서 이 값을
+   * 늘리고, 거절된 접수만 되돌린다. 설문 row를 잠근 뒤 읽으므로 그 사이 들어온 응답도 빠뜨리지 않는다.
+   *
    * 삭제와 재삽입 사이에 다른 요청이 설문을 조회하면 문항이 하나도 없는 상태를 보게 되므로,
    * 두 작업을 한 트랜잭션으로 묶는다.
    *
@@ -109,6 +146,7 @@ export class SurveyStore {
    * @param lottery.numbers 당첨 번호 목록
    * @returns 갱신했으면 true, 그 사이 설문이 삭제돼 아무것도 바꾸지 않았으면 false
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
+   * @throws {SurveyAlreadyAnsweredException} 응답이 있는 설문의 문항을 바꾸려 할 때
    */
   async updateWithQuestions(
     survey: SurveyEntity,
@@ -120,14 +158,27 @@ export class SurveyStore {
 
       const locked = await manager.findOne(SurveyEntity, {
         where: { id: survey.id },
-        select: { id: true },
+        select: { id: true, totalAnswers: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
         return false;
       }
 
-      await manager.delete(DynamicSurveyEntity, { survey: { id: survey.id } });
+      const current = await manager.find(DynamicSurveyEntity, {
+        where: { survey: { id: survey.id } },
+        order: { id: 'ASC' },
+      });
+      const replace = !hasSameQuestions(current, questions);
+      if (replace && locked.totalAnswers > 0) {
+        throw new SurveyAlreadyAnsweredException();
+      }
+
+      if (replace) {
+        await manager.delete(DynamicSurveyEntity, {
+          survey: { id: survey.id },
+        });
+      }
 
       await manager.update(SurveyEntity, survey.id, {
         title: survey.title,
@@ -141,6 +192,10 @@ export class SurveyStore {
           lotteryNumbers: lottery.numbers,
         }),
       });
+
+      if (!replace) {
+        return true;
+      }
 
       for (const question of questions) {
         question.survey = survey;
