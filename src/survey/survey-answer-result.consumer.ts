@@ -12,6 +12,10 @@ import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
+/** 접수 기록의 `eventId` 컬럼은 `uuid`라, 다른 모양의 값으로 조회하면 DB가 오류를 던진다(재시도해도 같다). */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
 interface SurveyAnswerResultEvent {
   eventId: string;
   status: 'STORED' | 'REJECTED';
@@ -94,7 +98,7 @@ export class SurveyAnswerResultConsumer
     }
   }
 
-  /** JSON 객체이고 `eventId`가 비어 있지 않은 문자열이면 이벤트를, 아니면 `undefined`를 돌려준다. */
+  /** JSON 객체이고 `eventId`가 UUID 문자열이면 이벤트를, 아니면 `undefined`를 돌려준다. */
   private parse(value: Buffer): SurveyAnswerResultEvent | undefined {
     let parsed: unknown;
     try {
@@ -108,6 +112,8 @@ export class SurveyAnswerResultConsumer
     }
 
     const { eventId } = parsed as { eventId?: unknown };
-    return typeof eventId !== 'string' || eventId === '' ? undefined : (parsed as SurveyAnswerResultEvent);
+    return typeof eventId === 'string' && UUID_PATTERN.test(eventId)
+      ? (parsed as SurveyAnswerResultEvent)
+      : undefined;
   }
 }
