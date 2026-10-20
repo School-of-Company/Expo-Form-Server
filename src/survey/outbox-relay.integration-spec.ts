@@ -9,6 +9,7 @@ import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submissio
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import { DEFAULT_RELAY_SETTINGS } from './survey-answer-relay.config.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 import { SurveyDrawResultStore } from './survey-draw-result.store.js';
 
@@ -211,15 +212,21 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
     }
 
     const published: string[] = [];
-    const publish = async (submission: SurveyAnswerSubmissionEntity) => {
+    const publish = async (batch: SurveyAnswerSubmissionEntity[]) => {
       await delay(150);
-      published.push(submission.id);
-      return 1 as const;
+      published.push(...batch.map((submission) => submission.id));
+      return {
+        published: batch.map((submission) => ({
+          submission,
+          version: 1 as const,
+        })),
+        failures: [],
+      };
     };
 
     const options = {
-      staleBefore: new Date(),
-      maxRetryCount: 5,
+      ...DEFAULT_RELAY_SETTINGS,
+      now: new Date(),
       limit: 100,
     };
 
@@ -238,5 +245,42 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
     ).toBe(true);
     // 두 번 발행됐다면 retryCount가 2가 된다.
     expect(rows.map((row) => row.retryCount)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('재발행은 retryCount가 늘수록 더 오래 기다린 뒤에 다시 잡는다', async () => {
+    const repository = dataSource.getRepository(SurveyAnswerSubmissionEntity);
+    await repository.clear();
+    const minute = 60_000;
+    const ids: string[] = [];
+    // retryCount 1과 3, 둘 다 마지막 발행이 12분 전이다. 대기는 5분(+지터)과 20분(+지터)이다.
+    for (const retryCount of [1, 3]) {
+      // eslint-disable-next-line no-await-in-loop
+      const { identifiers } = await repository.insert({
+        surveyId,
+        eventId: randomUUID(),
+        expoId: randomUUID(),
+        participationType: ParticipationType.STANDARD,
+        phoneNumber: `0101234500${retryCount}`,
+        status: SurveyAnswerSubmissionStatus.PUBLISHED,
+        retryCount,
+        publishedAt: new Date(Date.now() - (12 * minute)),
+        payload: { answers: {}, personalInformationStatus: true },
+      });
+      ids.push(String(identifiers[0].id));
+    }
+
+    const published: string[] = [];
+    await answerStore.relayPending(
+      { ...DEFAULT_RELAY_SETTINGS, now: new Date(), limit: 100 },
+      async (batch) => {
+        published.push(...batch.map((submission) => submission.id));
+        return {
+          published: batch.map((submission) => ({ submission, version: 1 as const })),
+          failures: [],
+        };
+      },
+    );
+
+    expect(published).toEqual([ids[0]]);
   });
 });

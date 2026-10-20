@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { DEFAULT_RELAY_SETTINGS } from './survey-answer-relay.config.js';
 import { SurveyAnswerRelayService } from './survey-answer-relay.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
@@ -37,8 +39,15 @@ const submissionWithSnapshot = {
   payload: { ...submission.payload, questions },
 } as unknown as SurveyAnswerSubmissionEntity;
 
+const batchMessages = (call: unknown[]) =>
+  (
+    call[0] as {
+      topicMessages: Array<{ messages: Array<{ value: string }> }>;
+    }
+  ).topicMessages[0].messages;
+
 describe('SurveyAnswerRelayService', () => {
-  let producer: { send: Mock };
+  let producer: { send: Mock; sendBatch: Mock };
   let kafka: { producer: Mock };
   let config: { get: Mock; getOrThrow: Mock };
   let store: {
@@ -47,10 +56,23 @@ describe('SurveyAnswerRelayService', () => {
     markPublished: Mock;
     relayPending: Mock;
   };
+  let scheduler: {
+    addInterval: Mock;
+    deleteInterval: Mock;
+    doesExist: Mock;
+  };
   let service: SurveyAnswerRelayService;
 
+  const firstMessageValue = () =>
+    batchMessages(producer.sendBatch.mock.calls[0])[0].value;
+
   beforeEach(() => {
-    producer = { send: vi.fn() };
+    producer = { send: vi.fn(), sendBatch: vi.fn() };
+    scheduler = {
+      addInterval: vi.fn(),
+      deleteInterval: vi.fn(),
+      doesExist: vi.fn().mockReturnValue(true),
+    };
     kafka = { producer: vi.fn().mockReturnValue(producer) };
     config = {
       get: vi.fn((_key: string, fallback: unknown) => fallback),
@@ -67,32 +89,35 @@ describe('SurveyAnswerRelayService', () => {
     store.relayPending.mockImplementation(
       async (
         _options: unknown,
-        publish: (s: SurveyAnswerSubmissionEntity) => Promise<1 | 2>,
+        publish: (
+          batch: SurveyAnswerSubmissionEntity[],
+        ) => Promise<{
+          published: Array<{
+            submission: SurveyAnswerSubmissionEntity;
+            version: 1 | 2;
+          }>;
+          failures: unknown[];
+        }>,
       ) => {
-        const failures: Array<{ submission: unknown; error: unknown }> = [];
         const received = (await store.findReceived()) as unknown[];
         const stale = (await store.findStalePublished()) as unknown[];
         const pending = [
           ...received,
           ...stale,
         ] as SurveyAnswerSubmissionEntity[];
-        for (const item of pending) {
-          try {
-            // eslint-disable-next-line no-await-in-loop
-            const version = await publish(item);
-            store.markPublished(item.id, version);
-          } catch (error) {
-            failures.push({ submission: item, error });
-          }
+        const result = await publish(pending);
+        for (const { submission: item, version } of result.published) {
+          store.markPublished(item.id, version);
         }
 
-        return failures;
+        return result.failures;
       },
     );
     service = new SurveyAnswerRelayService(
       kafka as never,
       config as never,
       store as unknown as SurveyAnswerSubmissionStore,
+      scheduler as unknown as SchedulerRegistry,
     );
   });
 
@@ -101,21 +126,25 @@ describe('SurveyAnswerRelayService', () => {
 
     await service.relay();
 
-    expect(producer.send).toHaveBeenCalledWith({
-      topic: 'survey.answer.submit',
-      messages: [
+    expect(producer.sendBatch).toHaveBeenCalledWith({
+      topicMessages: [
         {
-          key: 'survey-1:01012345678',
-          value: JSON.stringify({
-            eventId: 'event-1',
-            version: 1,
-            surveyId: 'survey-1',
-            expoId: 'expo-1',
-            participationType: ParticipationType.TRAINEE,
-            phoneNumber: '01012345678',
-            answerJson: JSON.stringify({ '1': '좋았습니다' }),
-            personalInformationStatus: true,
-          }),
+          topic: 'survey.answer.submit',
+          messages: [
+            {
+              key: 'survey-1:01012345678',
+              value: JSON.stringify({
+                eventId: 'event-1',
+                version: 1,
+                surveyId: 'survey-1',
+                expoId: 'expo-1',
+                participationType: ParticipationType.TRAINEE,
+                phoneNumber: '01012345678',
+                answerJson: JSON.stringify({ '1': '좋았습니다' }),
+                personalInformationStatus: true,
+              }),
+            },
+          ],
         },
       ],
     });
@@ -127,56 +156,113 @@ describe('SurveyAnswerRelayService', () => {
 
     await service.relay();
 
-    const sent = producer.send.mock.calls[0][0] as {
-      messages: Array<{ value: string }>;
-    };
-    const payload = JSON.parse(sent.messages[0].value) as { eventId: string };
+    const payload = JSON.parse(firstMessageValue()) as { eventId: string };
     expect(payload.eventId).toBe('event-1');
   });
 
   it('발행 실패는 로그만 남기고 markPublished를 호출하지 않는다', async () => {
     store.findReceived.mockResolvedValue([submission]);
-    producer.send.mockRejectedValue(new Error('broker unreachable'));
+    producer.sendBatch.mockRejectedValue(new Error('broker unreachable'));
 
     await expect(service.relay()).resolves.toBeUndefined();
     expect(store.markPublished).not.toHaveBeenCalled();
   });
 
-  it('한 건 발행 실패가 다른 건 처리를 막지 않는다', async () => {
-    const other = {
+  describe('묶음 발행', () => {
+    const second = {
+      ...submission,
       id: 'submission-2',
-      surveyId: 'survey-1',
-      expoId: 'expo-1',
-      participationType: ParticipationType.TRAINEE,
-      phoneNumber: '01012345678',
       eventId: 'event-2',
-      status: SurveyAnswerSubmissionStatus.RECEIVED,
-      payload: {
-        answers: { '1': '좋았습니다' },
-        personalInformationStatus: true,
-      },
-    } as unknown as SurveyAnswerSubmissionEntity;
-    store.findReceived.mockResolvedValue([submission, other]);
-    producer.send
-      .mockRejectedValueOnce(new Error('broker unreachable'))
-      .mockResolvedValueOnce(undefined);
+    };
 
-    await service.relay();
+    it('여러 건을 sendBatch 한 번으로 보낸다', async () => {
+      store.findReceived.mockResolvedValue([submission, second]);
 
-    expect(store.markPublished).toHaveBeenCalledTimes(1);
-    expect(store.markPublished).toHaveBeenCalledWith('submission-2', 1);
+      await service.relay();
+
+      expect(producer.sendBatch).toHaveBeenCalledTimes(1);
+      expect(batchMessages(producer.sendBatch.mock.calls[0])).toHaveLength(2);
+      expect(producer.send).not.toHaveBeenCalled();
+      expect(store.markPublished).toHaveBeenCalledTimes(2);
+    });
+
+    it('재시도해도 소용없는 오류면 한 건씩 나눠 정상 건은 발행한다', async () => {
+      store.findReceived.mockResolvedValue([submission, second]);
+      producer.sendBatch.mockRejectedValue(
+        Object.assign(new Error('too large'), { retriable: false }),
+      );
+      producer.send
+        .mockRejectedValueOnce(new Error('too large'))
+        .mockResolvedValueOnce(undefined);
+
+      await service.relay();
+
+      expect(producer.send).toHaveBeenCalledTimes(2);
+      expect(store.markPublished).toHaveBeenCalledTimes(1);
+      expect(store.markPublished).toHaveBeenCalledWith('submission-2', 1);
+    });
+
+    it('일시 오류면 묶음 전체를 표시하지 않고 나누어 보내지도 않는다', async () => {
+      store.findReceived.mockResolvedValue([submission, second]);
+      producer.sendBatch.mockRejectedValue(
+        Object.assign(new Error('timeout'), { retriable: true }),
+      );
+
+      await service.relay();
+
+      expect(producer.send).not.toHaveBeenCalled();
+      expect(store.markPublished).not.toHaveBeenCalled();
+    });
   });
+
+  describe('스케줄', () => {
+    it('기동 때 기본 30초 간격을 등록하고 종료 때 지운다', async () => {
+      const spy = vi
+        .spyOn(globalThis, 'setInterval')
+        .mockReturnValue(0 as unknown as NodeJS.Timeout);
+      Object.assign(producer, { connect: vi.fn(), disconnect: vi.fn() });
+
+      await service.onModuleInit();
+      await service.onModuleDestroy();
+
+      expect(spy).toHaveBeenCalledWith(expect.any(Function), 30_000);
+      expect(scheduler.addInterval).toHaveBeenCalledWith(
+        'survey-answer-relay',
+        0,
+      );
+      expect(scheduler.deleteInterval).toHaveBeenCalledWith(
+        'survey-answer-relay',
+      );
+      spy.mockRestore();
+    });
+
+    it('환경변수로 주기를 바꾼다', async () => {
+      config.get.mockImplementation((key: string, fallback: unknown) =>
+        key === 'SURVEY_ANSWER_RELAY_INTERVAL_MS' ? '5000' : fallback,
+      );
+      const spy = vi
+        .spyOn(globalThis, 'setInterval')
+        .mockReturnValue(0 as unknown as NodeJS.Timeout);
+      Object.assign(producer, { connect: vi.fn() });
+
+      await new SurveyAnswerRelayService(
+        kafka as never,
+        config as never,
+        store as unknown as SurveyAnswerSubmissionStore,
+        scheduler as unknown as SchedulerRegistry,
+      ).onModuleInit();
+
+      expect(spy).toHaveBeenCalledWith(expect.any(Function), 5000);
+      spy.mockRestore();
+    });
+  });
+
   describe('이벤트 버전', () => {
-    const publishedValue = () => {
-      const sent = producer.send.mock.calls[0][0] as {
-        messages: Array<{ value: string }>;
-      };
-      return JSON.parse(sent.messages[0].value) as {
+    const publishedValue = () => JSON.parse(firstMessageValue()) as {
         eventId: string;
         version: number;
         questions?: unknown;
       };
-    };
 
     const serviceWithVersion = (version: unknown) => {
       config.get.mockImplementation((key: string, fallback: unknown) =>
@@ -187,6 +273,7 @@ describe('SurveyAnswerRelayService', () => {
         kafka as never,
         config as never,
         store as unknown as SurveyAnswerSubmissionStore,
+        scheduler as unknown as SchedulerRegistry,
       );
     };
 
@@ -306,14 +393,14 @@ describe('SurveyAnswerRelayService', () => {
     expect(store.relayPending).toHaveBeenCalledTimes(1);
   });
 
-  it('발행 대상 조회 조건(오래된 기준·재시도 상한·배치 크기)을 store에 넘긴다', async () => {
+  it('발행 대상 조회 조건(기본 설정·배치 크기)을 store에 넘긴다', async () => {
     await service.relay();
 
     expect(store.relayPending).toHaveBeenCalledWith(
       {
-        staleBefore: expect.any(Date) as Date,
-        maxRetryCount: 5,
+        ...DEFAULT_RELAY_SETTINGS,
         limit: 100,
+        now: expect.any(Date) as Date,
       },
       expect.any(Function),
     );

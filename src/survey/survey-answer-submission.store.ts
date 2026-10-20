@@ -4,6 +4,11 @@ import { DataSource, In, Not, Repository, type EntityManager } from 'typeorm';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import {
+  backoffDelayMs,
+  chunk,
+  type SurveyAnswerRelaySettings,
+} from './survey-answer-relay.config.js';
 
 /** 아직 종결되지 않은 상태. 발행·결과 반영은 이 상태의 row만 바꿀 수 있다. */
 const IN_FLIGHT_STATUSES = [
@@ -15,6 +20,30 @@ const IN_FLIGHT_STATUSES = [
 export type AnswerRelayFailure = {
   submission: SurveyAnswerSubmissionEntity;
   error: unknown;
+};
+
+/** {@link SurveyAnswerSubmissionStore.relayPending}의 발행 콜백이 한 묶음(batch)에 대해 돌려주는 결과. */
+export type AnswerRelayBatchResult = {
+  published: Array<{
+    submission: SurveyAnswerSubmissionEntity;
+    version: 1 | 2;
+  }>;
+  failures: AnswerRelayFailure[];
+};
+
+/** {@link SurveyAnswerSubmissionStore.relayPending} 조회 조건. */
+export type AnswerRelayOptions = Pick<
+  SurveyAnswerRelaySettings,
+  | 'staleMs'
+  | 'staleMaxMs'
+  | 'jitterRatio'
+  | 'maxRetryCount'
+  | 'sendBatchSize'
+> & {
+  /** RECEIVED / 재발행 대상 각각의 최대 건수. */
+  limit: number;
+  /** 재발행 시각 판단 기준. */
+  now: Date;
 };
 
 /**
@@ -79,29 +108,32 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
-   * 발행할 접수 기록을 잠가서 `publish`로 하나씩 발행하고 표시한다. 대상은 두 가지다.
+   * 발행할 접수 기록을 잠가서 `publish`로 묶음 단위로 발행하고 표시한다. 대상은 두 가지다.
    * - 한 번도 발행되지 않은(`RECEIVED`) 기록
-   * - `publishedAt`이 `staleBefore`보다 오래된, 즉 결과를 못 받은 채 방치된 `PUBLISHED` 기록. `retryCount`가
-   *   `maxRetryCount` 미만인 것만 — 그 이상은 재발행을 포기하고 사람이 봐야 할 대상으로 남겨둔다(무한 재발행으로
-   *   부하를 키우지 않기 위해).
+   * - 결과를 못 받은 채 재발행 시각이 된 `PUBLISHED` 기록. `retryCount`가 `maxRetryCount` 미만인 것만 — 그 이상은
+   *   재발행을 포기하고 사람이 봐야 할 대상으로 남겨둔다(무한 재발행으로 부하를 키우지 않기 위해).
+   *
+   * 재발행 시각은 `publishedAt + 대기`이고, 대기는 `retryCount`에 따라 `staleMs`에서 2배씩 늘어 `staleMaxMs`에서
+   * 멈추며(`backoffDelayMs`), 행마다 고정된 지터(`hashtext(id, retryCount)`)를 더한다. 별도 컬럼 없이 기존
+   * `retryCount`·`publishedAt`만 쓰므로 마이그레이션이 없다. 지터가 행·회차마다 고정이라 주기마다 다시 뽑히지 않는다.
    *
    * 조회와 발행·표시를 한 트랜잭션에 두고 행을 `FOR UPDATE SKIP LOCKED`로 잡는다. 인스턴스가 여러 대여도 같은
    * 행을 둘이 동시에 읽지 못해 같은 건을 중복 발행하거나 `retryCount`를 두 번 올리지 않는다. 발행하는 동안 DB
    * 연결과 행 잠금을 쥐므로 `limit`을 작게 유지해야 한다. 결과 이벤트를 반영하는 `markFinal`은 같은 행의 잠금이 풀릴
    * 때까지 기다린다.
    *
-   * `publish`는 발행한 이벤트 버전을 돌려주고, 던지면 그 건은 표시하지 않고 다음 주기에 다시 잡힌다.
+   * `publish`는 `sendBatchSize` 건 이하의 묶음을 받아 성공한 건(발행한 이벤트 버전과 함께)과 실패한 건을
+   * 돌려준다. 실패한 건은 표시하지 않아 다음 주기에 다시 잡힌다.
    *
    * @returns 발행에 실패한 건
    */
   async relayPending(
-    {
-      staleBefore,
-      maxRetryCount,
-      limit,
-    }: { staleBefore: Date; maxRetryCount: number; limit: number },
-    publish: (submission: SurveyAnswerSubmissionEntity) => Promise<1 | 2>,
+    options: AnswerRelayOptions,
+    publish: (
+      batch: SurveyAnswerSubmissionEntity[],
+    ) => Promise<AnswerRelayBatchResult>,
   ): Promise<AnswerRelayFailure[]> {
+    const { limit, sendBatchSize } = options;
     return this.dataSource.transaction(async (manager) => {
       const received = await manager
         .createQueryBuilder(SurveyAnswerSubmissionEntity, 'submission')
@@ -114,37 +146,73 @@ export class SurveyAnswerSubmissionStore {
         .limit(limit)
         .getMany();
 
-      const stalePublished = await manager
-        .createQueryBuilder(SurveyAnswerSubmissionEntity, 'submission')
-        .setLock('pessimistic_write')
-        .setOnLocked('skip_locked')
-        .where('submission.status = :status', {
-          status: SurveyAnswerSubmissionStatus.PUBLISHED,
-        })
-        .andWhere('submission.publishedAt < :staleBefore', { staleBefore })
-        .andWhere('submission.retryCount < :maxRetryCount', { maxRetryCount })
-        .orderBy('submission.publishedAt', 'ASC')
-        .limit(limit)
-        .getMany();
+      const stalePublished = await this.lockRepublishDue(manager, options);
 
       const failures: AnswerRelayFailure[] = [];
-      for (const submission of [...received, ...stalePublished]) {
-        let eventVersion: 1 | 2;
-        try {
-          // 한 건씩 순서대로 발행한다. 실패해도 다음 건을 계속 처리하고, Kafka에 한꺼번에 몰아넣지 않는다.
-          // eslint-disable-next-line no-await-in-loop
-          eventVersion = await publish(submission);
-        } catch (error) {
-          failures.push({ submission, error });
-          continue;
-        }
-
+      for (const batch of chunk([...received, ...stalePublished], sendBatchSize)) {
+        // 묶음 단위로 순서대로 발행한다. 한 묶음이 실패해도 다음 묶음은 계속 처리한다.
         // eslint-disable-next-line no-await-in-loop
-        await this.markPublished(submission.id, eventVersion, manager);
+        const result = await publish(batch);
+        failures.push(...result.failures);
+
+        for (const { submission, version } of result.published) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.markPublished(submission.id, version, manager);
+        }
       }
 
       return failures;
     });
+  }
+
+  /** 재발행 시각이 된 `PUBLISHED` 기록을 잠가서 가져온다(`publishedAt` 오름차순). */
+  private async lockRepublishDue(
+    manager: EntityManager,
+    {
+      staleMs,
+      staleMaxMs,
+      jitterRatio,
+      maxRetryCount,
+      limit,
+      now,
+    }: AnswerRelayOptions,
+  ): Promise<SurveyAnswerSubmissionEntity[]> {
+    // 회차(retryCount)마다 기본 대기가 달라 회차별 조건을 OR로 잇는다. 상한(기본 5)이 작아 조건 수도 작다.
+    const parameters: Record<string, unknown> = {
+      status: SurveyAnswerSubmissionStatus.PUBLISHED,
+      now,
+      jitterRatio,
+    };
+    const dueClauses: string[] = [];
+    for (let retryCount = 1; retryCount < maxRetryCount; retryCount += 1) {
+      parameters[`retry${retryCount}`] = retryCount;
+      parameters[`delay${retryCount}`] = backoffDelayMs(retryCount, {
+        staleMs,
+        staleMaxMs,
+      });
+      // 원시 SQL 조각이라 SnakeNamingStrategy가 적용되지 않는 부분은 실제 컬럼명을 쓴다.
+      dueClauses.push(
+        `(submission.retryCount = :retry${retryCount} AND submission.publishedAt + ` +
+          `(CAST(:delay${retryCount} AS float8) * (1 + CAST(:jitterRatio AS float8) * ` +
+          `((hashtext(CAST(submission.id AS text) || ':' || CAST(submission.retryCount AS text)) & 1023) / 1024.0))` +
+          ` ) * INTERVAL '1 millisecond' < :now)`,
+      );
+    }
+
+    if (dueClauses.length === 0) {
+      return [];
+    }
+
+    return manager
+      .createQueryBuilder(SurveyAnswerSubmissionEntity, 'submission')
+      .setLock('pessimistic_write')
+      .setOnLocked('skip_locked')
+      .where('submission.status = :status')
+      .andWhere(`(${dueClauses.join(' OR ')})`)
+      .setParameters(parameters)
+      .orderBy('submission.publishedAt', 'ASC')
+      .limit(limit)
+      .getMany();
   }
 
   /**
