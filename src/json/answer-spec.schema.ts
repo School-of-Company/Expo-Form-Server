@@ -49,14 +49,25 @@ const VALUE_SCHEMA_BUILDERS: Record<
   /** 빈 문자열이 아닌 텍스트. */
   [DynamicFormFieldType.SENTENCE]: () => z.string().min(1),
   [DynamicFormFieldType.IMAGE]: buildImageSchema,
-  /** 예/아니오 성격의 단일 체크박스라 `jsonData`를 쓰지 않는다. */
-  [DynamicFormFieldType.CHECKBOX]: () => z.boolean(),
+  /**
+   * 단일 체크박스라 `jsonData`를 쓰지 않는다. 필수이면 체크한 것(`true`)만 받는다 — 필수 동의 항목을 체크하지
+   * 않고 제출할 수 없다. 조건부 문항은 보이는지가 부모 답변에 달려 있어 `buildAnswerSchema`가 판정한다.
+   */
+  [DynamicFormFieldType.CHECKBOX]: (question) =>
+    question.requiredStatus && question.otherJson?.conditional === undefined
+      ? z.literal(true, { error: '필수 항목에 체크해야 합니다.' })
+      : z.boolean(),
   [DynamicFormFieldType.DROPDOWN]: (question) =>
     oneOfJsonDataKeys(question.jsonData),
   /** `jsonData`의 키로 이루어진 배열. 있으면 `otherJson.maxSelection`까지만 허용한다. */
   [DynamicFormFieldType.MULTIPLE](question) {
     const maxSelection = question.otherJson?.maxSelection;
-    let schema = z.array(oneOfJsonDataKeys(question.jsonData)).min(1);
+    let schema = z
+      .array(oneOfJsonDataKeys(question.jsonData))
+      .min(1)
+      .refine((values) => new Set(values).size === values.length, {
+        message: '중복 선택할 수 없습니다.',
+      });
     if (maxSelection !== undefined) {
       schema = schema.max(maxSelection);
     }
@@ -87,10 +98,26 @@ function buildValueSchema(question: QuestionSpec): z.ZodType {
   const base = VALUE_SCHEMA_BUILDERS[question.formType](question);
   // 조건부 문항은 보이는지 여부가 부모 답변에 달려 있어 여기서는 생략을 허용하고,
   // 필수 여부는 `buildAnswerSchema`의 `superRefine`이 부모 답변을 보고 판정한다.
-  return question.requiredStatus &&
+  if (
+    question.requiredStatus &&
     question.otherJson?.conditional === undefined
-    ? base
-    : base.optional();
+  ) {
+    return base;
+  }
+
+  // 필수가 아닌 문항의 비어 있는 값(`""`, `[]`, `null`)은 생략과 같게 본다. 동반자 목록은 빈 배열이 그대로
+  // 유효한 값이라 건드리지 않는다.
+  return question.formType === DynamicFormFieldType.COMPANION
+    ? base.optional()
+    : z.preprocess(emptyToUndefined, base.optional()).optional();
+}
+
+function emptyToUndefined(value: unknown): unknown {
+  return value === '' ||
+    value === null ||
+    (Array.isArray(value) && value.length === 0)
+    ? undefined
+    : value;
 }
 
 /** 부모 문항의 답변이 `triggerValue(s)` 중 하나이면(다중 선택은 하나라도 포함하면) 보이는 것이다. */
@@ -154,15 +181,30 @@ export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
             (answers as Record<string, unknown>)[String(parent.id)],
             triggerValuesOf(conditional),
           );
-        const answered =
-          (answers as Record<string, unknown>)[String(question.id)] !==
-          undefined;
+        const answeredValue = (answers as Record<string, unknown>)[
+          String(question.id)
+        ];
+        const answered = answeredValue !== undefined;
 
         if (!answered && visible && question.requiredStatus) {
           context.addIssue({
             code: 'custom',
             path: [String(question.id)],
             message: '필수 문항입니다.',
+          });
+        }
+
+        // 조건부 필수 체크박스는 보일 때 체크해야 한다. 숨겨진 문항의 값은 무시한다.
+        const uncheckedRequiredCheckbox =
+          question.requiredStatus &&
+          question.formType === DynamicFormFieldType.CHECKBOX &&
+          answered &&
+          answeredValue !== true;
+        if (uncheckedRequiredCheckbox && visible) {
+          context.addIssue({
+            code: 'custom',
+            path: [String(question.id)],
+            message: '필수 항목에 체크해야 합니다.',
           });
         }
       }
