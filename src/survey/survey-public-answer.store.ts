@@ -21,6 +21,24 @@ export type DrawOutcome =
 
 const NOT_WON: DrawOutcome = { won: false, drawNumber: null };
 
+/** 공개 응답을 DB 정밀도(마이크로초) 그대로의 UTC 문자열로 읽는다. JS `Date`로 받으면 커서가 밀리초로 잘린다. */
+const UTC_MICROS = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
+/** 커서 조회로 읽은 공개 응답 한 줄. */
+export type PublicAnswerRow = {
+  id: string;
+  createdAt: string;
+  occupation: Occupation;
+  answers: Record<string, unknown>;
+};
+
+/** 공개 응답 한 페이지. `rows`는 `(createdAt, id)` 오름차순이다. */
+export type PublicAnswerPage = {
+  snapshotAt: string;
+  totalCount: number;
+  rows: PublicAnswerRow[];
+};
+
 /** 공개 링크 익명 응답의 영속성 접근을 한 곳에 모아둔 store. */
 @Injectable()
 export class SurveyPublicAnswerStore {
@@ -55,6 +73,9 @@ export class SurveyPublicAnswerStore {
         // 값은 그대로 jsonb로 들어간다.
         answers: answers as QueryDeepPartialEntity<Record<string, unknown>>,
         occupation,
+        // 트랜잭션 시작 시각(now())이 아니라 설문 행을 잠근 뒤의 시각이다. 응답 조회가 같은 행을 잠그고 정한 상한보다
+        // 늦게 커밋되는 응답은 반드시 그 상한보다 늦은 시각을 갖는다(#215).
+        createdAt: () => 'clock_timestamp()',
       });
 
       // 번호 없는 응답은 추첨에 넣지 않는다(#169). 같은 사람의 반복 당첨을 막을 기준이 없다.
@@ -77,6 +98,65 @@ export class SurveyPublicAnswerStore {
         ? this.recordWin(manager, surveyId, lotteryPhoneNumber, sequence)
         : NOT_WON;
     });
+  }
+
+  /**
+   * 조회 상한을 정한다. 설문 행을 공유 잠금으로 잡아 진행 중인 응답 저장(행을 잠근 채 `clock_timestamp()`로
+   * 시각을 매긴다)이 끝나길 기다린 뒤 시각을 읽으므로, 상한 이하의 응답은 이미 모두 커밋돼 있고 이후 응답은 상한보다
+   * 늦다. 그래서 상한을 고정한 페이지 조회는 그 사이 새 응답이 들어와도 빠지거나 겹치지 않는다(#215).
+   *
+   * @throws {SurveyNotFoundException} 설문이 그새 지워졌을 때
+   */
+  async snapshot(surveyId: string): Promise<string> {
+    // ponytail: 서버 시계가 뒤로 가지 않는다고 가정한다. 거꾸로 가면 순번 컬럼(sequence)으로 바꿔야 한다.
+    return this.dataSource.transaction(async (manager) => {
+      const locked = await manager.query<unknown[]>(
+        `SELECT id FROM survey WHERE id = $1 FOR SHARE`,
+        [surveyId],
+      );
+      if (locked.length === 0) {
+        throw new SurveyNotFoundException();
+      }
+
+      const [row] = await manager.query<Array<{ at: string }>>(
+        `SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', ${UTC_MICROS}) AS at`,
+      );
+      return row.at;
+    });
+  }
+
+  /**
+   * 상한 이하의 응답을 `(createdAt, id)` 순서로 `after` 다음부터 `limit`+1개까지 읽는다. 하나 더 읽는 건
+   * 다음 페이지가 있는지 보려는 것이다.
+   */
+  async findPage(
+    surveyId: string,
+    snapshotAt: string,
+    after: { createdAt: string; id: string } | null,
+    limit: number,
+  ): Promise<PublicAnswerPage> {
+    // ponytail: (survey_id, created_at, id) 인덱스 없이 훑는다. 설문당 응답이 수만 건을 넘으면 인덱스를 추가한다.
+    const rows = await this.dataSource.query<PublicAnswerRow[]>(
+      `SELECT id, occupation, answers, to_char(created_at AT TIME ZONE 'UTC', ${UTC_MICROS}) AS "createdAt"
+         FROM survey_public_answer
+        WHERE survey_id = $1 AND created_at <= $2::timestamptz
+          AND ($3::timestamptz IS NULL OR (created_at, id) > ($3::timestamptz, $4::uuid))
+        ORDER BY created_at, id
+        LIMIT $5`,
+      [
+        surveyId,
+        snapshotAt,
+        after?.createdAt ?? null,
+        after?.id ?? null,
+        limit + 1,
+      ],
+    );
+    const [{ count }] = await this.dataSource.query<Array<{ count: number }>>(
+      `SELECT count(*)::int AS count FROM survey_public_answer WHERE survey_id = $1 AND created_at <= $2::timestamptz`,
+      [surveyId, snapshotAt],
+    );
+
+    return { snapshotAt, totalCount: count, rows };
   }
 
   private async lockLottery(
