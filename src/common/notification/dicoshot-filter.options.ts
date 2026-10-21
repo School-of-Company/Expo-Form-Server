@@ -4,6 +4,9 @@ import {
   ProgramFormReservationUnavailableException,
 } from '../exceptions/domain.exception.js';
 
+/** 같은 오류 알림을 다시 보내기까지의 최소 간격(초). */
+export const DICOSHOT_THROTTLE_SECONDS = 60;
+
 /**
  * 처리되지 않은 예외를 Discord로 알리는 Dicoshot 전역 필터의 설정.
  *
@@ -21,4 +24,7 @@ export const dicoshotFilterOptions: FilterOptions = {
     ExternalServiceUnavailableException,
     ProgramFormReservationUnavailableException,
   ],
+  // 같은 오류가 반복되면(DB 장애 등) 요청마다 알림이 나가 채널이 묻힌다. 같은 오류·메서드·경로의 알림을 이 시간(초)에 한 번만
+  // 보낸다. 억제 키가 실제 경로(`request.path`)라서 경로 매개변수가 다르면 따로 센다(DicoShot/dicoshot-nest#4).
+  throttle: DICOSHOT_THROTTLE_SECONDS,
 };

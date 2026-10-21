@@ -26,6 +26,10 @@ export const LOTTERY_PHONE_MAX_LENGTH = 11;
  * `LotteryPhoneRetentionService`가 번호만 지운다. 당첨 순번과 발행 기록은 남는다.
  */
 @Index(['surveyId', 'drawNumber'], { unique: true })
+/** 아직 발행하지 않은 당첨 결과만 담는 부분 인덱스. 릴레이와 지표가 발행 대기 건을 찾을 때 쓴다. */
+@Index('IX_survey_draw_result_unpublished', ['createdAt'], {
+  where: `"published_at" IS NULL`,
+})
 @Entity('survey_draw_result')
 export class SurveyDrawResultEntity {
   @PrimaryGeneratedColumn('uuid')

@@ -16,6 +16,7 @@ import {
 import { ExpoModule } from './expo/expo.module.js';
 import { HealthController } from './health/health.controller.js';
 import { FormModule } from './form/form.module.js';
+import { MetricsModule } from './metrics/metrics.module.js';
 import { getMetricsRuntime } from './metrics/metrics-runtime.js';
 import { KafkaModule } from './kafka/kafka.module.js';
 import { SurveyModule } from './survey/survey.module.js';
@@ -60,6 +61,7 @@ import { SurveyModule } from './survey/survey.module.js';
     ),
     KafkaModule,
     DatabaseModule,
+    MetricsModule,
     FormModule,
     SurveyModule,
     ExpoModule,

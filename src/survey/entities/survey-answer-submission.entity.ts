@@ -26,6 +26,13 @@ import { SurveyAnswerSubmissionStatus } from './survey-answer-submission-status.
   unique: true,
   where: `status <> '${SurveyAnswerSubmissionStatus.REJECTED}'`,
 })
+/**
+ * 릴레이와 지표가 훑는 "아직 끝나지 않은 접수"만 담는 부분 인덱스. 종결 행(`STORED`/`REJECTED`)이 쌓여도 릴레이 조회가
+ * 전체를 훑지 않는다. 이름을 직접 정해 마이그레이션과 맞춘다.
+ */
+@Index('IX_survey_answer_submission_in_flight', ['status', 'createdAt'], {
+  where: `"status" IN ('RECEIVED', 'PUBLISHED')`,
+})
 @Entity('survey_answer_submission')
 export class SurveyAnswerSubmissionEntity {
   @PrimaryGeneratedColumn('uuid')

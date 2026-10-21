@@ -45,10 +45,39 @@ function normalizeDateString(value: unknown): unknown {
   const groups = OFFSETLESS_DATE_TIME.exec(text)?.groups;
   if (groups !== undefined) {
     const { date, time = '00:00', seconds = ':00' } = groups;
-    return `${date}T${time}${seconds}${KOREA_OFFSET}`;
+    return isRealDateTime(date, time, seconds)
+      ? `${date}T${time}${seconds}${KOREA_OFFSET}`
+      : NaN;
   }
 
-  return ISO_DATE_TIME_WITH_OFFSET.test(text) ? text : NaN;
+  if (!ISO_DATE_TIME_WITH_OFFSET.test(text)) {
+    return NaN;
+  }
+
+  const [date, rest] = text.split(/t/iu, 2);
+  const time = rest.slice(0, 5);
+  const seconds = /^:\d{2}/u.exec(rest.slice(5))?.[0] ?? ':00';
+  return isRealDateTime(date, time, seconds) ? text : NaN;
+}
+
+/**
+ * 달력에 있는 날짜이고 시각 범위가 맞는지 확인한다. `Date` 파서는 `2026-02-30`을 3월 2일로, `24:00`을 다음 날
+ * 0시로 조용히 바꿔 받아서, 오타로 입력한 접수 기간이 다른 날로 저장되는 것을 막으려면 직접 확인해야 한다.
+ */
+function isRealDateTime(date: string, time: string, seconds: string): boolean {
+  const [year, month, day] = date.split('-').map(Number);
+  const [hour, minute] = time.split(':').map(Number);
+  const second = Number(seconds.slice(1, 3));
+  if (hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+
+  const calendar = new Date(Date.UTC(year, month - 1, day));
+  return (
+    calendar.getUTCFullYear() === year &&
+    calendar.getUTCMonth() === month - 1 &&
+    calendar.getUTCDate() === day
+  );
 }
 
 /**

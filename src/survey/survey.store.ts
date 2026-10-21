@@ -210,7 +210,13 @@ export class SurveyStore {
 
   /** 설문을 삭제한다. 딸린 문항은 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
-    await this.surveys.delete({ id });
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(SurveyEntity, { id });
+      // 접수 기록(아웃박스)에는 설문 FK가 없어 CASCADE가 닿지 않는다. 남겨 두면 릴레이가 지워진 설문의 답변을 계속
+      // 유저 서비스로 발행한다. 설문을 먼저 지우는 순서는 박람회 일괄 삭제(`deleteByExpoId`)와 같다 — 접수가 설문
+      // row를 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤 접수 기록 삭제가 방금 커밋된 기록까지 지운다.
+      await manager.delete(SurveyAnswerSubmissionEntity, { surveyId: id });
+    });
   }
 
   /** 여러 박람회의 설문을 식별 값만 골라 조회한다. 문항은 끌고 오지 않는다. */

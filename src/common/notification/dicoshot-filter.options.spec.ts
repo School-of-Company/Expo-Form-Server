@@ -65,6 +65,47 @@ describe('dicoshotFilterOptions', () => {
   });
 });
 
+describe('dicoshotFilterOptions.throttle', () => {
+  // 억제 캐시는 프로세스 전역이라 다른 테스트와 겹치지 않게 이 블록만의 경로를 쓴다.
+  const flush = async () =>
+    new Promise((resolve) => {
+      setImmediate(resolve);
+    });
+
+  it('같은 오류가 같은 경로에서 반복되면 창 안에서는 한 번만 알린다', async () => {
+    const { filter, sendTo, host } = setup();
+
+    for (let index = 0; index < 5; index += 1) {
+      filter.catch(new Error('db down'), host('/forms/throttle-same', {}));
+    }
+
+    await flush();
+
+    expect(sendTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('경로 매개변수만 다른 같은 오류는 지금은 따로 센다(Dicoshot이 실제 경로를 키로 쓰기 때문)', async () => {
+    const { filter, sendTo, host } = setup();
+
+    filter.catch(new Error('db down'), host('/forms/by-id/id-aaa', {}));
+    filter.catch(new Error('db down'), host('/forms/by-id/id-bbb', {}));
+    await flush();
+
+    // DicoShot/dicoshot-nest#4(라우트 템플릿 키)가 반영되면 1건으로 줄어야 한다.
+    expect(sendTo).toHaveBeenCalledTimes(2);
+  });
+
+  it('서로 다른 오류는 억제하지 않는다', async () => {
+    const { filter, sendTo, host } = setup();
+
+    filter.catch(new Error('first'), host('/forms/throttle-kinds', {}));
+    filter.catch(new TypeError('second'), host('/forms/throttle-kinds', {}));
+    await flush();
+
+    expect(sendTo).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('dicoshotFilterOptions.ignoreErrors', () => {
   const isIgnored = (error: Error) =>
     dicoshotFilterOptions.ignoreErrors?.some((cls) => error instanceof cls) ??

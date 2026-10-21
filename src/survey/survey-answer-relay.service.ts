@@ -1,3 +1,4 @@
+import process from 'node:process';
 import {
   Inject,
   Injectable,
@@ -9,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { Kafka, Producer } from 'kafkajs';
 import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
+import { getMetricsRuntime } from '../metrics/metrics-runtime.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import {
@@ -61,7 +63,10 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
 
     // 주기를 환경변수로 바꿀 수 있어야 해서 `@Cron`(고정 표현식) 대신 기동 때 간격을 등록한다.
     const handle = setInterval(() => {
-      void this.relay();
+      // 처리하지 못한 거절이 프로세스를 죽이지 않게 한다(DB 장애 등으로 `relay`가 던질 수 있다).
+      this.relay().catch((error: unknown) => {
+        this.logger.error('설문 답변 릴레이 실행 실패', error);
+      });
     }, this.settings.intervalMs);
     this.scheduler.addInterval(RELAY_INTERVAL_NAME, handle);
   }
@@ -75,19 +80,29 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
   }
 
   async relay(): Promise<void> {
+    const metrics = getMetricsRuntime()?.service;
     // 같은 인스턴스에서 이전 실행이 아직 돌고 있으면(Kafka가 느릴 때) 겹쳐 돌지 않는다. 다른 인스턴스와의
     // 중복은 store가 행 잠금(`SKIP LOCKED`)으로 막는다.
     if (this.running) {
       this.logger.warn('이전 설문 답변 발행이 끝나지 않아 건너뜁니다.');
+      metrics?.recordRelayRun('answer', 'skipped');
       return;
     }
 
     this.running = true;
+    const startedAt = process.hrtime.bigint();
+    let published = 0;
+    let result: 'ok' | 'error' = 'ok';
     try {
       const failures = await this.store.relayPending(
         { ...this.settings, limit: this.settings.batchSize, now: new Date() },
-        async (batch) => this.publishBatch(batch),
+        async (batch) => {
+          const outcome = await this.publishBatch(batch);
+          published += outcome.published.length;
+          return outcome;
+        },
       );
+      metrics?.recordPublished('answer', published, failures.length);
 
       for (const { submission, error } of failures) {
         // 발행 실패는 표시하지 않아 다음 주기에 그대로 다시 잡힌다(RECEIVED는 계속 RECEIVED, PUBLISHED는
@@ -97,8 +112,16 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
           error,
         );
       }
+    } catch (error) {
+      result = 'error';
+      throw error;
     } finally {
       this.running = false;
+      metrics?.recordRelayRun(
+        'answer',
+        result,
+        Number(process.hrtime.bigint() - startedAt) / 1e9,
+      );
     }
   }
 
@@ -126,7 +149,7 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
         ],
       });
     } catch (error) {
-      const {retriable} = (error as { retriable?: boolean });
+      const { retriable } = error as { retriable?: boolean };
       if (retriable !== false || batch.length === 1) {
         return {
           published: [],

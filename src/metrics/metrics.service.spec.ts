@@ -28,4 +28,52 @@ describe('MetricsService', () => {
       'process_cpu_user_seconds_total',
     );
   });
+
+  it('외부 호출은 서비스·작업·결과 라벨로 기록한다', async () => {
+    const metrics = new MetricsService();
+    metrics.recordDownstream({
+      service: 'expo',
+      operation: 'reserve_update',
+      outcome: 'conflict',
+      seconds: 0.2,
+    });
+
+    const body = await metrics.render();
+
+    expect(body).toContain(
+      'form_downstream_calls_seconds_count{service="expo",operation="reserve_update",outcome="conflict"} 1',
+    );
+  });
+
+  it('릴레이 실행·발행·컨슈머 건너뜀을 고정 라벨로 센다', async () => {
+    const metrics = new MetricsService();
+    metrics.recordRelayRun('answer', 'ok', 0.4);
+    metrics.recordRelayRun('draw', 'skipped');
+    metrics.recordPublished('answer', 3, 1);
+    metrics.recordPublished('draw', 0, 0);
+    metrics.recordConsumerSkipped('unparsable');
+
+    const body = await metrics.render();
+
+    expect(body).toContain(
+      'form_outbox_relay_runs_total{outbox="answer",result="ok"} 1',
+    );
+    expect(body).toContain(
+      'form_outbox_relay_runs_total{outbox="draw",result="skipped"} 1',
+    );
+    expect(body).toContain(
+      'form_outbox_relay_duration_seconds_count{outbox="answer"} 1',
+    );
+    expect(body).toContain(
+      'form_outbox_publish_total{outbox="answer",result="ok"} 3',
+    );
+    expect(body).toContain(
+      'form_outbox_publish_total{outbox="answer",result="error"} 1',
+    );
+    // 0건은 시계열을 만들지 않는다.
+    expect(body).not.toContain('form_outbox_publish_total{outbox="draw"');
+    expect(body).toContain(
+      'form_result_consumer_skipped_total{reason="unparsable"} 1',
+    );
+  });
 });
