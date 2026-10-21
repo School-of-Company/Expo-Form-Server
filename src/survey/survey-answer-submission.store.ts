@@ -77,6 +77,20 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
+   * `(surveyId, phoneNumber)` 조합의 가장 최근 제출 기록을 상태와 상관없이 돌려준다. 거절된 응답도 포함하므로, 참가자 화면이
+   * "응답했는지"와 "처리 단계"를 함께 보여 줄 수 있다. 활성 기록이 있으면 그것이 가장 최근이다(거절 뒤에 다시 제출할 수 있어서).
+   */
+  async findLatestByKey(
+    surveyId: string,
+    phoneNumber: string,
+  ): Promise<SurveyAnswerSubmissionEntity | null> {
+    return this.submissions.findOne({
+      where: { surveyId, phoneNumber },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
    * 설문의 누적 응답 수를 늘리고 접수 기록을 저장한다.
    *
    * 동시 요청이 둘 다 {@link findActiveByKey}를 통과하면 활성 제출 유니크 제약이 한쪽을
