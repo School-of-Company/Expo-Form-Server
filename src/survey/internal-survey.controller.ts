@@ -20,9 +20,12 @@ import {
 import { ExpoIdsRequestDto } from '../common/dto/expo-ids.request.dto.js';
 import { InternalTokenGuard } from '../common/http/internal-token.guard.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import { FindPublicSurveyAnswersRequestDto } from './dto/find-public-survey-answers.request.dto.js';
 import { FindSurveyRequestDto } from './dto/find-survey.request.dto.js';
+import { PublicSurveyAnswerPageResponseDto } from './dto/public-survey-answer-page.response.dto.js';
 import { SurveySummaryDto } from './dto/survey-summary.response.dto.js';
 import { SurveyResponseDto } from './dto/survey.response.dto.js';
+import { SurveyPublicService } from './survey-public.service.js';
 import { SurveyService } from './survey.service.js';
 
 /**
@@ -33,7 +36,10 @@ import { SurveyService } from './survey.service.js';
 @UseGuards(InternalTokenGuard)
 @Controller('internal/surveys')
 export class InternalSurveyController {
-  constructor(private readonly surveyService: SurveyService) {}
+  constructor(
+    private readonly surveyService: SurveyService,
+    private readonly surveyPublicService: SurveyPublicService,
+  ) {}
 
   /** 리포트 서비스 등이 설문 문항 스펙(엑셀 열 제목 등)을 읽을 때 쓴다. */
   @ApiOperation({
@@ -49,6 +55,29 @@ export class InternalSurveyController {
     @Query() dto: FindSurveyRequestDto,
   ): Promise<SurveyResponseDto> {
     return this.surveyService.findOne(expoId, dto);
+  }
+
+  /** 리포트 서비스가 익명 공개 설문 응답 엑셀을 만들 때 끝까지 읽는다(#215). */
+  @ApiOperation({
+    summary: '공개 설문 응답 커서 조회 (내부)',
+    description:
+      '박람회 공개 설문(일반 참가자 설문 하나, 역할 공통)의 익명 응답을 제출 시각·응답 id 순서로 페이지씩 준다. 첫 페이지는 cursor 없이 부르고 nextCursor가 null일 때까지 그대로 넘긴다. 첫 페이지에서 고정한 snapshotAt까지만 읽어 그 사이 새 응답으로 빠지거나 겹치지 않고, 읽은 행 수의 합은 totalCount와 같다. questions는 현재 문항 정의다(questionDefinition=CURRENT, 응답이 있으면 문항 변경이 막힌다). 참가자 id·이름·입장 QR·경품 번호는 없다.',
+  })
+  @ApiOkResponse({ type: PublicSurveyAnswerPageResponseDto })
+  @ApiErrorResponse(
+    400,
+    '커서가 올바르지 않거나 이 설문의 커서가 아님 (SURVEY_CURSOR_INVALID)',
+  )
+  @ApiErrorResponse(
+    404,
+    '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
+  )
+  @Get(':expoId/public-answers')
+  async findPublicAnswers(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Query() dto: FindPublicSurveyAnswersRequestDto,
+  ): Promise<PublicSurveyAnswerPageResponseDto> {
+    return this.surveyPublicService.findAnswerPage(expoId, dto);
   }
 
   /** 박람회 서비스가 박람회 목록에 "설문 만들었는지"를 표시할 때 쓴다(v1 `GetExpoValidationStatus`). */
