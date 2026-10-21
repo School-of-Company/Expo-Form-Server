@@ -45,6 +45,7 @@ export class HttpExpoClient implements ExpoClient {
     try {
       const result = await fetchJson(url, expoResponseSchema, {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+        observe: { service: 'expo', operation: 'exists' },
       });
 
       return result !== null;
@@ -61,6 +62,7 @@ export class HttpExpoClient implements ExpoClient {
     try {
       const result = await fetchJson(url, expoPeriodResponseSchema, {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+        observe: { service: 'expo', operation: 'find_period' },
       });
 
       return result === null
@@ -86,6 +88,7 @@ export class HttpExpoClient implements ExpoClient {
     try {
       result = await putJson(url, { kind: 'UPDATE' }, expoResponseSchema, {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+        observe: { service: 'expo', operation: 'reserve_update' },
       });
     } catch (error) {
       if (error instanceof ExternalServiceError && error.status === 409) {
@@ -117,6 +120,7 @@ export class HttpExpoClient implements ExpoClient {
     try {
       await deleteRequest(url, {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+        observe: { service: 'expo', operation: 'release_change' },
       });
     } catch (error) {
       // ponytail: 한 번만 시도한다. 풀리지 않은 예약은 박람회 서비스에서 수동으로 해제해야 한다.

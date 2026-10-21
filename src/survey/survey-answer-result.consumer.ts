@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Consumer, Kafka, type KafkaMessage } from 'kafkajs';
 import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
+import { getMetricsRuntime } from '../metrics/metrics-runtime.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
@@ -75,6 +76,7 @@ export class SurveyAnswerResultConsumer
     const event = this.parse(message.value);
     if (event === undefined) {
       this.logger.error(`결과 이벤트를 해석할 수 없어 건너뜁니다: ${origin}`);
+      getMetricsRuntime()?.service.recordConsumerSkipped('unparsable');
       return;
     }
 
@@ -82,6 +84,7 @@ export class SurveyAnswerResultConsumer
       this.logger.warn(
         `알 수 없는 결과 상태 무시: eventId=${event.eventId}, status=${String(event.status)}`,
       );
+      getMetricsRuntime()?.service.recordConsumerSkipped('unknown_status');
       return;
     }
 

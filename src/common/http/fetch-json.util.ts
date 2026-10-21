@@ -1,4 +1,8 @@
 import type { z } from 'zod';
+import {
+  observeDownstream,
+  type DownstreamLabels,
+} from './downstream-observer.js';
 import { ExternalServiceError } from './external-service.error.js';
 
 const DEFAULT_TIMEOUT_MS = 3000;
@@ -7,6 +11,8 @@ const DEFAULT_TIMEOUT_MS = 3000;
 export type JsonRequestOptions = {
   headers?: Record<string, string>;
   timeoutMs?: number;
+  /** 지표에 남길 호출 이름. 없으면 계측하지 않는다. */
+  observe?: DownstreamLabels;
 };
 
 /**
@@ -17,14 +23,20 @@ export type JsonRequestOptions = {
 export async function fetchJson<T>(
   url: string,
   schema: z.ZodType<T>,
-  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions = {},
+  {
+    headers = {},
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    observe,
+  }: JsonRequestOptions = {},
 ): Promise<T | null> {
-  const response = await fetch(url, {
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  return observeDownstream(observe, async () => {
+    const response = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
 
-  return parseJsonResponse(url, response, schema);
+    return parseJsonResponse(url, response, schema);
+  });
 }
 
 /**
@@ -55,34 +67,42 @@ export async function putJson<T>(
 /** 외부 서비스에 DELETE 요청을 보낸다. 응답 바디는 읽지 않고, 2xx가 아니면 {@link ExternalServiceError}를 던진다. */
 export async function deleteRequest(
   url: string,
-  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions = {},
+  {
+    headers = {},
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    observe,
+  }: JsonRequestOptions = {},
 ): Promise<void> {
-  const response = await fetch(url, {
-    method: 'DELETE',
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  await discardBody(response);
+  return observeDownstream(observe, async () => {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    await discardBody(response);
 
-  if (!response.ok) {
-    throw new ExternalServiceError(url, response.status);
-  }
+    if (!response.ok) {
+      throw new ExternalServiceError(url, response.status);
+    }
+  });
 }
 
 async function sendJson<T>(
   url: string,
   { method, body }: { method: 'POST' | 'PUT'; body: unknown },
   schema: z.ZodType<T>,
-  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS }: JsonRequestOptions,
+  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS, observe }: JsonRequestOptions,
 ): Promise<T | null> {
-  const response = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  return observeDownstream(observe, async () => {
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
 
-  return parseJsonResponse(url, response, schema);
+    return parseJsonResponse(url, response, schema);
+  });
 }
 
 async function parseJsonResponse<T>(

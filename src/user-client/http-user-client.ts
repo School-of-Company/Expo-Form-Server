@@ -70,6 +70,7 @@ export class HttpUserClient implements UserClient {
       '/internal/participants/resolve',
       input,
       participantLookupResponseSchema,
+      'resolve_participant',
       // 같은 번호가 다른 표기로 여러 번 저장돼 있어 응답자를 특정할 수 없다는 뜻이다. 재시도로는 풀리지 않는다.
       { conflict: () => new ParticipantAmbiguousException() },
     );
@@ -82,6 +83,7 @@ export class HttpUserClient implements UserClient {
       '/internal/participant-sessions/resolve',
       input,
       participantSessionResponseSchema,
+      'resolve_session',
       {
         // 코드 없는 401은 내부 토큰 불일치일 수 있다 — 세션 문제로 덮지 않고 장애로 남긴다.
         unauthorized: (code) =>
@@ -113,7 +115,10 @@ export class HttpUserClient implements UserClient {
     const result = await this.request(
       `/internal/survey-answer-events/${encodeURIComponent(eventId)}`,
       async (url, headers) =>
-        fetchJson(url, surveyAnswerEventResultSchema, { headers }),
+        fetchJson(url, surveyAnswerEventResultSchema, {
+          headers,
+          observe: { service: 'user', operation: 'survey_answer_result' },
+        }),
     );
 
     return result === null
@@ -126,11 +131,16 @@ export class HttpUserClient implements UserClient {
     path: string,
     body: unknown,
     schema: z.ZodType<T>,
+    operation: string,
     options: StatusErrors = {},
   ): Promise<T | null> {
     return this.request(
       path,
-      async (url, headers) => postJson(url, body, schema, { headers }),
+      async (url, headers) =>
+        postJson(url, body, schema, {
+          headers,
+          observe: { service: 'user', operation },
+        }),
       options,
     );
   }
