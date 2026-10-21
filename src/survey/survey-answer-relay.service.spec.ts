@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
@@ -89,9 +90,7 @@ describe('SurveyAnswerRelayService', () => {
     store.relayPending.mockImplementation(
       async (
         _options: unknown,
-        publish: (
-          batch: SurveyAnswerSubmissionEntity[],
-        ) => Promise<{
+        publish: (batch: SurveyAnswerSubmissionEntity[]) => Promise<{
           published: Array<{
             submission: SurveyAnswerSubmissionEntity;
             version: 1 | 2;
@@ -236,6 +235,31 @@ describe('SurveyAnswerRelayService', () => {
       spy.mockRestore();
     });
 
+    it('주기 실행이 던져도(DB 장애) 처리되지 않은 거절로 프로세스를 죽이지 않고 로그만 남긴다', async () => {
+      const spy = vi
+        .spyOn(globalThis, 'setInterval')
+        .mockReturnValue(0 as unknown as NodeJS.Timeout);
+      const logError = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      Object.assign(producer, { connect: vi.fn(), disconnect: vi.fn() });
+      store.relayPending.mockRejectedValue(new Error('db down'));
+
+      await service.onModuleInit();
+      const [tick] = spy.mock.calls[0] as [() => void];
+      tick();
+      await new Promise((resolve) => {
+        setImmediate(resolve);
+      });
+
+      expect(logError).toHaveBeenCalledWith(
+        '설문 답변 릴레이 실행 실패',
+        expect.any(Error),
+      );
+      spy.mockRestore();
+      logError.mockRestore();
+    });
+
     it('환경변수로 주기를 바꾼다', async () => {
       config.get.mockImplementation((key: string, fallback: unknown) =>
         key === 'SURVEY_ANSWER_RELAY_INTERVAL_MS' ? '5000' : fallback,
@@ -258,7 +282,8 @@ describe('SurveyAnswerRelayService', () => {
   });
 
   describe('이벤트 버전', () => {
-    const publishedValue = () => JSON.parse(firstMessageValue()) as {
+    const publishedValue = () =>
+      JSON.parse(firstMessageValue()) as {
         eventId: string;
         version: number;
         questions?: unknown;

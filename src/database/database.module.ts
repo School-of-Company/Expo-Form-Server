@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   MIGRATIONS_GLOB,
   namingStrategy,
+  readPoolSettings,
   resolveSsl,
 } from './database.config.js';
 
@@ -26,6 +27,7 @@ import {
         namingStrategy,
         synchronize: config.get<string>('NODE_ENV') !== 'production',
         migrations: [MIGRATIONS_GLOB],
+        extra: readPoolSettings((key) => config.get<string>(key)),
         ssl: resolveSsl(
           config.get<string>('NODE_ENV'),
           config.get<string>('DATABASE_SSL_REJECT_UNAUTHORIZED'),

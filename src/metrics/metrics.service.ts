@@ -1,4 +1,10 @@
-import { Histogram, Registry, collectDefaultMetrics } from 'prom-client';
+import {
+  Counter,
+  Histogram,
+  Registry,
+  collectDefaultMetrics,
+} from 'prom-client';
+import type { DownstreamSample } from '../common/http/downstream-observer.js';
 
 const STANDARD_METHODS = new Set([
   'GET',
@@ -9,6 +15,9 @@ const STANDARD_METHODS = new Set([
   'DELETE',
   'OPTIONS',
 ]);
+
+/** 아웃박스 종류. 지표 라벨이라 이 목록으로 고정한다. */
+export type OutboxName = 'answer' | 'draw';
 
 /** 라우트 템플릿을 알 수 없는 요청(404 등)을 묶는 고정 라벨 값. */
 export const UNMATCHED_URI = 'unmatched';
@@ -36,8 +45,79 @@ export class MetricsService {
     registers: [this.registry],
   });
 
+  private readonly downstreamDuration = new Histogram({
+    name: 'form_downstream_calls_seconds',
+    help: '다른 서비스(박람회·유저) 호출 소요 시간과 결과',
+    labelNames: ['service', 'operation', 'outcome'],
+    buckets: LATENCY_BUCKETS,
+    registers: [this.registry],
+  });
+
+  private readonly relayRuns = new Counter({
+    name: 'form_outbox_relay_runs_total',
+    help: '아웃박스 릴레이 실행 결과',
+    labelNames: ['outbox', 'result'],
+    registers: [this.registry],
+  });
+
+  private readonly relayDuration = new Histogram({
+    name: 'form_outbox_relay_duration_seconds',
+    help: '아웃박스 릴레이 한 번의 실행 시간(행 잠금과 DB 연결을 쥐는 시간의 근사)',
+    labelNames: ['outbox'],
+    buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120],
+    registers: [this.registry],
+  });
+
+  private readonly publishes = new Counter({
+    name: 'form_outbox_publish_total',
+    help: '아웃박스 건 발행 결과',
+    labelNames: ['outbox', 'result'],
+    registers: [this.registry],
+  });
+
+  private readonly consumerSkipped = new Counter({
+    name: 'form_result_consumer_skipped_total',
+    help: '결과 컨슈머가 건너뛴 메시지',
+    labelNames: ['reason'],
+    registers: [this.registry],
+  });
+
   constructor() {
     collectDefaultMetrics({ register: this.registry });
+  }
+
+  recordDownstream({
+    service,
+    operation,
+    outcome,
+    seconds,
+  }: DownstreamSample): void {
+    this.downstreamDuration.observe({ service, operation, outcome }, seconds);
+  }
+
+  recordRelayRun(
+    outbox: OutboxName,
+    result: 'ok' | 'error' | 'skipped',
+    seconds?: number,
+  ): void {
+    this.relayRuns.inc({ outbox, result });
+    if (seconds !== undefined) {
+      this.relayDuration.observe({ outbox }, seconds);
+    }
+  }
+
+  recordPublished(outbox: OutboxName, ok: number, failed: number): void {
+    if (ok > 0) {
+      this.publishes.inc({ outbox, result: 'ok' }, ok);
+    }
+
+    if (failed > 0) {
+      this.publishes.inc({ outbox, result: 'error' }, failed);
+    }
+  }
+
+  recordConsumerSkipped(reason: 'unparsable' | 'unknown_status'): void {
+    this.consumerSkipped.inc({ reason });
   }
 
   recordRequest(

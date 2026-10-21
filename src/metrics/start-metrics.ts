@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 import { Logger } from '@nestjs/common';
+import { setDownstreamObserver } from '../common/http/downstream-observer.js';
 import {
   readMetricsBind,
   readMetricsEnabled,
@@ -20,12 +21,16 @@ export async function startMetrics(
 
   if (!readMetricsEnabled(env)) {
     setMetricsRuntime(undefined);
+    setDownstreamObserver(undefined);
     logger.log('METRICS_ENABLED=false: 메트릭 listener를 열지 않습니다.');
     return undefined;
   }
 
   const bind = readMetricsBind(env);
   const service = new MetricsService();
+  setDownstreamObserver((sample) => {
+    service.recordDownstream(sample);
+  });
   let server: Server;
   try {
     server = await startMetricsServer(service, bind.port, bind.host);
