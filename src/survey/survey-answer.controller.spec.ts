@@ -11,6 +11,7 @@ import { DomainExceptionFilter } from '../common/exceptions/domain-exception.fil
 import { HttpUserClient } from '../user-client/http-user-client.js';
 import { USER_CLIENT } from '../user-client/user-client.interface.js';
 import type { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
+import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import {
   readSessionCookie,
   SurveyAnswerController,
@@ -102,6 +103,13 @@ describe('SurveyAnswerController (#147 참가자 세션)', () => {
           useValue: {
             findActiveByKey: async (surveyId: string, phoneNumber: string) =>
               saved.find(
+                (s) =>
+                  s.surveyId === surveyId &&
+                  s.phoneNumber === phoneNumber &&
+                  s.status !== SurveyAnswerSubmissionStatus.REJECTED,
+              ) ?? null,
+            findLatestByKey: async (surveyId: string, phoneNumber: string) =>
+              saved.findLast(
                 (s) => s.surveyId === surveyId && s.phoneNumber === phoneNumber,
               ) ?? null,
             async createReceived(submission: SurveyAnswerSubmissionEntity) {
@@ -173,6 +181,70 @@ describe('SurveyAnswerController (#147 참가자 세션)', () => {
     expect(again.status).toBe(409);
     expect(again.body).toMatchObject({ code: 'SURVEY_ANSWER_ALREADY_EXISTS' });
     expect(saved).toHaveLength(1);
+  });
+
+  describe('GET /surveys/answer/standard/:expoId/me (#203 본인 응답 상태)', () => {
+    const me = (expoId: string, cookie?: string) => {
+      const call = request(app.getHttpServer()).get(
+        `/surveys/answer/standard/${expoId}/me`,
+      );
+      return cookie === undefined ? call : call.set('Cookie', cookie);
+    };
+
+    it('세션이 없거나 다른 행사의 것이면 401', async () => {
+      const none = await me(EXPO);
+      const other = await me(EXPO, 'PARTICIPANT_SESSION=other-expo');
+
+      expect(none.status).toBe(401);
+      expect(none.body).toMatchObject({ code: 'SESSION_REQUIRED' });
+      expect(other.status).toBe(401);
+    });
+
+    it('설문이 없으면 404', async () => {
+      const response = await me(OTHER_EXPO, 'PARTICIPANT_SESSION=other-expo');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toMatchObject({ code: 'SURVEY_NOT_FOUND' });
+    });
+
+    it('제출 기록이 없으면 answered=false, status=null', async () => {
+      const response = await me(EXPO, 'PARTICIPANT_SESSION=mine');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ answered: false, status: null });
+    });
+
+    it('접수·발행 중이면 RECEIVED, 저장 완료면 STORED로 답하고 둘 다 answered=true', async () => {
+      await submit(EXPO, 'PARTICIPANT_SESSION=mine').expect(202);
+      const received = await me(EXPO, 'PARTICIPANT_SESSION=mine');
+      saved[0].status = SurveyAnswerSubmissionStatus.PUBLISHED;
+      const published = await me(EXPO, 'PARTICIPANT_SESSION=mine');
+      saved[0].status = SurveyAnswerSubmissionStatus.STORED;
+      const stored = await me(EXPO, 'PARTICIPANT_SESSION=mine');
+
+      expect(received.body).toEqual({ answered: true, status: 'RECEIVED' });
+      expect(published.body).toEqual({ answered: true, status: 'RECEIVED' });
+      expect(stored.body).toEqual({ answered: true, status: 'STORED' });
+    });
+
+    it('거절됐으면 다시 제출할 수 있으므로 answered=false, status=REJECTED', async () => {
+      await submit(EXPO, 'PARTICIPANT_SESSION=mine').expect(202);
+      saved[0].status = SurveyAnswerSubmissionStatus.REJECTED;
+
+      const response = await me(EXPO, 'PARTICIPANT_SESSION=mine');
+
+      expect(response.body).toEqual({ answered: false, status: 'REJECTED' });
+    });
+
+    it('거절 뒤 재제출했으면 최신 제출의 상태로 답한다', async () => {
+      await submit(EXPO, 'PARTICIPANT_SESSION=mine').expect(202);
+      saved[0].status = SurveyAnswerSubmissionStatus.REJECTED;
+      await submit(EXPO, 'PARTICIPANT_SESSION=mine').expect(202);
+
+      const response = await me(EXPO, 'PARTICIPANT_SESSION=mine');
+
+      expect(response.body).toEqual({ answered: true, status: 'RECEIVED' });
+    });
   });
 });
 

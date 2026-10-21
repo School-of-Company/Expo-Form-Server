@@ -76,6 +76,17 @@ export class SurveyAnswerSubmissionStore {
     });
   }
 
+  /** `(surveyId, phoneNumber)` 조합의 가장 최근 제출 기록을 거절 여부와 상관없이 가져온다. */
+  async findLatestByKey(
+    surveyId: string,
+    phoneNumber: string,
+  ): Promise<SurveyAnswerSubmissionEntity | null> {
+    return this.submissions.findOne({
+      where: { surveyId, phoneNumber },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   /**
    * 설문의 누적 응답 수를 늘리고 접수 기록을 저장한다.
    *

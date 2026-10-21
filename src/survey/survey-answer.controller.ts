@@ -1,6 +1,8 @@
 import {
+  applyDecorators,
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -12,12 +14,14 @@ import { ConfigService } from '@nestjs/config';
 import {
   ApiAcceptedResponse,
   ApiCookieAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import { MySurveyAnswerResponseDto } from './dto/my-survey-answer.response.dto.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 
@@ -40,8 +44,30 @@ export function readSessionCookie(
   return values.length === 1 && values[0] !== '' ? values[0] : undefined;
 }
 
+/** 본인 응답 상태 조회 라우트의 공통 문서. 참여자군만 다르고 나머지는 같다. */
+// eslint-disable-next-line @typescript-eslint/naming-convention -- Nest 데코레이터 관례(PascalCase)를 따른다
+function ApiFindMine(summary: string) {
+  return applyDecorators(
+    ApiOperation({
+      summary,
+      description:
+        '참가자 세션(PARTICIPANT_SESSION 쿠키)의 응답자가 이 설문에 낸 가장 최근 제출의 상태를 돌려준다. status는 RECEIVED(접수·처리 중), STORED(저장 완료), REJECTED(거절 — 다시 제출할 수 있음), 제출이 없으면 null이다. answered가 true면 다시 제출할 때 409다.',
+    }),
+    ApiOkResponse({ type: MySurveyAnswerResponseDto }),
+    ApiErrorResponse(
+      401,
+      '참가자 세션이 없거나 다른 행사의 것이거나 만료됨 (SESSION_REQUIRED, SESSION_EXPIRED)',
+    ),
+    ApiErrorResponse(404, '설문이 없음 (SURVEY_NOT_FOUND)'),
+    ApiErrorResponse(
+      503,
+      '유저 서비스에서 세션을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+    ),
+  );
+}
+
 /**
- * `/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출 전용.
+ * `/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출과 본인 응답 상태 조회.
  *
  * Gateway 공개 경로라 JWT가 없다. 대신 참가자 세션 쿠키를 유저 서비스 내부 API로 확인한다(#147).
  */
@@ -138,6 +164,34 @@ export class SurveyAnswerController {
       ParticipationType.TRAINEE,
       readSessionCookie(request.headers.cookie, this.sessionCookieName),
       dto,
+    );
+  }
+
+  /** 일반 참가자 설문에 대한 본인 응답 상태를 조회한다(#203). */
+  @ApiFindMine('일반 참가자 설문 본인 응답 상태 조회')
+  @Get('standard/:expoId/me')
+  async findMineStandard(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Req() request: Request,
+  ): Promise<MySurveyAnswerResponseDto> {
+    return this.surveyAnswerService.findMine(
+      expoId,
+      ParticipationType.STANDARD,
+      readSessionCookie(request.headers.cookie, this.sessionCookieName),
+    );
+  }
+
+  /** 교원연수자 설문에 대한 본인 응답 상태를 조회한다(#203). */
+  @ApiFindMine('교원연수자 설문 본인 응답 상태 조회')
+  @Get('trainee/:expoId/me')
+  async findMineTrainee(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Req() request: Request,
+  ): Promise<MySurveyAnswerResponseDto> {
+    return this.surveyAnswerService.findMine(
+      expoId,
+      ParticipationType.TRAINEE,
+      readSessionCookie(request.headers.cookie, this.sessionCookieName),
     );
   }
 }

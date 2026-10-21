@@ -15,6 +15,7 @@ import {
   USER_CLIENT,
   type UserClient,
 } from '../user-client/user-client.interface.js';
+import type { MySurveyAnswerResponseDto } from './dto/my-survey-answer.response.dto.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { toQuestionSnapshots } from './question-snapshot.js';
@@ -75,13 +76,7 @@ export class SurveyAnswerService {
     sessionId: string | undefined,
     dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {
-    if (sessionId === undefined) {
-      throw new ParticipantSessionException();
-    }
-
-    const phoneNumber = normalizePhoneNumber(
-      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
-    );
+    const phoneNumber = await this.resolveSessionPhone(expoId, sessionId);
 
     const survey = await this.surveyStore.findByExpoAndType(
       expoId,
@@ -158,6 +153,70 @@ export class SurveyAnswerService {
 
     this.logger.log(
       `설문 답변 접수 완료: surveyId=${survey.id}, eventId=${submission.eventId}`,
+    );
+  }
+
+  /**
+   * 참가자 세션의 응답자가 이 설문에 낸 가장 최근 제출의 상태를 돌려준다(#203). 응답자는 {@link submit}과
+   * 같이 세션의 전화번호로 정한다. 참여자 등록 여부는 묻지 않는다 — 등록되지 않은 번호는 제출 기록도 없다.
+   *
+   * @throws {ParticipantSessionException} 세션이 없거나 다른 행사의 것이거나 만료됐을 때(401)
+   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
+   * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때
+   */
+  async findMine(
+    expoId: string,
+    participationType: ParticipationType,
+    sessionId: string | undefined,
+  ): Promise<MySurveyAnswerResponseDto> {
+    const phoneNumber = await this.resolveSessionPhone(expoId, sessionId);
+
+    const survey = await this.surveyStore.findByExpoAndType(
+      expoId,
+      participationType,
+    );
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
+
+    const latest = await this.submissionStore.findLatestByKey(
+      survey.id,
+      phoneNumber,
+    );
+    if (!latest) {
+      return { answered: false, status: null };
+    }
+
+    switch (latest.status) {
+      case SurveyAnswerSubmissionStatus.REJECTED: {
+        return { answered: false, status: latest.status };
+      }
+
+      case SurveyAnswerSubmissionStatus.STORED: {
+        return { answered: true, status: latest.status };
+      }
+
+      case SurveyAnswerSubmissionStatus.RECEIVED:
+      case SurveyAnswerSubmissionStatus.PUBLISHED: {
+        return {
+          answered: true,
+          status: SurveyAnswerSubmissionStatus.RECEIVED,
+        };
+      }
+    }
+  }
+
+  /** 세션 확인을 가장 먼저 해서 인증되지 않은 요청은 다른 결과 없이 401만 받는다. */
+  private async resolveSessionPhone(
+    expoId: string,
+    sessionId: string | undefined,
+  ): Promise<string> {
+    if (sessionId === undefined) {
+      throw new ParticipantSessionException();
+    }
+
+    return normalizePhoneNumber(
+      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
     );
   }
 }
