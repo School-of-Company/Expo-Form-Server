@@ -6,6 +6,8 @@ import {
 } from '../common/exceptions/domain.exception.js';
 import { isForeignKeyViolation } from '../common/exceptions/postgres-error.util.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
+import { FindPublicSurveyAnswersRequestDto } from './dto/find-public-survey-answers.request.dto.js';
+import { PublicSurveyAnswerPageResponseDto } from './dto/public-survey-answer-page.response.dto.js';
 import { PublicSurveyAnswerResponseDto } from './dto/public-survey-answer.response.dto.js';
 import { SubmitPublicSurveyAnswerRequestDto } from './dto/submit-public-survey-answer.request.dto.js';
 import {
@@ -14,6 +16,7 @@ import {
 } from './dto/public-survey.response.dto.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { normalizeLotteryPhone } from './lottery-phone.js';
+import { decodeCursor, encodeCursor } from './public-answer-cursor.js';
 import {
   SurveyPublicAnswerStore,
   type DrawOutcome,
@@ -85,6 +88,59 @@ export class SurveyPublicService {
     this.logger.log(`공개 설문 답변 저장 완료: surveyId=${survey.id}`);
 
     return { won: outcome.won };
+  }
+
+  /**
+   * 리포트 서비스가 익명 응답을 끝까지 읽도록 한 페이지를 준다(#215). 첫 페이지에서 정한 상한을 커서로 넘겨
+   * 모든 페이지가 같은 응답 집합을 나눠 읽는다. 문항은 지금 정의를 싣는다 — 응답이 있으면 문항을 바꿀 수 없다(#179).
+   *
+   * @throws {SurveyNotFoundException} 그 박람회에 일반 참가자 설문이 없을 때
+   * @throws {SurveyCursorInvalidException} 커서가 올바르지 않거나 이 설문의 것이 아닐 때
+   */
+  async findAnswerPage(
+    expoId: string,
+    dto: FindPublicSurveyAnswersRequestDto,
+  ): Promise<PublicSurveyAnswerPageResponseDto> {
+    const survey = await this.findPublicSurvey(expoId);
+    const cursor =
+      dto.cursor === undefined ? null : decodeCursor(dto.cursor, survey.id);
+    const snapshotAt =
+      cursor?.snapshotAt ?? (await this.answerStore.snapshot(survey.id));
+
+    const page = await this.answerStore.findPage(
+      survey.id,
+      snapshotAt,
+      cursor,
+      dto.limit,
+    );
+    const rows = page.rows.slice(0, dto.limit);
+    const last = rows.at(-1);
+
+    return {
+      survey: { id: survey.id, expoId: survey.expoId, title: survey.title },
+      questionDefinition: 'CURRENT',
+      questions: survey.dynamicSurveys.map((question, order) => ({
+        id: question.id,
+        order,
+        title: question.title,
+        formType: question.formType,
+        requiredStatus: question.requiredStatus,
+        jsonData: question.jsonData,
+        otherJson: question.otherJson,
+      })),
+      snapshotAt,
+      totalCount: page.totalCount,
+      answers: rows,
+      nextCursor:
+        last && page.rows.length > dto.limit
+          ? encodeCursor({
+              surveyId: survey.id,
+              snapshotAt,
+              createdAt: last.createdAt,
+              id: last.id,
+            })
+          : null,
+    };
   }
 
   /**

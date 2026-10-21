@@ -199,6 +199,20 @@ export class SurveyAnswerAlreadyExistsException extends DomainException {
 }
 
 /**
+ * 공개 설문 응답 커서를 해석할 수 없거나, 형식이 어긋나거나, 지금 조회하는 설문의 커서가 아닐 때(#215).
+ * 다른 박람회의 커서나 설문을 다시 만들기 전의 커서도 여기에 든다.
+ */
+export class SurveyCursorInvalidException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.SURVEY_CURSOR_INVALID,
+      '설문 응답 커서가 올바르지 않습니다.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
+
+/**
  * 참가자 세션의 전화번호로 응답자를 찾지 못했을 때. 해당 박람회에 등록되지 않았거나, 등록은 됐지만
  * 참여자군이 설문 대상과 달라 자격이 없는 경우도 같은 예외로 다룬다. 세션을 거친 뒤에만 나오므로
  * 이 응답은 SMS로 인증한 본인 번호에 대해서만 받는다(#147).
