@@ -154,7 +154,9 @@ function matchesTrigger(parentAnswer: unknown, triggerValues: string[]) {
  * 숨겨진 문항에 값이 와도 거부하지 않고 무시한다(값 자체의 형태 검증은 그대로 받는다) — 클라이언트는
  * 숨겨진 문항의 옛 값을 상태에 남겨 두므로, 연쇄 조건(Q1→Q2→Q3)에서 Q1을 바꿔 Q2만 빠지고 Q3의 옛 값이
  * 함께 오는 제출이 있을 수 있고, 이를 거부하면 이전에 통과하던 제출이 실패한다.
- * 부모를 찾을 수 없으면(스펙 오류) 보이는 것으로 보고 기존처럼 필수 여부만 따른다.
+ * 부모를 찾을 수 없거나 부모 연결이 순환이면(스펙 오류) 보이는 것으로 보고 기존처럼 필수 여부만 따른다.
+ * 연쇄 조건에서는 부모 문항도 보여야 자식이 보인다 — 부모가 숨겨졌으면 부모가 남긴 옛 값이 trigger와 같아도 자식은
+ * 숨겨진 것이다.
  */
 export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
   const shape = Object.fromEntries(
@@ -168,22 +170,52 @@ export function buildAnswerSchema(questions: readonly QuestionSpec[]) {
     .object(shape)
     .strict()
     .superRefine((answers, context) => {
-      for (const question of questions) {
-        const conditional = question.otherJson?.conditional;
-        if (conditional === undefined) {
+      const values = answers as Record<string, unknown>;
+      const visibility = new Map<number, boolean>();
+      // 문항이 보이려면 부모가 보이고(연쇄 조건이면 거슬러 올라가며) 부모 답변이 trigger에 해당해야 한다. 숨겨진 부모가
+      // 남긴 옛 값으로 자식이 보이는 것으로 판정되면, 화면에 없는 문항 때문에 제출이 실패한다.
+      const isVisible = (
+        index: number,
+        chain: ReadonlySet<number>,
+      ): boolean => {
+        const cached = visibility.get(index);
+        if (cached !== undefined) {
+          return cached;
+        }
+
+        const conditional = questions[index].otherJson?.conditional;
+        const parent =
+          conditional === undefined
+            ? undefined
+            : questions[conditional.parentIndex];
+        // 조건이 없거나 부모를 찾을 수 없거나(스펙 오류) 부모 연결이 순환이면 보이는 것으로 본다.
+        if (
+          conditional === undefined ||
+          parent === undefined ||
+          conditional.parentIndex === index ||
+          chain.has(conditional.parentIndex)
+        ) {
+          visibility.set(index, true);
+          return true;
+        }
+
+        const visible =
+          isVisible(conditional.parentIndex, new Set([...chain, index])) &&
+          matchesTrigger(
+            values[String(parent.id)],
+            triggerValuesOf(conditional),
+          );
+        visibility.set(index, visible);
+        return visible;
+      };
+
+      for (const [index, question] of questions.entries()) {
+        if (question.otherJson?.conditional === undefined) {
           continue;
         }
 
-        const parent = questions[conditional.parentIndex];
-        const visible =
-          parent === undefined ||
-          matchesTrigger(
-            (answers as Record<string, unknown>)[String(parent.id)],
-            triggerValuesOf(conditional),
-          );
-        const answeredValue = (answers as Record<string, unknown>)[
-          String(question.id)
-        ];
+        const visible = isVisible(index, new Set());
+        const answeredValue = values[String(question.id)];
         const answered = answeredValue !== undefined;
 
         if (!answered && visible && question.requiredStatus) {

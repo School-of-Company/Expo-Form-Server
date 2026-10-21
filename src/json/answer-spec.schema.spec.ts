@@ -319,6 +319,126 @@ describe('buildAnswerSchema', () => {
       );
     });
 
+    describe('연쇄 조건에서 숨겨진 부모', () => {
+      // Q1(드롭다운 1/2) → Q2(Q1=1) → Q3(필수 문장, Q2=1)
+      const chain = (requiredTail: boolean) =>
+        buildAnswerSchema([
+          { ...roleQuestion, id: 40 },
+          {
+            ...roleQuestion,
+            id: 41,
+            requiredStatus: false,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 0, triggerValue: '1' },
+            },
+          },
+          {
+            ...schoolQuestion,
+            id: 42,
+            requiredStatus: requiredTail,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 1, triggerValue: '1' },
+            },
+          },
+        ]);
+
+      it('부모가 숨겨졌으면 부모가 남긴 옛 값이 trigger와 같아도 자식의 필수를 요구하지 않는다', () => {
+        // Q1을 2로 바꿔 Q2가 숨겨졌고 Q2의 옛 값(1)이 함께 온다. Q3는 화면에 보이지 않는다.
+        expect(chain(true).safeParse({ '40': '2', '41': '1' }).success).toBe(
+          true,
+        );
+        expect(chain(true).safeParse({ '40': '2' }).success).toBe(true);
+      });
+
+      it('부모가 보이고 trigger가 맞으면 자식의 필수를 요구한다', () => {
+        expect(chain(true).safeParse({ '40': '1', '41': '1' }).success).toBe(
+          false,
+        );
+        expect(
+          chain(true).safeParse({ '40': '1', '41': '1', '42': '서울고' })
+            .success,
+        ).toBe(true);
+      });
+
+      it('부모는 보이지만 trigger가 아니면 자식은 숨겨진다', () => {
+        expect(chain(true).safeParse({ '40': '1', '41': '2' }).success).toBe(
+          true,
+        );
+      });
+
+      it('3단 이상으로 이어져도 맨 위가 숨겨지면 아래 전부 숨겨진다', () => {
+        const deep = buildAnswerSchema([
+          { ...roleQuestion, id: 50 },
+          {
+            ...roleQuestion,
+            id: 51,
+            requiredStatus: false,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 0, triggerValue: '1' },
+            },
+          },
+          {
+            ...roleQuestion,
+            id: 52,
+            requiredStatus: false,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 1, triggerValue: '1' },
+            },
+          },
+          {
+            ...schoolQuestion,
+            id: 53,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 2, triggerValue: '1' },
+            },
+          },
+        ]);
+
+        expect(
+          deep.safeParse({ '50': '2', '51': '1', '52': '1' }).success,
+        ).toBe(true);
+      });
+
+      it('부모 연결이 순환이거나 자기 자신이어도 무한 반복하지 않는다', () => {
+        const cyclic = buildAnswerSchema([
+          {
+            ...roleQuestion,
+            id: 60,
+            requiredStatus: false,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 1, triggerValue: '1' },
+            },
+          },
+          {
+            ...roleQuestion,
+            id: 61,
+            requiredStatus: false,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 0, triggerValue: '1' },
+            },
+          },
+          {
+            ...schoolQuestion,
+            id: 62,
+            otherJson: {
+              hasEtc: false,
+              conditional: { parentIndex: 2, triggerValue: '1' },
+            },
+          },
+        ]);
+
+        expect(cyclic.safeParse({}).success).toBe(false);
+        expect(cyclic.safeParse({ '62': '서울고' }).success).toBe(true);
+      });
+    });
+
     it('부모 답변이 없어도 숨겨진 것으로 본다', () => {
       const optionalParent = buildAnswerSchema([
         { ...roleQuestion, requiredStatus: false },
