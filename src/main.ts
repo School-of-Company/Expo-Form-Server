@@ -6,6 +6,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module.js';
 import { createHttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
 import { startMetrics } from './metrics/start-metrics.js';
+import { traceContextMiddleware } from './tracing/trace-context.middleware.js';
+import { TraceLogger } from './tracing/trace-logger.js';
 import { SWAGGER_UI_PATH, setupSwagger } from './swagger.js';
 
 async function bootstrap() {
@@ -13,8 +15,11 @@ async function bootstrap() {
   const metricsRuntime = await startMetrics((key) => process.env[key]);
   const metrics = metricsRuntime?.service;
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new TraceLogger(),
+  });
   app.enableShutdownHooks();
+  app.use(traceContextMiddleware);
   if (metrics !== undefined) {
     app.use(createHttpMetricsMiddleware(metrics));
   }
