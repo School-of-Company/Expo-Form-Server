@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -12,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   ApiAcceptedResponse,
   ApiCookieAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -19,6 +21,7 @@ import type { Request } from 'express';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
+import { SurveyAnswerStatusResponseDto } from './dto/survey-answer-status.response.dto.js';
 import { SurveyAnswerService } from './survey-answer.service.js';
 
 /** 유저 서비스가 SMS 인증 뒤 발급하는 참가자 세션 쿠키의 기본 이름. 신청 서비스와 같은 설정 키로 바꾼다. */
@@ -41,7 +44,7 @@ export function readSessionCookie(
 }
 
 /**
- * `/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출 전용.
+ * `/surveys/answer` HTTP 엔트리포인트 — 응답자의 답변 제출과 본인 응답 상태 조회.
  *
  * Gateway 공개 경로라 JWT가 없다. 대신 참가자 세션 쿠키를 유저 서비스 내부 API로 확인한다(#147).
  */
@@ -58,6 +61,64 @@ export class SurveyAnswerController {
     const name = config.get<string>('PARTICIPANT_SESSION_COOKIE_NAME');
     this.sessionCookieName =
       name === undefined || name === '' ? DEFAULT_SESSION_COOKIE_NAME : name;
+  }
+
+  /**
+   * 일반 참가자 본인의 설문 응답 상태를 조회한다. 응답 화면이 이미 응답한 참가자에게 문항과 제출 버튼을 보여 주지 않게 하고,
+   * 제출한 뒤에는 접수·저장 완료·거절을 구분해 보여 줄 수 있다.
+   */
+  @ApiOperation({
+    summary: '일반 참가자 본인의 설문 응답 상태 조회',
+    description:
+      '참가자 세션(PARTICIPANT_SESSION 쿠키)의 전화번호로 이 설문에 응답했는지(answered)와 처리 단계(status: RECEIVED 접수, PUBLISHED 전달·결과 대기, STORED 저장 완료, REJECTED 거절)를 돌려준다. 응답한 적이 없으면 `{answered:false, status:null}`이다. 거절된 응답은 다시 제출할 수 있어 answered가 false다. 본인 것만 조회하며 거절 사유는 싣지 않는다.',
+  })
+  @ApiOkResponse({ type: SurveyAnswerStatusResponseDto })
+  @ApiErrorResponse(
+    401,
+    '참가자 세션이 없거나 다른 행사의 것이거나 만료됨 (SESSION_REQUIRED, SESSION_EXPIRED)',
+  )
+  @ApiErrorResponse(404, '설문이 없음 (SURVEY_NOT_FOUND)')
+  @ApiErrorResponse(
+    503,
+    '유저 서비스에서 세션을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
+  @Get('standard/:expoId/me')
+  async findMyStandardStatus(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Req() request: Request,
+  ): Promise<SurveyAnswerStatusResponseDto> {
+    return this.surveyAnswerService.findMyAnswerStatus(
+      expoId,
+      ParticipationType.STANDARD,
+      readSessionCookie(request.headers.cookie, this.sessionCookieName),
+    );
+  }
+
+  /** 교원연수자 본인의 설문 응답 상태를 조회한다. 규칙은 일반 참가자와 같다. */
+  @ApiOperation({
+    summary: '교원연수자 본인의 설문 응답 상태 조회',
+    description: '조회 규칙과 응답은 일반 참가자와 같다.',
+  })
+  @ApiOkResponse({ type: SurveyAnswerStatusResponseDto })
+  @ApiErrorResponse(
+    401,
+    '참가자 세션이 없거나 다른 행사의 것이거나 만료됨 (SESSION_REQUIRED, SESSION_EXPIRED)',
+  )
+  @ApiErrorResponse(404, '설문이 없음 (SURVEY_NOT_FOUND)')
+  @ApiErrorResponse(
+    503,
+    '유저 서비스에서 세션을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+  )
+  @Get('trainee/:expoId/me')
+  async findMyTraineeStatus(
+    @Param('expoId', ParseUUIDPipe) expoId: string,
+    @Req() request: Request,
+  ): Promise<SurveyAnswerStatusResponseDto> {
+    return this.surveyAnswerService.findMyAnswerStatus(
+      expoId,
+      ParticipationType.TRAINEE,
+      readSessionCookie(request.headers.cookie, this.sessionCookieName),
+    );
   }
 
   /**

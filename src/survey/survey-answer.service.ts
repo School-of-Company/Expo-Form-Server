@@ -16,6 +16,7 @@ import {
   type UserClient,
 } from '../user-client/user-client.interface.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
+import { SurveyAnswerStatusResponseDto } from './dto/survey-answer-status.response.dto.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { toQuestionSnapshots } from './question-snapshot.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
@@ -45,6 +46,53 @@ export class SurveyAnswerService {
     private readonly submissionStore: SurveyAnswerSubmissionStore,
     @Inject(USER_CLIENT) private readonly userClient: UserClient,
   ) {}
+
+  /**
+   * 참가자 본인이 이 설문에 이미 응답했는지와 처리 단계를 돌려준다. 응답 화면이 제출 전에 "이미 응답했습니다"를 보여 주고,
+   * 제출한 뒤에는 접수·저장 완료·거절을 구분해 보여 줄 수 있게 한다.
+   *
+   * 응답자는 제출과 같게 세션의 검증된 전화번호로 정한다. 본문·쿼리의 번호를 받지 않으므로 남의 응답 여부를 물을 수 없다.
+   * 유저 서비스의 참가자 조회는 하지 않는다 — 응답 여부는 이 서비스의 접수 기록만 보면 되고, 등록 여부가 응답으로 새지 않는다.
+   *
+   * @throws {ParticipantSessionException} 세션이 없거나 다른 행사의 것이거나 만료됐을 때(401)
+   * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
+   * @throws {ExternalServiceUnavailableException} 유저 서비스에서 세션을 확인하지 못했을 때
+   */
+  async findMyAnswerStatus(
+    expoId: string,
+    participationType: ParticipationType,
+    sessionId: string | undefined,
+  ): Promise<SurveyAnswerStatusResponseDto> {
+    if (sessionId === undefined) {
+      throw new ParticipantSessionException();
+    }
+
+    const phoneNumber = normalizePhoneNumber(
+      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
+    );
+
+    const survey = await this.surveyStore.findByExpoAndType(
+      expoId,
+      participationType,
+    );
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
+
+    const latest = await this.submissionStore.findLatestByKey(
+      survey.id,
+      phoneNumber,
+    );
+    if (latest === null) {
+      return { answered: false, status: null };
+    }
+
+    // 거절된 응답은 다시 제출할 수 있으므로 응답한 것으로 보지 않는다(활성 제출 유니크 제약도 거절 건을 제외한다).
+    return {
+      answered: latest.status !== SurveyAnswerSubmissionStatus.REJECTED,
+      status: latest.status,
+    };
+  }
 
   /**
    * 참가자 세션으로 응답자를 확인하고, 저장된 문항 스펙으로 답변을 검증한 뒤 접수 기록을 남긴다.
