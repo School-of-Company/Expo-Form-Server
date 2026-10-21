@@ -1,11 +1,23 @@
 import type { z } from 'zod';
 import {
+  currentTrace,
+  formatTraceparent,
+} from '../../tracing/trace-context.js';
+import {
   observeDownstream,
   type DownstreamLabels,
 } from './downstream-observer.js';
 import { ExternalServiceError } from './external-service.error.js';
 
 const DEFAULT_TIMEOUT_MS = 3000;
+
+/** 요청 처리 중이면 `traceparent`를 실어 하위 서비스가 같은 trace에 이어 붙게 한다. 호출자가 준 헤더가 우선한다. */
+function withTrace(headers: Record<string, string>): Record<string, string> {
+  const trace = currentTrace();
+  return trace === undefined
+    ? headers
+    : { traceparent: formatTraceparent(trace), ...headers };
+}
 
 /** {@link fetchJson}·{@link postJson} 호출 옵션. */
 export type JsonRequestOptions = {
@@ -31,7 +43,7 @@ export async function fetchJson<T>(
 ): Promise<T | null> {
   return observeDownstream(observe, async () => {
     const response = await fetch(url, {
-      headers,
+      headers: withTrace(headers),
       signal: AbortSignal.timeout(timeoutMs),
     });
 
@@ -76,7 +88,7 @@ export async function deleteRequest(
   return observeDownstream(observe, async () => {
     const response = await fetch(url, {
       method: 'DELETE',
-      headers,
+      headers: withTrace(headers),
       signal: AbortSignal.timeout(timeoutMs),
     });
     await discardBody(response);
@@ -96,7 +108,7 @@ async function sendJson<T>(
   return observeDownstream(observe, async () => {
     const response = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: withTrace({ 'Content-Type': 'application/json', ...headers }),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });

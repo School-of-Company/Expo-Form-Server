@@ -8,6 +8,11 @@ import {
   type Mock,
 } from 'vitest';
 import { z } from 'zod';
+import {
+  createTraceContext,
+  formatTraceparent,
+  runWithTrace,
+} from '../../tracing/trace-context.js';
 import { ExternalServiceError } from './external-service.error.js';
 import { fetchJson, postJson } from './fetch-json.util.js';
 
@@ -103,5 +108,57 @@ describe('fetchJson', () => {
     await expect(fetchJson('http://x/y', z.object({}))).rejects.toThrow(
       ExternalServiceError,
     );
+  });
+});
+
+describe('traceparent 전파', () => {
+  let fetchMock: Mock;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response('{"ok":true}', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('요청 처리 중이면 traceparent를 싣고, 호출자가 준 헤더를 덮어쓰지 않는다', async () => {
+    const context = createTraceContext();
+
+    await runWithTrace(context, async () => {
+      await fetchJson('http://x/y', z.object({ ok: z.boolean() }), {
+        headers: { 'X-Internal-Token': 'secret' },
+      });
+      await postJson('http://x/y', {}, z.object({ ok: z.boolean() }));
+    });
+
+    for (const [, init] of fetchMock.mock.calls as Array<
+      [string, { headers: Record<string, string> }]
+    >) {
+      expect(init.headers.traceparent).toBe(formatTraceparent(context));
+    }
+
+    expect(
+      (
+        fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }]
+      )[1].headers['X-Internal-Token'],
+    ).toBe('secret');
+  });
+
+  it('요청 밖에서는 traceparent를 붙이지 않는다', async () => {
+    await fetchJson('http://x/y', z.object({ ok: z.boolean() }));
+
+    expect(
+      (
+        fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }]
+      )[1].headers,
+    ).not.toHaveProperty('traceparent');
   });
 });
