@@ -5,7 +5,7 @@ import {
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
-import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
+import { mapUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import {
   EXPO_CLIENT,
   type ExpoClient,
@@ -116,16 +116,10 @@ export class SurveyService {
     // 위 existsByExpoAndType 검사와 이 save 사이에 다른 요청이 끼어들면 둘 다 통과한 채로
     // 여기까지 올 수 있다. 그럴 땐 DB 유니크 제약이 마지막으로 걸러주는데, 그 위반을 그대로
     // 두면 409가 아니라 500이 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
-    let saved: SurveyEntity;
-    try {
-      saved = await this.surveyStore.save(survey);
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new SurveyAlreadyExistsException();
-      }
-
-      throw error;
-    }
+    const saved = await mapUniqueViolation(
+      async () => this.surveyStore.save(survey),
+      () => new SurveyAlreadyExistsException(),
+    );
 
     this.logger.log(`설문 생성 완료: surveyId=${saved.id}, expoId=${expoId}`);
 

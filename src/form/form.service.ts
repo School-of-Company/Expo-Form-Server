@@ -10,7 +10,7 @@ import {
   ProgramFormProtectionPendingException,
   ProgramFormTitleDuplicatedException,
 } from '../common/exceptions/domain.exception.js';
-import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
+import { mapUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import {
   EXPO_CLIENT,
   type ExpoClient,
@@ -118,16 +118,10 @@ export class FormService {
     // 위 existsByExpoAndTypes 검사와 이 save 사이에 다른 요청이 끼어들면 둘 다 통과한 채로
     // 여기까지 올 수 있다. 그럴 땐 DB 유니크 제약이 마지막으로 걸러주는데, 그 위반을 그대로
     // 두면 409가 아니라 500이 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
-    let saved: FormEntity;
-    try {
-      saved = await this.formStore.save(form);
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new FormAlreadyExistsException();
-      }
-
-      throw error;
-    }
+    const saved = await mapUniqueViolation(
+      async () => this.formStore.save(form),
+      () => new FormAlreadyExistsException(),
+    );
 
     this.logger.log(`폼 생성 완료: formId=${saved.id}, expoId=${expoId}`);
 
@@ -275,16 +269,10 @@ export class FormService {
       dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
 
-    let saved: FormEntity;
-    try {
-      saved = await this.formStore.save(form);
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new ProgramFormTitleDuplicatedException();
-      }
-
-      throw error;
-    }
+    const saved = await mapUniqueViolation(
+      async () => this.formStore.save(form),
+      () => new ProgramFormTitleDuplicatedException(),
+    );
 
     this.logger.log(
       `프로그램용 폼 생성 완료: formId=${saved.id}, expoId=${expoId}`,
@@ -337,6 +325,7 @@ export class FormService {
    * @throws {FormNotFoundException} 프로그램용 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
    * @throws {ProgramFormProtectionPendingException} 적용 기간을 줄이려 할 때
    * @throws {ProgramFormGuardianPolicyInUseException} 보호자 동반 정책이 이 폼을 참조할 때
+   * @throws {ProgramFormChangeInProgressException} 이 폼에 다른 변경이 진행 중일 때
    * @throws {ExternalServiceUnavailableException} 박람회 서비스에 예약하지 못했을 때
    * @throws {FormVersionConflictException} `expectedVersion`이 현재 버전과 다를 때
    * @throws {ProgramFormTitleDuplicatedException} 바꾼 제목이 같은 박람회의 다른 프로그램용 폼과 겹칠 때
@@ -368,18 +357,17 @@ export class FormService {
     const changeId = randomUUID();
     let result: Awaited<ReturnType<FormStore['updateProgramWithFields']>>;
     try {
-      await this.expoClient.reserveProgramFormUpdate(formId, changeId);
-      result = await this.formStore.updateProgramWithFields(
-        form,
-        expectedVersion,
-        fields,
+      result = await mapUniqueViolation(
+        async () => {
+          await this.expoClient.reserveProgramFormUpdate(formId, changeId);
+          return this.formStore.updateProgramWithFields(
+            form,
+            expectedVersion,
+            fields,
+          );
+        },
+        () => new ProgramFormTitleDuplicatedException(),
       );
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new ProgramFormTitleDuplicatedException();
-      }
-
-      throw error;
     } finally {
       await this.expoClient.releaseProgramFormChange(formId, changeId);
     }
@@ -438,29 +426,30 @@ export class FormService {
    */
   private toResponse(form: FormEntity): FormResponseDto {
     return {
-      id: form.id,
-      expoId: form.expoId,
-      title: form.title,
-      informationText: form.informationText,
+      ...this.toCommonResponse(form),
       participantType: requireParticipationType(form.participationType),
       applicationType: requireApplicationType(form.applicationType),
-      startDate: form.startDate,
-      endDate: form.endDate,
       occupationOpenAt: form.occupationOpenAt,
-      dynamicForm: this.toFieldResponses(form),
     };
   }
 
   /** 프로그램용 폼을 응답 DTO로 변환한다. 신청 방식이 없고 `version`이 더해진다. */
   private toProgramResponse(form: FormEntity): ProgramFormResponseDto {
     return {
-      id: form.id,
-      expoId: form.expoId,
+      ...this.toCommonResponse(form),
       purpose: FormPurpose.PROGRAM,
       version: form.version,
+      participantType: form.participationType,
+    };
+  }
+
+  /** 등록용·프로그램용 응답이 똑같이 담는 필드. 나머지는 각 변환이 얹는다. */
+  private toCommonResponse(form: FormEntity) {
+    return {
+      id: form.id,
+      expoId: form.expoId,
       title: form.title,
       informationText: form.informationText,
-      participantType: form.participationType,
       startDate: form.startDate,
       endDate: form.endDate,
       dynamicForm: this.toFieldResponses(form),

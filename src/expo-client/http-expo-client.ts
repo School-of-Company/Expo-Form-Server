@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { z } from 'zod';
 import {
   ExternalServiceUnavailableException,
+  ProgramFormChangeInProgressException,
   ProgramFormGuardianPolicyInUseException,
   ProgramFormReservationUnavailableException,
 } from '../common/exceptions/domain.exception.js';
@@ -14,6 +15,9 @@ import {
 import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
 import type { ExpoClient, ExpoPeriod } from './expo-client.interface.js';
+
+/** 박람회 서비스가 수정 예약을 "이 폼에 진행 중인 변경이 있다"며 409로 거절할 때 바디에 싣는 `code`. */
+const CHANGE_IN_PROGRESS_CODE = 'PROGRAM_FORM_CHANGE_IN_PROGRESS';
 
 /** 박람회가 있다는 사실만 쓰고 내용은 쓰지 않아서, 객체 모양인지만 본다. */
 const expoResponseSchema = z.looseObject({});
@@ -92,7 +96,10 @@ export class HttpExpoClient implements ExpoClient {
       });
     } catch (error) {
       if (error instanceof ExternalServiceError && error.status === 409) {
-        throw new ProgramFormGuardianPolicyInUseException();
+        // 사유 코드가 없는 409(코드를 주기 전 버전의 박람회 서비스)는 지금까지처럼 보호자 정책 참조로 본다.
+        throw error.code === CHANGE_IN_PROGRESS_CODE
+          ? new ProgramFormChangeInProgressException()
+          : new ProgramFormGuardianPolicyInUseException();
       }
 
       this.logger.error(`박람회 서비스 폼 수정 예약 실패: ${url}`, error);

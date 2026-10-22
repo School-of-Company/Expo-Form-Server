@@ -67,6 +67,26 @@ describe('postJson', () => {
       postJson('http://x/y', {}, z.object({})),
     ).rejects.toMatchObject({ status: 401, code: undefined });
   });
+
+  it('409도 바디의 code를 ExternalServiceError에 싣는다(JSON이 아니면 없음)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json(
+        { code: 'PROGRAM_FORM_CHANGE_IN_PROGRESS' },
+        { status: 409 },
+      ),
+    );
+    await expect(
+      postJson('http://x/y', {}, z.object({})),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'PROGRAM_FORM_CHANGE_IN_PROGRESS',
+    });
+
+    fetchMock.mockResolvedValueOnce(new Response('nope', { status: 409 }));
+    await expect(
+      postJson('http://x/y', {}, z.object({})),
+    ).rejects.toMatchObject({ status: 409, code: undefined });
+  });
 });
 
 describe('fetchJson', () => {
