@@ -8,7 +8,7 @@ function queryFailed(code: string) {
   return new QueryFailedError(
     'insert',
     [],
-    Object.assign(new Error(), { code }),
+    Object.assign(new Error('driver'), { code }),
   );
 }
 
