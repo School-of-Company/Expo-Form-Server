@@ -8,7 +8,7 @@ import {
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
-import { isUniqueViolation } from '../common/exceptions/postgres-error.util.js';
+import { mapUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { normalizePhoneNumber } from '../common/phone-number.util.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
 import {
@@ -17,6 +17,7 @@ import {
 } from '../user-client/user-client.interface.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerStatusResponseDto } from './dto/survey-answer-status.response.dto.js';
+import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { toQuestionSnapshots } from './question-snapshot.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
@@ -63,21 +64,11 @@ export class SurveyAnswerService {
     participationType: ParticipationType,
     sessionId: string | undefined,
   ): Promise<SurveyAnswerStatusResponseDto> {
-    if (sessionId === undefined) {
-      throw new ParticipantSessionException();
-    }
-
-    const phoneNumber = normalizePhoneNumber(
-      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
-    );
-
-    const survey = await this.surveyStore.findByExpoAndType(
+    const { phoneNumber, survey } = await this.resolveRespondent(
       expoId,
       participationType,
+      sessionId,
     );
-    if (!survey) {
-      throw new SurveyNotFoundException();
-    }
 
     const latest = await this.submissionStore.findLatestByKey(
       survey.id,
@@ -123,21 +114,11 @@ export class SurveyAnswerService {
     sessionId: string | undefined,
     dto: SubmitSurveyAnswerRequestDto,
   ): Promise<void> {
-    if (sessionId === undefined) {
-      throw new ParticipantSessionException();
-    }
-
-    const phoneNumber = normalizePhoneNumber(
-      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
-    );
-
-    const survey = await this.surveyStore.findByExpoAndType(
+    const { phoneNumber, survey } = await this.resolveRespondent(
       expoId,
       participationType,
+      sessionId,
     );
-    if (!survey) {
-      throw new SurveyNotFoundException();
-    }
 
     // 이 설문의 참여자군 테이블에서만 찾는다. 다른 참여자군으로 등록된 번호도 "없음"으로 돌아오므로,
     // 등록되지 않은 경우와 참여자군이 안 맞는 경우가 같은 예외로 묶인다.
@@ -188,16 +169,10 @@ export class SurveyAnswerService {
     // 위 findActiveByKey와 이 저장 사이에 같은 응답자의 다른 요청이 끼어들면 둘 다 통과한다.
     // 그럴 땐 활성 제출 유니크 제약이 한쪽을 막는데, 그 위반을 그대로 두면 409가 아니라 500이
     // 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
-    let created: boolean;
-    try {
-      created = await this.submissionStore.createReceived(submission);
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new SurveyAnswerAlreadyExistsException();
-      }
-
-      throw error;
-    }
+    const created = await mapUniqueViolation(
+      async () => this.submissionStore.createReceived(submission),
+      () => new SurveyAnswerAlreadyExistsException(),
+    );
 
     // 위에서 설문을 찾은 뒤 박람회 일괄 삭제가 끼어들면 기록 없이 돌아온다.
     if (!created) {
@@ -207,5 +182,33 @@ export class SurveyAnswerService {
     this.logger.log(
       `설문 답변 접수 완료: surveyId=${survey.id}, eventId=${submission.eventId}`,
     );
+  }
+
+  /**
+   * 세션으로 응답자의 전화번호를 확인하고 대상 설문을 찾는다. 세션 확인을 가장 먼저 해서, 인증되지 않은 요청은 다른
+   * 결과 없이 401만 받는다(#147).
+   */
+  private async resolveRespondent(
+    expoId: string,
+    participationType: ParticipationType,
+    sessionId: string | undefined,
+  ): Promise<{ phoneNumber: string; survey: SurveyEntity }> {
+    if (sessionId === undefined) {
+      throw new ParticipantSessionException();
+    }
+
+    const phoneNumber = normalizePhoneNumber(
+      await this.userClient.resolveParticipantSession({ expoId, sessionId }),
+    );
+
+    const survey = await this.surveyStore.findByExpoAndType(
+      expoId,
+      participationType,
+    );
+    if (!survey) {
+      throw new SurveyNotFoundException();
+    }
+
+    return { phoneNumber, survey };
   }
 }
