@@ -37,3 +37,18 @@ export function isForeignKeyViolation(err: unknown): boolean {
       POSTGRES_FOREIGN_KEY_VIOLATION_CODE
   );
 }
+
+/**
+ * 조회-후-저장 사이의 경합으로 유니크 제약이 위반되면 500 대신 호출부가 정한 도메인 예외(409)로 바꾼다. 다른 오류는
+ * 그대로 다시 던진다. `operation`은 DB 쓰기를 포함하는 작업 하나다.
+ */
+export async function mapUniqueViolation<T>(
+  operation: () => Promise<T>,
+  toException: () => Error,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    throw isUniqueViolation(error) ? toException() : error;
+  }
+}
