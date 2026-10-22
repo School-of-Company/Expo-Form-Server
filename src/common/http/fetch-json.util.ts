@@ -127,9 +127,13 @@ async function parseJsonResponse<T>(
     return null;
   }
 
-  // 401은 바디의 `code`로 이유(세션 없음·만료 등)를 구분하는 API가 있어 읽어서 넘긴다.
-  if (response.status === 401) {
-    throw new ExternalServiceError(url, 401, await readErrorCode(response));
+  // 401(세션 없음·만료 등)과 409(거절 사유)는 바디의 `code`로 이유를 구분하는 API가 있어 읽어서 넘긴다.
+  if (response.status === 401 || response.status === 409) {
+    throw new ExternalServiceError(
+      url,
+      response.status,
+      await readErrorCode(response),
+    );
   }
 
   if (!response.ok) {

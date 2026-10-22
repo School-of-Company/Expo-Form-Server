@@ -101,6 +101,20 @@ export class ProgramFormGuardianPolicyInUseException extends DomainException {
 }
 
 /**
+ * 박람회 서비스가 이 폼에 이미 진행 중인 변경(다른 사람의 수정 등)이 있다며 수정 예약을 409로 거절했을 때.
+ * 보호자 동반 정책 참조({@link ProgramFormGuardianPolicyInUseException})와 달리 잠시 뒤 다시 시도하면 풀린다.
+ */
+export class ProgramFormChangeInProgressException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.PROGRAM_FORM_CHANGE_IN_PROGRESS,
+      '다른 변경이 진행 중이라 이 폼을 지금 수정할 수 없습니다. 잠시 후 폼을 다시 불러온 뒤 시도해 주세요.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/**
  * 프로그램용 폼을 고치기 전에 박람회 서비스에 변경을 예약하지 못했을 때. 보호자 동반 정책이 이 폼을 쓰는지
  * 확인할 수 없으니 안전하게 수정을 막는다(fail-closed).
  *

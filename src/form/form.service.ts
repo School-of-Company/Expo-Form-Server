@@ -337,6 +337,7 @@ export class FormService {
    * @throws {FormNotFoundException} 프로그램용 폼이 없을 때(수정하는 사이 삭제된 경우 포함)
    * @throws {ProgramFormProtectionPendingException} 적용 기간을 줄이려 할 때
    * @throws {ProgramFormGuardianPolicyInUseException} 보호자 동반 정책이 이 폼을 참조할 때
+   * @throws {ProgramFormChangeInProgressException} 이 폼에 다른 변경이 진행 중일 때
    * @throws {ExternalServiceUnavailableException} 박람회 서비스에 예약하지 못했을 때
    * @throws {FormVersionConflictException} `expectedVersion`이 현재 버전과 다를 때
    * @throws {ProgramFormTitleDuplicatedException} 바꾼 제목이 같은 박람회의 다른 프로그램용 폼과 겹칠 때

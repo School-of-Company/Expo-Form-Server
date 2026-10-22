@@ -110,7 +110,7 @@ export class ProgramFormController {
   @ApiErrorResponse(404, '해당 폼이 없음 (FORM_NOT_FOUND)')
   @ApiErrorResponse(
     409,
-    'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING), 또는 보호자 동반 정책이 참조하는 폼 (PROGRAM_FORM_GUARDIAN_POLICY_IN_USE)',
+    'expectedVersion이 현재 버전과 다름 (FORM_VERSION_CONFLICT), 제목이 겹침 (PROGRAM_FORM_TITLE_DUPLICATED), 적용 기간을 줄이려 함 (PROGRAM_FORM_PROTECTION_PENDING), 보호자 동반 정책이 참조하는 폼 (PROGRAM_FORM_GUARDIAN_POLICY_IN_USE), 또는 다른 변경이 진행 중인 폼 (PROGRAM_FORM_CHANGE_IN_PROGRESS, 잠시 뒤 다시 불러와 시도)',
   )
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @ApiErrorResponse(

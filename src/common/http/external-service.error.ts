@@ -3,7 +3,7 @@ export class ExternalServiceError extends Error {
   constructor(
     public readonly url: string,
     public readonly status: number,
-    /** 401 응답 바디의 `code`(예: 유저 서비스의 `SESSION_EXPIRED`). 없거나 읽지 못하면 undefined. */
+    /** 401·409 응답 바디의 `code`(예: 유저 서비스의 `SESSION_EXPIRED`). 없거나 읽지 못하면 undefined. */
     public readonly code?: string,
   ) {
     super(`외부 서비스 호출 실패: ${url} (status: ${status})`);
