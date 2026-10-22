@@ -9,6 +9,7 @@ import {
 } from 'vitest';
 import {
   ExternalServiceUnavailableException,
+  ProgramFormChangeInProgressException,
   ProgramFormGuardianPolicyInUseException,
   ProgramFormReservationUnavailableException,
 } from '../common/exceptions/domain.exception.js';
@@ -165,6 +166,26 @@ describe('HttpExpoClient', () => {
       await expect(
         client.reserveProgramFormUpdate(formId, changeId),
       ).rejects.toThrow(ProgramFormGuardianPolicyInUseException);
+    });
+
+    it('409의 사유 코드가 정책 참조면 보호자 동반 정책 사용 중으로 거절한다', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(409, { code: 'PROGRAM_FORM_GUARDIAN_POLICY_IN_USE' }),
+      );
+
+      await expect(
+        client.reserveProgramFormUpdate(formId, changeId),
+      ).rejects.toThrow(ProgramFormGuardianPolicyInUseException);
+    });
+
+    it('409의 사유 코드가 진행 중인 변경이면 그 사유로 거절한다', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(409, { code: 'PROGRAM_FORM_CHANGE_IN_PROGRESS' }),
+      );
+
+      await expect(
+        client.reserveProgramFormUpdate(formId, changeId),
+      ).rejects.toThrow(ProgramFormChangeInProgressException);
     });
 
     it.each([

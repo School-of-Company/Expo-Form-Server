@@ -23,7 +23,9 @@ export interface ExpoClient {
    * 프로그램용 폼 수정을 박람회 서비스에 예약한다(`kind=UPDATE`). 예약이 끝나면 커밋·실패와 상관없이
    * {@link releaseProgramFormChange}로 풀어야 한다 — 풀지 않으면 그 폼의 연결·변경이 계속 막힌다.
    *
-   * @throws {ProgramFormGuardianPolicyInUseException} 박람회 서비스가 거절했을 때(409)
+   * @throws {ProgramFormGuardianPolicyInUseException} 보호자 동반 정책이 참조해 박람회 서비스가 거절했을 때(409)
+   * @throws {ProgramFormChangeInProgressException} 이 폼에 진행 중인 변경이 있어 박람회 서비스가 거절했을 때(409,
+   *   `code=PROGRAM_FORM_CHANGE_IN_PROGRESS`)
    * @throws {ProgramFormReservationUnavailableException} 그 밖의 실패 — 확인 못 하면 수정을 막는다(fail-closed)
    */
   reserveProgramFormUpdate(formId: string, changeId: string): Promise<void>;
