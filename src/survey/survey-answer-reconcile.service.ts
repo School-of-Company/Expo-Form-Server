@@ -8,6 +8,7 @@ import {
   type UserClient,
 } from '../user-client/user-client.interface.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
+import { resolveRelaySettings } from './survey-answer-relay.config.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
 /** 한 번에 DB에서 가져올 기록 수. */
@@ -123,10 +124,11 @@ export class SurveyAnswerReconcileService {
 
   private async check(): Promise<ReconcileSummary> {
     const summary = emptySummary();
-    const maxRetryCount = this.readNumber('SURVEY_ANSWER_MAX_RETRY_COUNT', 5);
-    const staleBefore = new Date(
-      Date.now() - this.readNumber('SURVEY_ANSWER_STALE_MS', 5 * 60 * 1000),
+    // 릴레이가 재발행을 멈추는 기준과 같은 값을 써야 하므로, 릴레이와 같은 설정 해석(기본값·검증)을 그대로 쓴다.
+    const { maxRetryCount, staleMs } = resolveRelaySettings((key) =>
+      this.config.get(key),
     );
+    const staleBefore = new Date(Date.now() - staleMs);
     let afterId = this.resumeAfterId;
     /** 이번 점검에서 결과까지 확인한 마지막 기록. 멈추면 다음 점검이 여기 다음부터 이어 본다. */
     let lastCheckedId: string | undefined;
@@ -204,12 +206,6 @@ export class SurveyAnswerReconcileService {
       // 원인은 클라이언트가 이미 로그로 남겼다. 다음 점검에서 다시 본다.
       return 'unavailable';
     }
-  }
-
-  /** 환경 변수는 문자열로 들어온다. 숫자가 아니면 기본값을 쓴다. */
-  private readNumber(key: string, fallback: number): number {
-    const value = Number(this.config.get<string>(key) ?? fallback);
-    return Number.isFinite(value) ? value : fallback;
   }
 
   private report(summary: ReconcileSummary): void {
