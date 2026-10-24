@@ -149,6 +149,17 @@ With Mau, you can deploy your application in just a few clicks, allowing you to 
 
 앱 시작/종료와 처리되지 않은 예외를 [`dicoshot-nest`](https://www.npmjs.com/package/dicoshot-nest)로 Discord 채널에 알립니다. `.env`에 `DISCORD_WEBHOOK_URL`을 설정하면 활성화되고, 비워두면 자동으로 비활성화됩니다.
 
+## Logging
+
+Expo 서비스 공통 로그 표준입니다(Spring·Nest 모두 같음). Expo-Monitoring의 공용 Loki가 모든 서비스를 같은 라벨로 읽습니다.
+
+- stdout의 모든 줄은 JSON 객체 하나입니다(`src/logging/json-logger.ts`, pino). 필수 키는 `@timestamp`(ISO-8601), `level`(대문자 `TRACE`/`DEBUG`/`INFO`/`WARN`/`ERROR`, Nest `fatal`은 `ERROR`, `verbose`는 `TRACE`), `service`(`expo-form-server`, Eureka 앱 이름), `module`, `message`입니다. 오류는 `stack_trace`, 요청 처리 중의 로그는 `traceId`를 더합니다. stdout에 다른 출력(`console.log` 등)을 섞지 않습니다.
+- 수집 파이프라인은 이 키 이름만 읽고 서비스별 fallback이 없습니다. 로그가 안 잡히거나 필드가 맞지 않으면 파이프라인에 파싱 fallback을 더하지 말고 이 서비스의 로그 출력을 고칩니다.
+- `module`은 Nest 로거 컨텍스트(`new Logger(Foo.name)`)를 그대로 씁니다(nestjs-pino `renameContext: 'module'`과 같은 매핑). 컨텍스트가 없으면 `app`입니다. 호출부에서 `module`을 넣지 않습니다.
+- `traceId`로 Grafana에서 Loki 로그와 Tempo 트레이스가 서로 이어집니다(예전의 줄 끝 `trace=<id>`를 대신합니다).
+- 로거는 `main.ts`에서 Nest 앱보다 먼저 설치되어 메트릭 listener 기동과 실패 종료도 JSON으로 남습니다. `LOG_LEVEL`(기본 `info`)로 레벨을 정합니다.
+- `NODE_ENV=local`(또는 `PROFILE=local`)에서만 같은 JSON을 `${EXPO_LOG_DIR:-~/.expo/logs}/expo-form-server/app.log`에도 써서 로컬 Loki가 파일을 tail합니다. 운영은 stdout만 쓰고(pm2가 받음) 로그 파일 설정을 더하지 않습니다.
+
 ## Resources
 
 Check out a few resources that may come in handy when working with NestJS:
