@@ -1,20 +1,24 @@
 import process from 'node:process';
 import {
+  bulkhead,
   circuitBreaker,
   ConsecutiveBreaker,
   ConstantBackoff,
   handleWhen,
   retry,
+  type BulkheadPolicy,
   type CircuitBreakerPolicy,
   type IPolicy,
 } from 'cockatiel';
 import { ExternalServiceError } from './external-service.error.js';
 
-export { BrokenCircuitError } from 'cockatiel';
+export { BrokenCircuitError, BulkheadRejectedError } from 'cockatiel';
 
 const DEFAULT_FAILURE_THRESHOLD = 5;
 const DEFAULT_HALF_OPEN_MS = 30_000;
 const DEFAULT_RETRY_ATTEMPTS = 1;
+const DEFAULT_BULKHEAD_CONCURRENT = 20;
+const DEFAULT_BULKHEAD_QUEUE = 10;
 const RETRY_DELAY_MS = 200;
 
 /**
@@ -60,6 +64,7 @@ function readInteger(name: string, fallback: number, min: number): number {
 
 type ServiceGuard = {
   breaker: CircuitBreakerPolicy;
+  bulkhead: BulkheadPolicy;
   retryPolicy: IPolicy;
 };
 
@@ -91,7 +96,15 @@ function guardFor(service: string): ServiceGuard {
       ),
       backoff: new ConstantBackoff(RETRY_DELAY_MS),
     });
-    guard = { breaker, retryPolicy };
+    const limiter = bulkhead(
+      readInteger(
+        'DOWNSTREAM_BULKHEAD_MAX_CONCURRENT',
+        DEFAULT_BULKHEAD_CONCURRENT,
+        1,
+      ),
+      readInteger('DOWNSTREAM_BULKHEAD_MAX_QUEUE', DEFAULT_BULKHEAD_QUEUE, 0),
+    );
+    guard = { breaker, bulkhead: limiter, retryPolicy };
     guards.set(service, guard);
   }
 
@@ -99,7 +112,9 @@ function guardFor(service: string): ServiceGuard {
 }
 
 /**
- * 하위 서비스 호출을 회로 차단기로 감싼다. 연속 실패가 한도를 넘으면 회로가 열려 한동안 호출하지 않고
+ * 하위 서비스 호출을 회로 차단기와 벌크헤드로 감싼다. 벌크헤드는 서비스별 동시 호출 수를 제한해, 응답이 느려질 때
+ * 그 서비스 호출이 연결을 다 차지하지 못하게 한다 — 상한과 대기열을 넘으면 {@link BulkheadRejectedError}로 바로 실패한다.
+ * 연속 실패가 한도를 넘으면 회로가 열려 한동안 호출하지 않고
  * {@link BrokenCircuitError}로 바로 실패한다 — 죽은 서비스를 기다리며 요청이 쌓이는 것을 막는다.
  *
  * `idempotent`일 때만 재시도한다(멱등한 GET). 쓰기는 응답을 못 받았어도 상대가 처리했을 수 있어 재시도하지 않는다.
@@ -110,8 +125,11 @@ export async function guardDownstream<T>(
   idempotent: boolean,
   call: () => Promise<T>,
 ): Promise<T> {
-  const { breaker, retryPolicy } = guardFor(service);
-  const guarded = async () => breaker.execute(call);
+  const { breaker, bulkhead: limiter, retryPolicy } = guardFor(service);
+  // 회로가 열려 있으면 자리를 차지하지 않도록 차단기를 바깥에 둔다. 자리가 없어 거절된 호출은 서비스 장애가
+  // 아니므로 회로에 세지 않는다(`isTransientFailure`가 아니다).
+  const guarded = async () =>
+    breaker.execute(async () => limiter.execute(call));
 
   return idempotent ? retryPolicy.execute(guarded) : guarded();
 }
