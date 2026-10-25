@@ -38,6 +38,7 @@
     "@nestjs/swagger": "^11.4.7",
     "@nestjs/typeorm": "^11.0.3",
     "@school-of-company/nestjs-eureka": "^0.1.0",
+    "cockatiel": "4.0.0",
     "dicoshot-nest": "^0.7.0",
     "express": "^5.2.1",
     "kafkajs": "^2.2.4",
