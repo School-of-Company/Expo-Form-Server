@@ -5,6 +5,7 @@ import { ExternalServiceError } from './external-service.error.js';
 import { deleteRequest, fetchJson, putJson } from './fetch-json.util.js';
 import {
   BrokenCircuitError,
+  BulkheadRejectedError,
   guardDownstream,
   isTransientFailure,
   logDownstreamFailure,
@@ -209,9 +210,10 @@ describe('하위 서비스 회로 차단기', () => {
     const logger = { warn: vi.fn(), error: vi.fn() };
 
     logDownstreamFailure(logger, '실패', new BrokenCircuitError());
+    logDownstreamFailure(logger, '실패', new BulkheadRejectedError(1, 0));
     logDownstreamFailure(logger, '실패', new ExternalServiceError('u', 500));
 
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledTimes(1);
   });
 
@@ -222,5 +224,68 @@ describe('하위 서비스 회로 차단기', () => {
     await expect(guardDownstream('expo', false, async () => 1)).rejects.toThrow(
       'DOWNSTREAM_BREAKER_MIN_CALLS',
     );
+  });
+
+  it('동시 호출 상한을 넘으면 대기열까지만 받고 나머지는 거절한다', async () => {
+    vi.stubEnv('DOWNSTREAM_BULKHEAD_MAX_CONCURRENT', '2');
+    vi.stubEnv('DOWNSTREAM_BULKHEAD_MAX_QUEUE', '1');
+    resetDownstreamGuards();
+
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const slow = async () => {
+      await gate;
+      return 'ok';
+    };
+
+    const running = [
+      guardDownstream('expo', false, slow),
+      guardDownstream('expo', false, slow),
+      guardDownstream('expo', false, slow),
+    ];
+    await expect(guardDownstream('expo', false, slow)).rejects.toBeInstanceOf(
+      BulkheadRejectedError,
+    );
+    expect(classifyFailure(new BulkheadRejectedError(2, 1))).toBe(
+      'bulkhead_full',
+    );
+
+    // 다른 서비스는 영향을 받지 않는다.
+    await expect(
+      guardDownstream('user', false, async () => 'user'),
+    ).resolves.toBe('user');
+
+    open();
+    await expect(Promise.all(running)).resolves.toEqual(['ok', 'ok', 'ok']);
+  });
+
+  it('거절된 호출은 회로 실패로 세지 않는다', async () => {
+    vi.stubEnv('DOWNSTREAM_BULKHEAD_MAX_CONCURRENT', '1');
+    vi.stubEnv('DOWNSTREAM_BULKHEAD_MAX_QUEUE', '0');
+    resetDownstreamGuards();
+
+    let finish!: () => void;
+    const held = guardDownstream(
+      'expo',
+      false,
+      async () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    for (let i = 0; i < 5; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await guardDownstream('expo', false, async () => 1).catch(
+        () => undefined,
+      );
+    }
+
+    finish();
+    await held;
+    await expect(
+      guardDownstream('expo', false, async () => 'alive'),
+    ).resolves.toBe('alive');
   });
 });
