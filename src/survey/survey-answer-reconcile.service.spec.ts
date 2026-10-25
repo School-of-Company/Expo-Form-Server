@@ -11,6 +11,7 @@ import {
 } from 'vitest';
 import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
+import { DEFAULT_RELAY_SETTINGS } from './survey-answer-relay.config.js';
 import { SurveyAnswerReconcileService } from './survey-answer-reconcile.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
@@ -270,19 +271,43 @@ describe('SurveyAnswerReconcileService', () => {
     expect(idField?.value).toContain('외 2건');
   });
 
-  it('설정값이 숫자가 아니면 기본값을 쓴다', async () => {
-    service = createService([
-      ...enabledEnv,
-      ['SURVEY_ANSWER_MAX_RETRY_COUNT', 'not-a-number'],
-      ['SURVEY_ANSWER_STALE_MS', 'not-a-number'],
-    ]);
-
+  it('설정이 없으면 릴레이와 같은 기본값을 쓴다', async () => {
     await service.reconcile();
 
     const [query] = store.findExhausted.mock.calls[0] as [
       { maxRetryCount: number },
     ];
-    expect(query.maxRetryCount).toBe(5);
+    expect(query.maxRetryCount).toBe(DEFAULT_RELAY_SETTINGS.maxRetryCount);
+  });
+
+  it('재발행 한도와 대기 시간은 릴레이와 같은 설정값을 읽는다', async () => {
+    service = createService([
+      ...enabledEnv,
+      ['SURVEY_ANSWER_MAX_RETRY_COUNT', '7'],
+      ['SURVEY_ANSWER_STALE_MS', '60000'],
+    ]);
+    const before = Date.now();
+
+    await service.reconcile();
+
+    const [query] = store.findExhausted.mock.calls[0] as [
+      { maxRetryCount: number; staleBefore: Date },
+    ];
+    expect(query.maxRetryCount).toBe(7);
+    expect(before - query.staleBefore.getTime()).toBeGreaterThanOrEqual(60_000);
+    expect(before - query.staleBefore.getTime()).toBeLessThan(65_000);
+  });
+
+  it('릴레이처럼 잘못된 설정값은 받아들이지 않는다', async () => {
+    service = createService([
+      ...enabledEnv,
+      ['SURVEY_ANSWER_MAX_RETRY_COUNT', 'not-a-number'],
+    ]);
+
+    await expect(service.reconcile()).rejects.toThrow(
+      'SURVEY_ANSWER_MAX_RETRY_COUNT must be a positive integer.',
+    );
+    expect(store.findExhausted).not.toHaveBeenCalled();
   });
 
   describe('켜고 끄기(SURVEY_ANSWER_RECONCILE_ENABLED)', () => {
