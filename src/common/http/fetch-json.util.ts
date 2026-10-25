@@ -25,12 +25,12 @@ function withTrace(headers: Record<string, string>): Record<string, string> {
  * GET만 재시도한다 — 자세한 규칙은 {@link guardDownstream}.
  */
 async function callDownstream<T>(
-  observe: DownstreamLabels | undefined,
+  { observe, bypassGuard }: JsonRequestOptions,
   idempotent: boolean,
   call: () => Promise<T>,
 ): Promise<T> {
   return observeDownstream(observe, async () =>
-    observe === undefined
+    observe === undefined || bypassGuard === true
       ? call()
       : guardDownstream(observe.service, idempotent, call),
   );
@@ -42,6 +42,10 @@ export type JsonRequestOptions = {
   timeoutMs?: number;
   /** 지표에 남길 호출 이름. 없으면 계측하지 않는다. */
   observe?: DownstreamLabels;
+  /**
+   * 회로 차단기를 거치지 않고 계측만 한다. 예약 해제처럼 열린 회로 때문에 막히면 뒷정리가 안 되는 호출에 쓴다.
+   */
+  bypassGuard?: boolean;
 };
 
 /**
@@ -56,9 +60,10 @@ export async function fetchJson<T>(
     headers = {},
     timeoutMs = DEFAULT_TIMEOUT_MS,
     observe,
+    bypassGuard,
   }: JsonRequestOptions = {},
 ): Promise<T | null> {
-  return callDownstream(observe, true, async () => {
+  return callDownstream({ observe, bypassGuard }, true, async () => {
     const response = await fetch(url, {
       headers: withTrace(headers),
       signal: AbortSignal.timeout(timeoutMs),
@@ -100,9 +105,10 @@ export async function deleteRequest(
     headers = {},
     timeoutMs = DEFAULT_TIMEOUT_MS,
     observe,
+    bypassGuard,
   }: JsonRequestOptions = {},
 ): Promise<void> {
-  return callDownstream(observe, false, async () => {
+  return callDownstream({ observe, bypassGuard }, false, async () => {
     const response = await fetch(url, {
       method: 'DELETE',
       headers: withTrace(headers),
@@ -120,9 +126,14 @@ async function sendJson<T>(
   url: string,
   { method, body }: { method: 'POST' | 'PUT'; body: unknown },
   schema: z.ZodType<T>,
-  { headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS, observe }: JsonRequestOptions,
+  {
+    headers = {},
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    observe,
+    bypassGuard,
+  }: JsonRequestOptions,
 ): Promise<T | null> {
-  return callDownstream(observe, false, async () => {
+  return callDownstream({ observe, bypassGuard }, false, async () => {
     const response = await fetch(url, {
       method,
       headers: withTrace({ 'Content-Type': 'application/json', ...headers }),

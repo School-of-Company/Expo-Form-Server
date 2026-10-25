@@ -7,6 +7,7 @@ import {
   BrokenCircuitError,
   guardDownstream,
   isTransientFailure,
+  logDownstreamFailure,
   resetDownstreamGuards,
 } from './resilience.js';
 
@@ -19,7 +20,9 @@ const jsonResponse = (status: number, body?: unknown) =>
 
 describe('하위 서비스 회로 차단기', () => {
   beforeEach(() => {
-    vi.stubEnv('DOWNSTREAM_BREAKER_FAILURE_THRESHOLD', '3');
+    vi.stubEnv('DOWNSTREAM_BREAKER_MIN_CALLS', '3');
+    vi.stubEnv('DOWNSTREAM_BREAKER_FAILURE_RATE', '50');
+    vi.stubEnv('DOWNSTREAM_BREAKER_WINDOW_MS', '60000');
     vi.stubEnv('DOWNSTREAM_BREAKER_HALF_OPEN_MS', '60000');
     resetDownstreamGuards();
   });
@@ -45,7 +48,7 @@ describe('하위 서비스 회로 차단기', () => {
     const fetchMock = vi.fn(async () => jsonResponse(500));
     vi.stubGlobal('fetch', fetchMock);
 
-    // GET은 즉시 실패를 1회 재시도하므로 호출 2번이 시도 2번이다. 한도 3 = 호출 2번(시도 4번 중 3번째에서 열림).
+    // GET은 즉시 실패를 1회 재시도하므로 요청 하나가 시도 둘이다. 최소 3회이므로 두 번째 요청의 첫 시도에서 열린다.
     await expect(
       fetchJson('http://x/1', schema, { observe: expo }),
     ).rejects.toBeInstanceOf(ExternalServiceError);
@@ -137,12 +140,87 @@ describe('하위 서비스 회로 차단기', () => {
     expect(classifyFailure(new BrokenCircuitError())).toBe('circuit_open');
   });
 
+  it('호출이 최소 횟수보다 적으면 모두 실패해도 열지 않는다', async () => {
+    vi.stubEnv('DOWNSTREAM_BREAKER_MIN_CALLS', '10');
+    resetDownstreamGuards();
+    const call = vi.fn(async () => {
+      throw new ExternalServiceError('http://x', 503);
+    });
+
+    for (let i = 0; i < 9; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await guardDownstream('expo', false, call).catch(() => undefined);
+    }
+
+    // 아홉 번째까지 모두 실패해도 열리지 않아 열 번째 호출도 실제로 나간다.
+    await expect(guardDownstream('expo', false, call)).rejects.toBeInstanceOf(
+      ExternalServiceError,
+    );
+    expect(call).toHaveBeenCalledTimes(10);
+    await expect(guardDownstream('expo', false, call)).rejects.toBeInstanceOf(
+      BrokenCircuitError,
+    );
+  });
+
+  it('실패율이 한도 이하면 열지 않는다', async () => {
+    vi.stubEnv('DOWNSTREAM_BREAKER_MIN_CALLS', '4');
+    resetDownstreamGuards();
+    let n = 0;
+    const call = async () => {
+      n++;
+      if (n % 3 === 0) {
+        throw new ExternalServiceError('http://x', 503);
+      }
+
+      return n;
+    };
+
+    for (let i = 0; i < 30; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await guardDownstream('expo', false, call).catch(() => undefined);
+    }
+
+    await expect(
+      guardDownstream('expo', false, async () => 'ok'),
+    ).resolves.toBe('ok');
+  });
+
+  it('bypassGuard 호출은 회로가 열려 있어도 보낸다', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(503));
+    vi.stubGlobal('fetch', fetchMock);
+    for (let i = 0; i < 4; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await fetchJson('http://x/1', schema, { observe: expo }).catch(
+        () => undefined,
+      );
+    }
+
+    await expect(
+      fetchJson('http://x/1', schema, { observe: expo }),
+    ).rejects.toBeInstanceOf(BrokenCircuitError);
+
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(
+      deleteRequest('http://x/1', { observe: expo, bypassGuard: true }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('회로가 열려 호출하지 않은 실패는 스택 없이 경고 한 줄로 남긴다', () => {
+    const logger = { warn: vi.fn(), error: vi.fn() };
+
+    logDownstreamFailure(logger, '실패', new BrokenCircuitError());
+    logDownstreamFailure(logger, '실패', new ExternalServiceError('u', 500));
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
   it('잘못된 환경변수는 오류로 알린다', async () => {
-    vi.stubEnv('DOWNSTREAM_BREAKER_FAILURE_THRESHOLD', '0');
+    vi.stubEnv('DOWNSTREAM_BREAKER_MIN_CALLS', '0');
     resetDownstreamGuards();
 
     await expect(guardDownstream('expo', false, async () => 1)).rejects.toThrow(
-      'DOWNSTREAM_BREAKER_FAILURE_THRESHOLD',
+      'DOWNSTREAM_BREAKER_MIN_CALLS',
     );
   });
 });

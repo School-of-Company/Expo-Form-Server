@@ -1,7 +1,8 @@
 import process from 'node:process';
 import {
+  BrokenCircuitError,
   circuitBreaker,
-  ConsecutiveBreaker,
+  SamplingBreaker,
   ConstantBackoff,
   handleWhen,
   retry,
@@ -12,7 +13,9 @@ import { ExternalServiceError } from './external-service.error.js';
 
 export { BrokenCircuitError } from 'cockatiel';
 
-const DEFAULT_FAILURE_THRESHOLD = 5;
+const DEFAULT_MIN_CALLS = 10;
+const DEFAULT_FAILURE_RATE_PERCENT = 50;
+const DEFAULT_WINDOW_MS = 30_000;
 const DEFAULT_HALF_OPEN_MS = 30_000;
 const DEFAULT_RETRY_ATTEMPTS = 1;
 const RETRY_DELAY_MS = 200;
@@ -58,6 +61,37 @@ function readInteger(name: string, fallback: number, min: number): number {
   return value;
 }
 
+/**
+ * 최근 `WINDOW_MS` 동안 호출이 `MIN_CALLS`번 이상이고 실패율이 `FAILURE_RATE` 퍼센트를 넘으면 연다. 호출이 적을 때
+ * 몇 번의 실패로 열리지 않게 하려는 것이다 — 재시도가 요청마다 실패를 두 번 세므로 "연속 N회"는 너무 쉽게 열렸다.
+ */
+function createSamplingBreaker(): SamplingBreaker {
+  const windowMs = readInteger(
+    'DOWNSTREAM_BREAKER_WINDOW_MS',
+    DEFAULT_WINDOW_MS,
+    1000,
+  );
+  const minCalls = readInteger(
+    'DOWNSTREAM_BREAKER_MIN_CALLS',
+    DEFAULT_MIN_CALLS,
+    1,
+  );
+  const ratePercent = readInteger(
+    'DOWNSTREAM_BREAKER_FAILURE_RATE',
+    DEFAULT_FAILURE_RATE_PERCENT,
+    1,
+  );
+  if (ratePercent > 99) {
+    throw new Error('DOWNSTREAM_BREAKER_FAILURE_RATE must be at most 99.');
+  }
+
+  return new SamplingBreaker({
+    threshold: ratePercent / 100,
+    duration: windowMs,
+    minimumRps: minCalls / (windowMs / 1000),
+  });
+}
+
 type ServiceGuard = {
   breaker: CircuitBreakerPolicy;
   retryPolicy: IPolicy;
@@ -75,13 +109,7 @@ function guardFor(service: string): ServiceGuard {
         DEFAULT_HALF_OPEN_MS,
         1,
       ),
-      breaker: new ConsecutiveBreaker(
-        readInteger(
-          'DOWNSTREAM_BREAKER_FAILURE_THRESHOLD',
-          DEFAULT_FAILURE_THRESHOLD,
-          1,
-        ),
-      ),
+      breaker: createSamplingBreaker(),
     });
     const retryPolicy = retry(handleWhen(isRetryable), {
       maxAttempts: readInteger(
@@ -99,7 +127,7 @@ function guardFor(service: string): ServiceGuard {
 }
 
 /**
- * 하위 서비스 호출을 회로 차단기로 감싼다. 연속 실패가 한도를 넘으면 회로가 열려 한동안 호출하지 않고
+ * 하위 서비스 호출을 회로 차단기로 감싼다. 실패율이 한도를 넘으면 회로가 열려 한동안 호출하지 않고
  * {@link BrokenCircuitError}로 바로 실패한다 — 죽은 서비스를 기다리며 요청이 쌓이는 것을 막는다.
  *
  * `idempotent`일 때만 재시도한다(멱등한 GET). 쓰기는 응답을 못 받았어도 상대가 처리했을 수 있어 재시도하지 않는다.
@@ -119,4 +147,24 @@ export async function guardDownstream<T>(
 /** 테스트에서 회로 상태와 환경변수 설정을 처음으로 되돌린다. */
 export function resetDownstreamGuards(): void {
   guards.clear();
+}
+
+/**
+ * 하위 서비스 호출 실패를 남긴다. 회로가 열려 호출하지 않은 경우는 장애 동안 요청마다 반복되므로 스택 없이 한 줄
+ * 경고로만 남기고, 그 밖의 실패는 원인과 함께 오류로 남긴다.
+ */
+export function logDownstreamFailure(
+  logger: {
+    warn(message: string): void;
+    error(message: string, error: unknown): void;
+  },
+  message: string,
+  error: unknown,
+): void {
+  if (error instanceof BrokenCircuitError) {
+    logger.warn(`${message} (회로 열림, 호출하지 않음)`);
+    return;
+  }
+
+  logger.error(message, error);
 }
