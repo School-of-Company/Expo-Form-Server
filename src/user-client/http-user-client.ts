@@ -9,6 +9,7 @@ import {
 import { ErrorCode } from '../common/exceptions/error-code.enum.js';
 import { ExternalServiceError } from '../common/http/external-service.error.js';
 import { fetchJson, postJson } from '../common/http/fetch-json.util.js';
+import { logDownstreamFailure } from '../common/http/resilience.js';
 import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
 import type {
@@ -179,7 +180,7 @@ export class HttpUserClient implements UserClient {
       }
 
       // 전화번호·세션 ID와 토큰이 실려 있는 요청 내용은 남기지 않는다. URL과 원인만 기록한다.
-      this.logger.error(`유저 서비스 호출 실패: ${url}`, error);
+      logDownstreamFailure(this.logger, `유저 서비스 호출 실패: ${url}`, error);
       throw new ExternalServiceUnavailableException();
     }
   }
