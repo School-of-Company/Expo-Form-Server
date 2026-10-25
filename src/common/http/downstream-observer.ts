@@ -1,9 +1,10 @@
 import process from 'node:process';
 import { ExternalServiceError } from './external-service.error.js';
+import { BrokenCircuitError } from './resilience.js';
 
 /** 외부 서비스 호출 결과 분류. 지표 라벨로 쓰므로 값은 이 목록으로 고정한다. */
 export type DownstreamOutcome =
-  'success' | 'not_found' | 'conflict' | 'timeout' | 'failure';
+  'success' | 'not_found' | 'conflict' | 'timeout' | 'circuit_open' | 'failure';
 
 /** 호출을 어느 서비스의 어떤 작업으로 셀지. 둘 다 코드에서 정한 고정 이름이다(URL·ID·번호를 넣지 않는다). */
 export type DownstreamLabels = {
@@ -38,6 +39,10 @@ function isTimeout(error: unknown): boolean {
 export function classifyFailure(error: unknown): DownstreamOutcome {
   if (isTimeout(error)) {
     return 'timeout';
+  }
+
+  if (error instanceof BrokenCircuitError) {
+    return 'circuit_open';
   }
 
   return error instanceof ExternalServiceError && error.status === 409

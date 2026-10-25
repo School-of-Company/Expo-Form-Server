@@ -6,6 +6,7 @@ import {
   ProgramFormGuardianPolicyInUseException,
   ProgramFormReservationUnavailableException,
 } from '../common/exceptions/domain.exception.js';
+import { logDownstreamFailure } from '../common/http/resilience.js';
 import { ExternalServiceError } from '../common/http/external-service.error.js';
 import {
   deleteRequest,
@@ -54,7 +55,11 @@ export class HttpExpoClient implements ExpoClient {
 
       return result !== null;
     } catch (error) {
-      this.logger.error(`박람회 서비스 존재 확인 실패: ${url}`, error);
+      logDownstreamFailure(
+        this.logger,
+        `박람회 서비스 존재 확인 실패: ${url}`,
+        error,
+      );
       throw new ExternalServiceUnavailableException();
     }
   }
@@ -73,7 +78,11 @@ export class HttpExpoClient implements ExpoClient {
         ? null
         : { startedDay: result.startedDay, finishedDay: result.finishedDay };
     } catch (error) {
-      this.logger.error(`박람회 서비스 기간 조회 실패: ${url}`, error);
+      logDownstreamFailure(
+        this.logger,
+        `박람회 서비스 기간 조회 실패: ${url}`,
+        error,
+      );
       throw new ExternalServiceUnavailableException();
     }
   }
@@ -102,7 +111,11 @@ export class HttpExpoClient implements ExpoClient {
           : new ProgramFormGuardianPolicyInUseException();
       }
 
-      this.logger.error(`박람회 서비스 폼 수정 예약 실패: ${url}`, error);
+      logDownstreamFailure(
+        this.logger,
+        `박람회 서비스 폼 수정 예약 실패: ${url}`,
+        error,
+      );
       throw new ProgramFormReservationUnavailableException();
     }
 
@@ -128,10 +141,16 @@ export class HttpExpoClient implements ExpoClient {
       await deleteRequest(url, {
         headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
         observe: { service: 'expo', operation: 'release_change' },
+        // 회로가 열려 있다는 이유로 해제를 건너뛰면 예약이 만료(5분)까지 남아 다음 수정이 막힌다.
+        bypassGuard: true,
       });
     } catch (error) {
       // ponytail: 한 번만 시도한다. 풀리지 않은 예약은 박람회 서비스에서 수동으로 해제해야 한다.
-      this.logger.error(`박람회 서비스 폼 변경 예약 해제 실패: ${url}`, error);
+      logDownstreamFailure(
+        this.logger,
+        `박람회 서비스 폼 변경 예약 해제 실패: ${url}`,
+        error,
+      );
     }
   }
 

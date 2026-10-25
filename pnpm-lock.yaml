@@ -32,6 +32,9 @@ importers:
       '@school-of-company/nestjs-eureka':
         specifier: ^0.1.0
         version: 0.1.0(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      cockatiel:
+        specifier: 4.0.0
+        version: 4.0.0
       dicoshot-nest:
         specifier: ^0.7.0
         version: 0.7.0(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
@@ -1444,6 +1447,10 @@ packages:
   clone@1.0.4:
     resolution: {integrity: sha512-JQHZ2QMW6l3aH/j6xCqQThY/9OH4D/9ls34cgkUBiEeocRTU04tHfKPBsUK1PqZCUQM7GiA0IIXJSuXHI64Kbg==}
     engines: {node: '>=0.8'}
+
+  cockatiel@4.0.0:
+    resolution: {integrity: sha512-XpUZJnogsd03BGB19T9sv7Xb8SwvD8JddZV2Tlp0LNspopZ6Idv24ZwCl8vAGJ6JwODZ0zLRYVj3NWvmRcUDqA==}
+    engines: {node: '>=22'}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -5264,6 +5271,8 @@ snapshots:
       wrap-ansi: 9.0.2
 
   clone@1.0.4: {}
+
+  cockatiel@4.0.0: {}
 
   color-convert@2.0.1:
     dependencies:
