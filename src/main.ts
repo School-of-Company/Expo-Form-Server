@@ -8,6 +8,10 @@ import { createHttpMetricsMiddleware } from './metrics/http-metrics.middleware.j
 import { startMetrics } from './metrics/start-metrics.js';
 import { traceContextMiddleware } from './tracing/trace-context.middleware.js';
 import { FORM_EUREKA_APP_NAME } from './eureka/eureka-options.js';
+import {
+  createHttpAccessLogMiddleware,
+  isHttpAccessLogEnabled,
+} from './logging/http-access-log.middleware.js';
 import { createPino, JsonLogger, readLogEnv } from './logging/json-logger.js';
 import { SWAGGER_UI_PATH, setupSwagger } from './swagger.js';
 
@@ -26,6 +30,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
   app.use(traceContextMiddleware);
+  // 기동 후에는 오류가 날 때만 로그가 남아, 운영 로그로 요청 흐름을 볼 수 없었다. 요청마다 한 줄을 남긴다.
+  if (isHttpAccessLogEnabled(process.env.HTTP_ACCESS_LOG_ENABLED)) {
+    app.use(createHttpAccessLogMiddleware());
+  }
+
   if (metrics !== undefined) {
     app.use(createHttpMetricsMiddleware(metrics));
   }
@@ -49,9 +58,7 @@ async function bootstrap() {
 try {
   await bootstrap();
 } catch (error) {
-  new Logger('Bootstrap').fatal(
-    error instanceof Error ? error : String(error),
-  );
+  new Logger('Bootstrap').fatal(error instanceof Error ? error : String(error));
   // 이미 열린 메트릭 listener가 있어도 기동 실패는 종료해야 한다. 오류를 다시 던지면 Node가 평문 스택을 stderr에 남긴다.
   // eslint-disable-next-line unicorn/no-process-exit
   process.exit(1);
