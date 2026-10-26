@@ -13,7 +13,6 @@ function fakePool() {
     pool.waitingCount += 1;
     await new Promise((resolve) => {
       // pg-pool이 쓰는 것과 같은 큐라야 실제 동작과 같다.
-      // eslint-disable-next-line unicorn/prefer-queue-microtask
       process.nextTick(resolve);
     });
     pool.waitingCount -= 1;
