@@ -128,7 +128,11 @@ export class MetricsCollectorsService implements OnModuleInit {
       help: 'DB 연결 풀의 연결 수(total, idle, waiting). waiting이 계속 0보다 크면 풀이 고갈된 것이다',
       labelNames: ['state'],
       registers: [registry],
-      collect: () => {
+      collect: async () => {
+        // 같은 스크레이프에서 아웃박스 게이지가 집계 쿼리를 띄운다. `pg-pool`은 유휴 연결이 있어도 다음 틱에야
+        // 내주므로, 그 사이에 읽으면 유휴 1·대기 1로 잡혀 고갈이 없는데도 FormDbPoolExhausted가 계속 울렸다.
+        // 진행 중인 집계가 끝난 뒤에 읽어 지표 자신의 쿼리는 빼고 센다.
+        await this.refreshing;
         const counts = this.poolCounts();
         if (counts === undefined) {
           return;
