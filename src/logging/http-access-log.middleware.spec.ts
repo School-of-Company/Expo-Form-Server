@@ -53,7 +53,7 @@ describe('createHttpAccessLogMiddleware', () => {
     expect(next).toHaveBeenCalledOnce();
     expect(logger.log).toHaveBeenCalledOnce();
     expect(logger.log.mock.calls[0]?.[0]).toMatch(
-      /^GET \/forms\/:id 200 \d+ms$/u,
+      /^GET \/forms\/:id status: 200 \(\d+ms\)$/u,
     );
   });
 
@@ -74,7 +74,7 @@ describe('createHttpAccessLogMiddleware', () => {
 
     response.emit('close');
 
-    expect(logger.error.mock.calls[0]?.[0]).toMatch(/ 499 \d+ms$/u);
+    expect(logger.error.mock.calls[0]?.[0]).toMatch(/ status: 499 \(\d+ms\)$/u);
   });
 
   it('매칭된 라우트가 없으면 쿼리를 뗀 경로를 남긴다', () => {
@@ -87,7 +87,7 @@ describe('createHttpAccessLogMiddleware', () => {
     response.emit('finish');
 
     const message = String(logger.warn.mock.calls[0]?.[0]);
-    expect(message).toMatch(/^GET \/nope 404 \d+ms$/u);
+    expect(message).toMatch(/^GET \/nope status: 404 \(\d+ms\)$/u);
     expect(message).not.toContain('010');
   });
 

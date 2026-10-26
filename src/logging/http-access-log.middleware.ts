@@ -12,7 +12,7 @@ const SKIPPED_PATHS = new Set(['/health']);
 type AccessLogger = Pick<Logger, 'log' | 'warn' | 'error'>;
 
 /**
- * 요청마다 응답이 끝난 시점에 한 줄을 남긴다: `GET /forms/:id 200 12ms`.
+ * 요청마다 응답이 끝난 시점에 한 줄을 남긴다: `GET /forms/:id status: 200 (12ms)`.
  *
  * 경로는 매칭된 라우트 템플릿을 쓰고, 매칭되지 않았으면 쿼리를 뗀 원문 경로를 쓴다 — 쿼리와 경로 값에는
  * 전화번호 같은 개인정보가 실릴 수 있다. 헤더·쿠키·본문은 남기지 않는다. 레벨은 4xx가 WARN, 5xx와 499가 ERROR다.
@@ -38,7 +38,7 @@ export function createHttpAccessLogMiddleware(
 
       logged = true;
       const ms = Math.round(Number(process.hrtime.bigint() - startedAt) / 1e6);
-      const message = `${request.method} ${loggablePath(request)} ${status} ${ms}ms`;
+      const message = `${request.method} ${loggablePath(request)} status: ${status} (${ms}ms)`;
       const emit = () => {
         if (status === CLIENT_CLOSED_STATUS || status >= 500) {
           logger.error(message);
