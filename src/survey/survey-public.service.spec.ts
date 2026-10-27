@@ -8,6 +8,7 @@ import {
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import { hashGiftToken } from './gift-secret.js';
 import { SurveyPublicService } from './survey-public.service.js';
 import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyStore } from './survey.store.js';
@@ -87,14 +88,35 @@ describe('SurveyPublicService', () => {
     it('답변을 저장하고 당첨이 아니라고 알려 준다', async () => {
       const result = await service.submit(expoId, answerDto);
 
-      expect(result).toEqual({ won: false });
+      expect(result).toEqual({
+        won: false,
+        giftToken: expect.any(String) as string,
+      });
 
       expect(answerStore.create).toHaveBeenCalledWith(
         'survey-1',
         { '1': '좋았습니다' },
         Occupation.ELEMENTARY_STUDENT,
         null,
+        hashGiftToken(result.giftToken),
       );
+    });
+
+    it('당첨과 상관없이 제출마다 다른 수령 토큰을 발급하고 해시만 저장소에 넘긴다', async () => {
+      const first = await service.submit(expoId, answerDto);
+      const second = await service.submit(expoId, answerDto);
+
+      expect(first.giftToken).not.toBe(second.giftToken);
+      const tokenHash = (answerStore.create.mock.calls[0] as string[])[4];
+      expect(tokenHash).toBe(hashGiftToken(first.giftToken));
+      expect(tokenHash).not.toBe(first.giftToken);
+    });
+
+    it('검증에 실패하면 토큰을 발급하지 않고 저장도 하지 않는다', async () => {
+      await expect(
+        service.submit(expoId, { ...answerDto, answers: {} }),
+      ).rejects.toBeInstanceOf(SurveyAnswerInvalidException);
+      expect(answerStore.create).not.toHaveBeenCalled();
     });
 
     it('같은 박람회에 여러 번 제출해도 막지 않는다', async () => {
@@ -121,6 +143,7 @@ describe('SurveyPublicService', () => {
 
         await expect(service.submit(expoId, answerDto)).resolves.toEqual({
           won: true,
+          giftToken: expect.any(String) as string,
         });
       });
 
@@ -134,6 +157,7 @@ describe('SurveyPublicService', () => {
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
           null,
+          expect.any(String),
         );
         expect(result.won).toBe(true);
       });
@@ -146,6 +170,7 @@ describe('SurveyPublicService', () => {
           { '1': '좋았습니다' },
           Occupation.ELEMENTARY_STUDENT,
           '01012345678',
+          expect.any(String),
         );
       });
 
@@ -159,6 +184,7 @@ describe('SurveyPublicService', () => {
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
           null,
+          expect.any(String),
         );
         expect(answerStore.create).toHaveBeenNthCalledWith(
           2,
@@ -166,6 +192,7 @@ describe('SurveyPublicService', () => {
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
           null,
+          expect.any(String),
         );
       });
 
@@ -182,6 +209,7 @@ describe('SurveyPublicService', () => {
           expect.anything(),
           Occupation.ELEMENTARY_STUDENT,
           null,
+          expect.any(String),
         );
       });
 

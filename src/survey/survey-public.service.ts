@@ -16,6 +16,7 @@ import {
 } from './dto/public-survey.response.dto.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { normalizeLotteryPhone } from './lottery-phone.js';
+import { generateGiftToken, hashGiftToken } from './gift-secret.js';
 import { decodeCursor, encodeCursor } from './public-answer-cursor.js';
 import {
   SurveyPublicAnswerStore,
@@ -68,6 +69,7 @@ export class SurveyPublicService {
 
     const lotteryPhoneNumber = this.resolveLotteryPhone(survey, dto);
 
+    const giftToken = generateGiftToken();
     let outcome: DrawOutcome;
     try {
       outcome = await this.answerStore.create(
@@ -75,6 +77,7 @@ export class SurveyPublicService {
         result.data,
         dto.occupation,
         lotteryPhoneNumber,
+        hashGiftToken(giftToken),
       );
     } catch (error) {
       // 설문을 확인한 뒤 저장하기 전에 박람회 삭제로 설문이 지워진 경우다.
@@ -87,7 +90,7 @@ export class SurveyPublicService {
 
     this.logger.log(`공개 설문 답변 저장 완료: surveyId=${survey.id}`);
 
-    return { won: outcome.won };
+    return { won: outcome.won, giftToken };
   }
 
   /**

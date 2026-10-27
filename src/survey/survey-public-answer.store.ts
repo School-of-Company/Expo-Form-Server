@@ -6,6 +6,7 @@ import {
 } from 'typeorm';
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { SurveyNotFoundException } from '../common/exceptions/domain.exception.js';
+import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 
 /** 경품 설정을 잠그고 읽은 한 줄. 컬럼 이름 그대로 돌려받는다. */
@@ -56,6 +57,8 @@ export class SurveyPublicAnswerStore {
    * `lotteryPhoneNumber`는 당첨됐을 때 문자를 보낼 번호다. 입력하지 않았으면 `null`이고 추첨 대상에서 뺀다 —
    * 순번도 소비하지 않고 당첨되지 않는다(#169). 같은 설문에서 이미 추첨에 참여한 번호도 순번을 소비하지 않는다(#182).
    *
+   * `giftTokenHash`가 있으면 그 응답의 기념품 수령 기록도 같은 트랜잭션에서 만든다.
+   *
    * @throws {SurveyNotFoundException} 설문 행을 잠그는 순간 설문이 이미 지워졌을 때
    */
   async create(
@@ -63,11 +66,12 @@ export class SurveyPublicAnswerStore {
     answers: Record<string, unknown>,
     occupation: Occupation,
     lotteryPhoneNumber: string | null,
+    giftTokenHash: string | null = null,
   ): Promise<DrawOutcome> {
     return this.dataSource.transaction(async (manager) => {
       const lottery = await this.lockLottery(manager, surveyId);
 
-      await manager.insert(SurveyPublicAnswerEntity, {
+      const inserted = await manager.insert(SurveyPublicAnswerEntity, {
         surveyId,
         // QueryDeepPartialEntity가 Record<string, unknown>을 깊게 펼치다 타입이 어긋난다.
         // 값은 그대로 jsonb로 들어간다.
@@ -77,6 +81,15 @@ export class SurveyPublicAnswerStore {
         // 늦게 커밋되는 응답은 반드시 그 상한보다 늦은 시각을 갖는다(#215).
         createdAt: () => 'clock_timestamp()',
       });
+
+      // 수령 기록은 응답과 같은 트랜잭션에서 만든다 — 응답만 남거나 토큰만 남는 일이 없다(#239).
+      if (giftTokenHash !== null) {
+        await manager.insert(SurveyGiftClaimEntity, {
+          surveyId,
+          answerId: (inserted.identifiers[0] as { id: string }).id,
+          tokenHash: giftTokenHash,
+        });
+      }
 
       // 번호 없는 응답은 추첨에 넣지 않는다(#169). 같은 사람의 반복 당첨을 막을 기준이 없다.
       const joined =

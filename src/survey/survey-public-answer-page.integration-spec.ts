@@ -19,6 +19,8 @@ import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { publicSurveyAnswerPageSchema } from './dto/public-survey-answer-page.response.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
+import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
 import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -62,6 +64,8 @@ describe.skipIf(adminUrl === undefined)(
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
           SurveyLotteryParticipantEntity,
+          SurveyGiftPinEntity,
+          SurveyGiftClaimEntity,
         ],
         synchronize: true,
       });
