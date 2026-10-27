@@ -1,9 +1,7 @@
 import { Logger } from '@nestjs/common';
+import { ProjectionMissLogger } from '../common/projection/projection-miss-logger.js';
 import type { ExpoProjectionStore } from '../expo-projection/expo-projection.store.js';
 import type { ExpoClient, ExpoPeriod } from './expo-client.interface.js';
-
-/** 미스 로그를 박람회마다 한 번만 남기려고 기억하는 박람회 수의 상한. 넘치면 비우고 다시 센다. */
-const MISS_LOG_MEMORY = 10_000;
 
 /**
  * 박람회 조회(`exists`, `findPeriod`)를 `expo.expo.changed`로 채운 로컬 프로젝션에서 읽는 {@link ExpoClient}.
@@ -15,7 +13,7 @@ const MISS_LOG_MEMORY = 10_000;
  */
 export class ProjectedExpoClient implements ExpoClient {
   private readonly logger = new Logger(ProjectedExpoClient.name);
-  private readonly loggedMisses = new Set<string>();
+  private readonly misses = new ProjectionMissLogger(this.logger);
 
   constructor(
     private readonly delegate: ExpoClient,
@@ -57,16 +55,8 @@ export class ProjectedExpoClient implements ExpoClient {
   }
 
   private logMiss(expoId: string): void {
-    if (this.loggedMisses.has(expoId)) {
-      return;
-    }
-
-    if (this.loggedMisses.size >= MISS_LOG_MEMORY) {
-      this.loggedMisses.clear();
-    }
-
-    this.loggedMisses.add(expoId);
-    this.logger.log(
+    this.misses.record(
+      expoId,
       `박람회 프로젝션에 없어 박람회 서비스로 조회합니다: expoId=${expoId}`,
     );
   }
