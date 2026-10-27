@@ -14,6 +14,11 @@ import {
   EUREKA_SERVICE_URL_ENV,
 } from './eureka/eureka-options.js';
 import { ExpoModule } from './expo/expo.module.js';
+import { ExpoChangedConsumerModule } from './expo-projection/expo-changed-consumer.module.js';
+import {
+  EXPO_PROJECTION_ENABLED_KEY,
+  isExpoProjectionEnabled,
+} from './expo-projection/expo-projection.config.js';
 import { HealthController } from './health/health.controller.js';
 import { FormModule } from './form/form.module.js';
 import { MetricsModule } from './metrics/metrics.module.js';
@@ -65,6 +70,10 @@ import { SurveyModule } from './survey/survey.module.js';
     FormModule,
     SurveyModule,
     ExpoModule,
+    // 박람회 변경 이벤트로 박람회 프로젝션을 채운다. KAFKA_EXPO_PROJECTION_ENABLED=true일 때만 구독한다.
+    ConditionalModule.registerWhen(ExpoChangedConsumerModule, (env) =>
+      isExpoProjectionEnabled(env[EXPO_PROJECTION_ENABLED_KEY]),
+    ),
   ],
   controllers: [AppController, HealthController],
   providers: [
