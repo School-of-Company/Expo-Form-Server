@@ -13,6 +13,8 @@ import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { publicSurveyAnswerResponseSchema } from './dto/public-survey-answer.response.dto.js';
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
+import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
 import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -52,6 +54,8 @@ describe.skipIf(adminUrl === undefined)(
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
           SurveyLotteryParticipantEntity,
+          SurveyGiftPinEntity,
+          SurveyGiftClaimEntity,
         ],
         synchronize: true,
       });
@@ -107,7 +111,10 @@ describe.skipIf(adminUrl === undefined)(
           }),
         })
         .expect(200);
-      return publicSurveyAnswerResponseSchema.strict().parse(response.body);
+      const { won } = publicSurveyAnswerResponseSchema
+        .strict()
+        .parse(response.body);
+      return { won };
     }
 
     it('동시에 같은 정규화 번호로 제출해도 순번은 하나만 소비하고 한 번만 당첨된다', async () => {
