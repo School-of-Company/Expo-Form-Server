@@ -8,6 +8,8 @@ import { LotteryPhoneRetentionService } from './lottery-phone-retention.service.
 import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
+import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
+import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
 import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -19,6 +21,9 @@ import { SurveyAnswerService } from './survey-answer.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 import { SurveyDrawResultRelayService } from './survey-draw-result-relay.service.js';
 import { SurveyDrawResultStore } from './survey-draw-result.store.js';
+import { SurveyGiftController } from './survey-gift.controller.js';
+import { SurveyGiftService } from './survey-gift.service.js';
+import { SurveyGiftStore } from './survey-gift.store.js';
 import { SurveyLotteryController } from './survey-lottery.controller.js';
 import { SurveyLotteryService } from './survey-lottery.service.js';
 import { SurveyPublicController } from './survey-public.controller.js';
@@ -38,6 +43,8 @@ import { SurveyStore } from './survey.store.js';
       SurveyPublicAnswerEntity,
       SurveyDrawResultEntity,
       SurveyLotteryParticipantEntity,
+      SurveyGiftPinEntity,
+      SurveyGiftClaimEntity,
     ]),
     DeletedExpoModule,
     ExpoClientModule,
@@ -48,6 +55,7 @@ import { SurveyStore } from './survey.store.js';
     SurveyAnswerController,
     SurveyPublicController,
     SurveyLotteryController,
+    SurveyGiftController,
     InternalSurveyController,
   ],
   providers: [
@@ -64,6 +72,8 @@ import { SurveyStore } from './survey.store.js';
     SurveyDrawResultRelayService,
     LotteryPhoneRetentionService,
     SurveyPublicAnswerStore,
+    SurveyGiftService,
+    SurveyGiftStore,
   ],
   exports: [SurveyStore],
 })

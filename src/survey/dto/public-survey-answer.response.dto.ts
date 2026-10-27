@@ -8,6 +8,11 @@ import { z } from 'zod';
 export const publicSurveyAnswerResponseSchema = z.object({
   /** 이 응답이 경품에 당첨됐는지. */
   won: z.boolean(),
+  /**
+   * 기념품 수령 확인 토큰. 제출에 성공한 응답자에게만 한 번 돌려주고 서버에는 해시만 남으므로 잃어버리면 다시 받을 수 없다.
+   * 추첨 당첨 여부와 상관없이 응답자 전원에게 발급한다. 로그·URL 쿼리에 남기지 않는다.
+   */
+  giftToken: z.string(),
 });
 
 export class PublicSurveyAnswerResponseDto extends createZodDto(
