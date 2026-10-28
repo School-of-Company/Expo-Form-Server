@@ -121,15 +121,25 @@ WHERE event_id = '<알림의 eventId>' AND status = 'PUBLISHED';
 
 "확인 불가"는 유저 서비스가 응답하지 않은 경우라, 장애가 풀리면 다음 점검에서 다시 판단한다. 되돌릴 필요가 없다.
 
+## Expo projection
+
+박람회 조회(폼·설문 생성 때 존재 확인, 당첨 번호 보관 기간 계산의 박람회 기간)는 박람회 서비스가 보내는 `expo.expo.changed`(Expo-Expo-Server#212)로 채운 로컬 프로젝션에서 읽을 수 있다.
+
+- `KAFKA_EXPO_PROJECTION_ENABLED=true`일 때만 켜진다(기본 꺼짐). 꺼져 있으면 지금처럼 `GET /internal/expo/{expoId}`로 동기 조회하고 토픽도 구독하지 않는다.
+- 켜면 컨슈머(그룹 `KAFKA_EXPO_CHANGED_GROUP_ID`, 기본 `expo-form-server.expo-changed`)가 박람회별 마지막 `version`보다 큰 이벤트만 반영해 `expo_projection`(박람회 기간만)을 덮어쓰고, tombstone이면 행을 지운다. 반영한 버전은 `expo_projection_version`에 남는다.
+- 프로젝션에 없는 박람회는 동기 조회로 넘어간다(박람회마다 한 번 로그). 처음 켠 뒤 박람회 서비스의 `POST /internal/expo-events/republish`로 전체 상태를 한 번 싣는다.
+- 해석할 수 없는 메시지와 3번 반영에 실패한 메시지는 `expo.expo.changed.dlt`로 보낸다(운영에서 미리 만든다).
+- 프로그램용 폼 변경 예약·해제(`/internal/forms/by-id/{formId}/changes/{changeId}`)는 박람회 서비스 상태를 바꾸는 호출이라 켜도 동기다.
+
 ## Internal API
 
 다른 서비스가 Gateway를 거치지 않고 부르는 `/internal` 경로다. `X-Internal-Token` 헤더가 `INTERNAL_TOKEN`(필수, 32자 이상)과 같아야 하고, 아니면 401이다. Gateway 라우팅 표에 `/internal` prefix를 넣지 않는다.
 
-| 메서드·경로                                                                                    | 쓰는 곳                                         |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `GET /internal/forms/{expoId}?type=&applicationType=`                                          | 신청 서비스 — 제출된 신청서를 폼 스펙으로 검증  |
-| `GET /internal/surveys/{expoId}?type=`                                                         | 리포트 서비스 등 — 설문 문항 스펙               |
-| `POST /internal/forms/summaries`, `POST /internal/surveys/summaries` (`{expoIds}`, 최대 100개) | 박람회 서비스 — 박람회별 폼·설문 생성 현황      |
+| 메서드·경로                                                                                    | 쓰는 곳                                                                                        |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `GET /internal/forms/{expoId}?type=&applicationType=`                                          | 신청 서비스 — 제출된 신청서를 폼 스펙으로 검증                                                 |
+| `GET /internal/surveys/{expoId}?type=`                                                         | 리포트 서비스 등 — 설문 문항 스펙                                                              |
+| `POST /internal/forms/summaries`, `POST /internal/surveys/summaries` (`{expoIds}`, 최대 100개) | 박람회 서비스 — 박람회별 폼·설문 생성 현황                                                     |
 | `DELETE /internal/expos/{expoId}`                                                              | 박람회 서비스 — 박람회 삭제 시 폼·설문·접수 기록을 한 번에 지우고 삭제 기록을 남김(없어도 204) |
 
 ## Deployment
