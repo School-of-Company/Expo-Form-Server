@@ -87,7 +87,7 @@ export function resolveRelaySettings(
 
 /**
  * `retryCount`번째 발행 뒤 다음 재발행까지의 기본 대기(ms). 지터는 더하지 않는다.
- * `markPublished`가 발행마다 `retryCount`를 올리므로 첫 재발행 대기는 `retryCount = 1`이고 `staleMs`와 같다.
+ * 릴레이가 발행할 때마다(claim) `retryCount`를 올리므로 첫 재발행 대기는 `retryCount = 1`이고 `staleMs`와 같다.
  */
 export function backoffDelayMs(
   retryCount: number,
