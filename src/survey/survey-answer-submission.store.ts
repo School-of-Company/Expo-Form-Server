@@ -34,11 +34,7 @@ export type AnswerRelayBatchResult = {
 /** {@link SurveyAnswerSubmissionStore.relayPending} 조회 조건. */
 export type AnswerRelayOptions = Pick<
   SurveyAnswerRelaySettings,
-  | 'staleMs'
-  | 'staleMaxMs'
-  | 'jitterRatio'
-  | 'maxRetryCount'
-  | 'sendBatchSize'
+  'staleMs' | 'staleMaxMs' | 'jitterRatio' | 'maxRetryCount' | 'sendBatchSize'
 > & {
   /** RECEIVED / 재발행 대상 각각의 최대 건수. */
   limit: number;
@@ -122,7 +118,7 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
-   * 발행할 접수 기록을 잠가서 `publish`로 묶음 단위로 발행하고 표시한다. 대상은 두 가지다.
+   * 발행할 접수 기록을 claim해서 `publish`로 묶음 단위로 발행한다. 대상은 두 가지다.
    * - 한 번도 발행되지 않은(`RECEIVED`) 기록
    * - 결과를 못 받은 채 재발행 시각이 된 `PUBLISHED` 기록. `retryCount`가 `maxRetryCount` 미만인 것만 — 그 이상은
    *   재발행을 포기하고 사람이 봐야 할 대상으로 남겨둔다(무한 재발행으로 부하를 키우지 않기 위해).
@@ -131,13 +127,14 @@ export class SurveyAnswerSubmissionStore {
    * 멈추며(`backoffDelayMs`), 행마다 고정된 지터(`hashtext(id, retryCount)`)를 더한다. 별도 컬럼 없이 기존
    * `retryCount`·`publishedAt`만 쓰므로 마이그레이션이 없다. 지터가 행·회차마다 고정이라 주기마다 다시 뽑히지 않는다.
    *
-   * 조회와 발행·표시를 한 트랜잭션에 두고 행을 `FOR UPDATE SKIP LOCKED`로 잡는다. 인스턴스가 여러 대여도 같은
-   * 행을 둘이 동시에 읽지 못해 같은 건을 중복 발행하거나 `retryCount`를 두 번 올리지 않는다. 발행하는 동안 DB
-   * 연결과 행 잠금을 쥐므로 `limit`을 작게 유지해야 한다. 결과 이벤트를 반영하는 `markFinal`은 같은 행의 잠금이 풀릴
-   * 때까지 기다린다.
+   * 발행 중에는 DB 연결과 행 잠금을 쥐지 않는다(#136). 짧은 트랜잭션에서 대상 행을 `FOR UPDATE SKIP LOCKED`로 잡아
+   * 발행한 것으로 먼저 표시(claim: `PUBLISHED`, `publishedAt`, `retryCount + 1`)하고 커밋한 뒤 발행한다. 인스턴스가
+   * 여러 대여도 같은 행을 둘이 동시에 claim하지 못해 같은 건을 중복 발행하거나 `retryCount`를 두 번 올리지 않는다.
+   * claim이 끝나면 잠금이 풀리므로 결과 이벤트를 반영하는 `markFinal`이 발행을 기다리지 않는다.
    *
    * `publish`는 `sendBatchSize` 건 이하의 묶음을 받아 성공한 건(발행한 이벤트 버전과 함께)과 실패한 건을
-   * 돌려준다. 실패한 건은 표시하지 않아 다음 주기에 다시 잡힌다.
+   * 돌려준다. 성공한 건은 이벤트 버전을 기록하고, 실패한 건은 claim 전 값으로 되돌려 다음 주기에 다시 잡힌다.
+   * claim 뒤 발행 전에 프로세스가 죽으면 그 건은 발행된 것으로 남아 재발행 시각에 다시 나간다(지연만 생기고 빠지지 않는다).
    *
    * @returns 발행에 실패한 건
    */
@@ -147,7 +144,32 @@ export class SurveyAnswerSubmissionStore {
       batch: SurveyAnswerSubmissionEntity[],
     ) => Promise<AnswerRelayBatchResult>,
   ): Promise<AnswerRelayFailure[]> {
-    const { limit, sendBatchSize } = options;
+    const claimed = await this.claimPending(options);
+
+    const failures: AnswerRelayFailure[] = [];
+    for (const batch of chunk(claimed, options.sendBatchSize)) {
+      // 묶음 단위로 순서대로 발행한다. 한 묶음이 실패해도 다음 묶음은 계속 처리한다.
+      // eslint-disable-next-line no-await-in-loop
+      const result = await publish(batch);
+      failures.push(...result.failures);
+      // eslint-disable-next-line no-await-in-loop
+      await this.recordEventVersions(result.published);
+      // eslint-disable-next-line no-await-in-loop
+      await this.releaseClaims(
+        result.failures.map(({ submission }) => submission),
+      );
+    }
+
+    return failures;
+  }
+
+  /**
+   * 발행할 행을 잠가 읽고 발행한 것으로 표시한 뒤 커밋한다. 돌려주는 엔티티는 표시 전 값이라, 발행 버전 판단과
+   * 실패 시 되돌리기에 그대로 쓴다.
+   */
+  private async claimPending(
+    options: AnswerRelayOptions,
+  ): Promise<SurveyAnswerSubmissionEntity[]> {
     return this.dataSource.transaction(async (manager) => {
       const received = await manager
         .createQueryBuilder(SurveyAnswerSubmissionEntity, 'submission')
@@ -157,26 +179,73 @@ export class SurveyAnswerSubmissionStore {
           status: SurveyAnswerSubmissionStatus.RECEIVED,
         })
         .orderBy('submission.createdAt', 'ASC')
-        .limit(limit)
+        .limit(options.limit)
         .getMany();
 
       const stalePublished = await this.lockRepublishDue(manager, options);
-
-      const failures: AnswerRelayFailure[] = [];
-      for (const batch of chunk([...received, ...stalePublished], sendBatchSize)) {
-        // 묶음 단위로 순서대로 발행한다. 한 묶음이 실패해도 다음 묶음은 계속 처리한다.
-        // eslint-disable-next-line no-await-in-loop
-        const result = await publish(batch);
-        failures.push(...result.failures);
-
-        for (const { submission, version } of result.published) {
-          // eslint-disable-next-line no-await-in-loop
-          await this.markPublished(submission.id, version, manager);
-        }
+      const claimed = [...received, ...stalePublished];
+      if (claimed.length > 0) {
+        await manager.update(
+          SurveyAnswerSubmissionEntity,
+          { id: In(claimed.map(({ id }) => id)) },
+          {
+            status: SurveyAnswerSubmissionStatus.PUBLISHED,
+            publishedAt: options.now,
+            // 원시 SQL이라 SnakeNamingStrategy가 적용되지 않는다 — 실제 컬럼명을 써야 한다.
+            retryCount: () => 'retry_count + 1',
+          },
+        );
       }
 
-      return failures;
+      return claimed;
     });
+  }
+
+  /**
+   * 발행한 이벤트 버전을 처음 발행한 건에만 기록한다. 이미 기록돼 있으면 그대로 둔다(재발행은 그 버전으로 나갔으므로 같은 값이다).
+   * 결과가 먼저 도착해 종결된 행에도 기록한다 — 버전은 상태와 상관없이 발행한 사실이다.
+   */
+  private async recordEventVersions(
+    published: AnswerRelayBatchResult['published'],
+  ): Promise<void> {
+    for (const version of [1, 2] as const) {
+      const ids = published
+        .filter((item) => item.version === version)
+        .map(({ submission }) => submission.id);
+      if (ids.length === 0) {
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      await this.submissions.update(
+        { id: In(ids) },
+        { eventVersion: () => `COALESCE(event_version, ${version})` },
+      );
+    }
+  }
+
+  /**
+   * 발행에 실패한 건의 claim을 되돌린다. 그 사이 다른 실행이 다시 claim했거나 결과가 도착해 종결됐다면
+   * (`status`·`retryCount`가 claim 직후 값과 다르면) 건드리지 않는다.
+   */
+  private async releaseClaims(
+    submissions: SurveyAnswerSubmissionEntity[],
+  ): Promise<void> {
+    for (const submission of submissions) {
+      // eslint-disable-next-line no-await-in-loop
+      await this.submissions.update(
+        {
+          id: submission.id,
+          status: SurveyAnswerSubmissionStatus.PUBLISHED,
+          retryCount: submission.retryCount + 1,
+        },
+        {
+          status: submission.status,
+          publishedAt: submission.publishedAt,
+          retryCount: submission.retryCount,
+        },
+      );
+    }
   }
 
   /** 재발행 시각이 된 `PUBLISHED` 기록을 잠가서 가져온다(`publishedAt` 오름차순). */
@@ -265,37 +334,8 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
-   * 발행(또는 재발행) 완료를 기록한다. `eventId`는 건드리지 않는다 — 재발행이어도 최초 발행 때
-   * 발급된 값을 그대로 유지해야 유저 서비스가 멱등키로 쓸 수 있다.
-   *
-   * 아직 종결되지 않은 row만 갱신한다. 발행하는 사이 결과 이벤트가 먼저 도착해 `STORED`/
-   * `REJECTED`가 됐다면, 늦게 실행된 이 갱신이 종결 상태를 덮어쓰면 안 된다.
-   *
-   * 이벤트 버전은 처음 발행할 때 한 번만 기록한다. 이미 기록돼 있으면 그대로 둔다(재발행은 그 버전으로
-   * 나갔으므로 같은 값이다).
-   */
-  async markPublished(
-    id: string,
-    eventVersion: 1 | 2,
-    manager?: EntityManager,
-  ): Promise<void> {
-    const repository =
-      manager?.getRepository(SurveyAnswerSubmissionEntity) ?? this.submissions;
-    await repository.update(
-      { id, status: In(IN_FLIGHT_STATUSES) },
-      {
-        status: SurveyAnswerSubmissionStatus.PUBLISHED,
-        publishedAt: new Date(),
-        // 원시 SQL이라 SnakeNamingStrategy가 적용되지 않는다 — 실제 컬럼명을 써야 한다.
-        retryCount: () => 'retry_count + 1',
-        eventVersion: () => `COALESCE(event_version, ${eventVersion})`,
-      },
-    );
-  }
-
-  /**
    * 결과 이벤트를 반영한다. 아직 종결되지 않은(`RECEIVED`/`PUBLISHED`) row만 갱신한다 —
-   * `RECEIVED`도 포함하는 건, 발행 직후 `markPublished()`보다 결과가 먼저 도착할 수 있어서다.
+   * 릴레이는 발행 전에 `PUBLISHED`로 claim하지만, 발행 실패로 claim을 되돌린 건(`RECEIVED`)에 앞서 일부 나간 묶음의 결과가 올 수 있다.
    * 이미 종결된 row는 조건에 안 걸려 무시되므로, 늦게·중복으로 도착한 이벤트가 최종 상태를
    * 덮어쓰지 못한다.
    *

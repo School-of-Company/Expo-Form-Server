@@ -247,6 +247,68 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
     expect(rows.map((row) => row.retryCount)).toEqual([1, 1, 1, 1]);
   });
 
+  it('발행하는 동안 행을 잠그지 않아 결과 반영이 기다리지 않고, 실패한 건은 claim 전으로 되돌린다', async () => {
+    const repository = dataSource.getRepository(SurveyAnswerSubmissionEntity);
+    await repository.clear();
+    const eventIds = [randomUUID(), randomUUID()];
+    for (const [index, eventId] of eventIds.entries()) {
+      // eslint-disable-next-line no-await-in-loop
+      await repository.insert({
+        surveyId,
+        eventId,
+        expoId: randomUUID(),
+        participationType: ParticipationType.STANDARD,
+        phoneNumber: `0101234590${index}`,
+        status: SurveyAnswerSubmissionStatus.RECEIVED,
+        payload: { answers: {}, personalInformationStatus: true },
+      });
+    }
+
+    let finalizedDuringPublish = false;
+    await answerStore.relayPending(
+      { ...DEFAULT_RELAY_SETTINGS, now: new Date(), limit: 100 },
+      async (batch) => {
+        // 발행 중에 결과가 도착한다. 행 잠금을 쥐고 있었다면 relayPending이 끝날 때까지 여기서 멈춘다.
+        finalizedDuringPublish = await answerStore.markFinal(
+          eventIds[0],
+          SurveyAnswerSubmissionStatus.STORED,
+          null,
+        );
+        const [sent, failed] = [
+          batch.filter((item) => item.eventId === eventIds[0]),
+          batch.filter((item) => item.eventId !== eventIds[0]),
+        ];
+        return {
+          published: sent.map((submission) => ({
+            submission,
+            version: 2 as const,
+          })),
+          failures: failed.map((submission) => ({
+            submission,
+            error: new Error('broker down'),
+          })),
+        };
+      },
+    );
+
+    expect(finalizedDuringPublish).toBe(true);
+    const stored = await repository.findOneByOrFail({ eventId: eventIds[0] });
+    expect(stored).toMatchObject({
+      status: SurveyAnswerSubmissionStatus.STORED,
+      retryCount: 1,
+      eventVersion: 2,
+    });
+    const released = await repository.findOneByOrFail({
+      eventId: eventIds[1],
+    });
+    expect(released).toMatchObject({
+      status: SurveyAnswerSubmissionStatus.RECEIVED,
+      retryCount: 0,
+      publishedAt: null,
+      eventVersion: null,
+    });
+  });
+
   it('재발행은 retryCount가 늘수록 더 오래 기다린 뒤에 다시 잡는다', async () => {
     const repository = dataSource.getRepository(SurveyAnswerSubmissionEntity);
     await repository.clear();
@@ -275,7 +337,10 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
       async (batch) => {
         published.push(...batch.map((submission) => submission.id));
         return {
-          published: batch.map((submission) => ({ submission, version: 1 as const })),
+          published: batch.map((submission) => ({
+            submission,
+            version: 1 as const,
+          })),
           failures: [],
         };
       },
