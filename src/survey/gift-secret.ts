@@ -1,11 +1,5 @@
 import { Buffer } from 'node:buffer';
-import {
-  createHash,
-  randomBytes,
-  scrypt,
-  timingSafeEqual,
-  type BinaryLike,
-} from 'node:crypto';
+import { createHash, randomBytes, scrypt, type BinaryLike } from 'node:crypto';
 
 const SCRYPT_KEY_LENGTH = 32;
 
@@ -37,22 +31,4 @@ export async function hashPin(pin: string): Promise<string> {
   const salt = randomBytes(16);
   const key = await derive(pin, salt);
   return `scrypt$${salt.toString('hex')}$${key.toString('hex')}`;
-}
-
-/** 저장된 해시와 PIN이 같은지 시간 일정 비교로 확인한다. 형식이 깨진 해시는 항상 불일치다. */
-export async function verifyPin(pin: string, stored: string): Promise<boolean> {
-  const [scheme, saltHex, keyHex] = stored.split('$', 3);
-  if (
-    scheme !== 'scrypt' ||
-    saltHex === undefined ||
-    saltHex === '' ||
-    keyHex === undefined ||
-    keyHex === ''
-  ) {
-    return false;
-  }
-
-  const expected = Buffer.from(keyHex, 'hex');
-  const actual = await derive(pin, Buffer.from(saltHex, 'hex'));
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }

@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   GiftPickupTokenInvalidException,
-  GiftPinInvalidException,
-  GiftPinLockedException,
-  GiftPinNotConfiguredException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
-import { hashGiftToken, hashPin } from './gift-secret.js';
+import { hashGiftToken } from './gift-secret.js';
 import { SurveyGiftService } from './survey-gift.service.js';
 import { SurveyGiftStore } from './survey-gift.store.js';
 import { SurveyStore } from './survey.store.js';
@@ -113,79 +110,67 @@ describe('SurveyGiftService', () => {
   });
 
   describe('수령 확인', () => {
-    const dto = { token: 'secret', pin: '1234' };
+    const claimedAt = new Date('2026-10-29T01:00:00.000Z');
 
-    it('저장소에는 토큰 해시와 PIN 검증 함수를 넘긴다', async () => {
-      const stored = await hashPin('1234');
-      const claimedAt = new Date('2026-10-27T01:00:00.000Z');
-      giftStore.confirm.mockImplementation(
-        async (
-          _surveyId: string,
-          _hash: string,
-          verify: (pinHash: string) => Promise<boolean>,
-        ) => {
-          expect(await verify(stored)).toBe(true);
-          expect(await verify(await hashPin('9999'))).toBe(false);
-          return { status: 'CLAIMED', claimedAt, alreadyClaimed: false };
-        },
-      );
+    it('토큰 해시만 저장소에 넘기고 PIN 없이 완료한다', async () => {
+      giftStore.confirm.mockResolvedValue({
+        status: 'CLAIMED',
+        claimedAt,
+        alreadyClaimed: false,
+      });
+      giftStore.hasPin.mockResolvedValue(false);
 
-      const result = await service.confirm(expoId, dto);
+      const result = await service.confirm(expoId, { token: 'secret' });
 
-      expect(giftStore.confirm.mock.calls[0].slice(0, 2)).toEqual([
+      expect(giftStore.confirm).toHaveBeenCalledWith(
         'survey-1',
         hashGiftToken('secret'),
-      ]);
+      );
       expect(result).toEqual({
         claimed: true,
         claimedAt: claimedAt.toISOString(),
-        pinConfigured: true,
+        pinConfigured: false,
       });
     });
 
+    it('이전 클라이언트가 pin을 보내도 무시한다', async () => {
+      giftStore.confirm.mockResolvedValue({
+        status: 'CLAIMED',
+        claimedAt,
+        alreadyClaimed: false,
+      });
+      giftStore.hasPin.mockResolvedValue(true);
+
+      await service.confirm(expoId, { token: 'secret', pin: '0000' });
+
+      expect(giftStore.confirm).toHaveBeenCalledWith(
+        'survey-1',
+        hashGiftToken('secret'),
+      );
+    });
+
     it('이미 완료된 건은 같은 완료 상태를 그대로 돌려준다', async () => {
-      const claimedAt = new Date('2026-10-27T01:00:00.000Z');
       giftStore.confirm.mockResolvedValue({
         status: 'CLAIMED',
         claimedAt,
         alreadyClaimed: true,
       });
+      giftStore.hasPin.mockResolvedValue(true);
 
-      await expect(service.confirm(expoId, dto)).resolves.toMatchObject({
+      await expect(
+        service.confirm(expoId, { token: 'secret' }),
+      ).resolves.toMatchObject({
         claimed: true,
         claimedAt: claimedAt.toISOString(),
       });
     });
 
-    it.each([
-      [{ status: 'NOT_FOUND' }, GiftPickupTokenInvalidException],
-      [{ status: 'NO_PIN' }, GiftPinNotConfiguredException],
-      [{ status: 'LOCKED', retryAfterSeconds: 300 }, GiftPinLockedException],
-      [{ status: 'INVALID', attemptsLeft: 2 }, GiftPinInvalidException],
-    ])('%o 결과는 해당 예외로 바꾼다', async (result, exception) => {
-      giftStore.confirm.mockResolvedValue(result);
+    it('없거나 다른 박람회의 토큰이면 404다', async () => {
+      giftStore.confirm.mockResolvedValue({ status: 'NOT_FOUND' });
 
-      await expect(service.confirm(expoId, dto)).rejects.toBeInstanceOf(
-        exception,
-      );
-    });
-
-    it('잠금 예외는 남은 시간을, PIN 오류는 남은 횟수를 담는다', async () => {
-      giftStore.confirm.mockResolvedValueOnce({
-        status: 'LOCKED',
-        retryAfterSeconds: 120,
-      });
-      await expect(service.confirm(expoId, dto)).rejects.toMatchObject({
-        retryAfterSeconds: 120,
-      });
-
-      giftStore.confirm.mockResolvedValueOnce({
-        status: 'INVALID',
-        attemptsLeft: 3,
-      });
-      await expect(service.confirm(expoId, dto)).rejects.toMatchObject({
-        attemptsLeft: 3,
-      });
+      await expect(
+        service.confirm(expoId, { token: 'x' }),
+      ).rejects.toBeInstanceOf(GiftPickupTokenInvalidException);
     });
   });
 });
