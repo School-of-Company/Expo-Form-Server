@@ -54,7 +54,7 @@ describe('SurveyAnswerRelayService', () => {
   let store: {
     findReceived: Mock;
     findStalePublished: Mock;
-    markPublished: Mock;
+    recordEventVersion: Mock;
     relayPending: Mock;
   };
   let scheduler: {
@@ -82,7 +82,7 @@ describe('SurveyAnswerRelayService', () => {
     store = {
       findReceived: vi.fn().mockResolvedValue([]),
       findStalePublished: vi.fn().mockResolvedValue([]),
-      markPublished: vi.fn(),
+      recordEventVersion: vi.fn(),
       relayPending: vi.fn(),
     };
     // store가 하는 일(RECEIVED·오래된 PUBLISHED를 잠가 읽고, 건마다 publish를 부르고, 성공하면 표시한다)만 흉내
@@ -106,7 +106,7 @@ describe('SurveyAnswerRelayService', () => {
         ] as SurveyAnswerSubmissionEntity[];
         const result = await publish(pending);
         for (const { submission: item, version } of result.published) {
-          store.markPublished(item.id, version);
+          store.recordEventVersion(item.id, version);
         }
 
         return result.failures;
@@ -120,7 +120,7 @@ describe('SurveyAnswerRelayService', () => {
     );
   });
 
-  it('RECEIVED 건을 발행하고 markPublished를 호출한다', async () => {
+  it('RECEIVED 건을 발행하고 recordEventVersion를 호출한다', async () => {
     store.findReceived.mockResolvedValue([submission]);
 
     await service.relay();
@@ -147,7 +147,7 @@ describe('SurveyAnswerRelayService', () => {
         },
       ],
     });
-    expect(store.markPublished).toHaveBeenCalledWith('submission-1', 1);
+    expect(store.recordEventVersion).toHaveBeenCalledWith('submission-1', 1);
   });
 
   it('오래 머문 PUBLISHED 건도 같은 eventId로 재발행한다', async () => {
@@ -159,12 +159,12 @@ describe('SurveyAnswerRelayService', () => {
     expect(payload.eventId).toBe('event-1');
   });
 
-  it('발행 실패는 로그만 남기고 markPublished를 호출하지 않는다', async () => {
+  it('발행 실패는 로그만 남기고 recordEventVersion를 호출하지 않는다', async () => {
     store.findReceived.mockResolvedValue([submission]);
     producer.sendBatch.mockRejectedValue(new Error('broker unreachable'));
 
     await expect(service.relay()).resolves.toBeUndefined();
-    expect(store.markPublished).not.toHaveBeenCalled();
+    expect(store.recordEventVersion).not.toHaveBeenCalled();
   });
 
   describe('묶음 발행', () => {
@@ -182,7 +182,7 @@ describe('SurveyAnswerRelayService', () => {
       expect(producer.sendBatch).toHaveBeenCalledTimes(1);
       expect(batchMessages(producer.sendBatch.mock.calls[0])).toHaveLength(2);
       expect(producer.send).not.toHaveBeenCalled();
-      expect(store.markPublished).toHaveBeenCalledTimes(2);
+      expect(store.recordEventVersion).toHaveBeenCalledTimes(2);
     });
 
     it('재시도해도 소용없는 오류면 한 건씩 나눠 정상 건은 발행한다', async () => {
@@ -197,8 +197,8 @@ describe('SurveyAnswerRelayService', () => {
       await service.relay();
 
       expect(producer.send).toHaveBeenCalledTimes(2);
-      expect(store.markPublished).toHaveBeenCalledTimes(1);
-      expect(store.markPublished).toHaveBeenCalledWith('submission-2', 1);
+      expect(store.recordEventVersion).toHaveBeenCalledTimes(1);
+      expect(store.recordEventVersion).toHaveBeenCalledWith('submission-2', 1);
     });
 
     it('일시 오류면 묶음 전체를 표시하지 않고 나누어 보내지도 않는다', async () => {
@@ -210,7 +210,7 @@ describe('SurveyAnswerRelayService', () => {
       await service.relay();
 
       expect(producer.send).not.toHaveBeenCalled();
-      expect(store.markPublished).not.toHaveBeenCalled();
+      expect(store.recordEventVersion).not.toHaveBeenCalled();
     });
   });
 
@@ -337,7 +337,7 @@ describe('SurveyAnswerRelayService', () => {
 
       await serviceWithVersion('2').relay();
 
-      expect(store.markPublished).toHaveBeenCalledWith('submission-1', 2);
+      expect(store.recordEventVersion).toHaveBeenCalledWith('submission-1', 2);
     });
 
     it('v1로 발행한 건은 설정이 v2로 바뀌어도 같은 v1로 재발행한다', async () => {
@@ -355,7 +355,7 @@ describe('SurveyAnswerRelayService', () => {
       expect(value.eventId).toBe('event-1');
       expect(value.version).toBe(1);
       expect(value).not.toHaveProperty('questions');
-      expect(store.markPublished).toHaveBeenCalledWith('submission-1', 1);
+      expect(store.recordEventVersion).toHaveBeenCalledWith('submission-1', 1);
     });
 
     it('v2로 발행한 건은 설정이 v1로 돌아가도 같은 v2로 재발행한다', async () => {
@@ -373,7 +373,7 @@ describe('SurveyAnswerRelayService', () => {
       expect(value.eventId).toBe('event-1');
       expect(value.version).toBe(2);
       expect(value.questions).toEqual(questions);
-      expect(store.markPublished).toHaveBeenCalledWith('submission-1', 2);
+      expect(store.recordEventVersion).toHaveBeenCalledWith('submission-1', 2);
     });
 
     it('버전을 기록하기 전에 이미 발행된 건은 설정이 v2여도 v1로 재발행한다', async () => {

@@ -2,9 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   GiftPickupTokenInvalidException,
-  GiftPinInvalidException,
-  GiftPinLockedException,
-  GiftPinNotConfiguredException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
 import {
@@ -14,13 +11,13 @@ import {
   GiftPinResponseDto,
   UpdateGiftPinRequestDto,
 } from './dto/survey-gift.dto.js';
-import { hashGiftToken, hashPin, verifyPin } from './gift-secret.js';
+import { hashGiftToken, hashPin } from './gift-secret.js';
 import { SurveyGiftStore } from './survey-gift.store.js';
 import { SurveyStore } from './survey.store.js';
 
 /**
- * 공개 설문 응답별 기념품 수령 확인. 직원 PIN 설정과, 제출자가 받은 토큰 + 직원 PIN으로 수령을 완료하는 흐름을 맡는다.
- * PIN·토큰 원문은 로그에 남기지 않는다.
+ * 공개 설문 응답별 기념품 수령 확인. 제출자가 받은 토큰만으로 수령을 완료하는 흐름(#267)과, 이제 확인에 쓰이지 않는
+ * 직원 PIN 설정(#239)을 맡는다. PIN·토큰 원문은 로그에 남기지 않는다.
  */
 @Injectable()
 export class SurveyGiftService {
@@ -76,12 +73,10 @@ export class SurveyGiftService {
   }
 
   /**
-   * 토큰과 직원 PIN을 확인해 수령을 완료한다. 이미 완료된 토큰은 PIN 없이 완료 상태를 그대로 돌려준다.
+   * 토큰만으로 수령을 완료한다(직원 PIN은 보지 않는다). 이미 완료된 토큰은 기존 완료 상태를 그대로 돌려준다.
+   * 요청에 `pin`이 있어도 무시한다 — 이전 클라이언트와의 호환용이다.
    *
    * @throws {GiftPickupTokenInvalidException} 토큰이 없거나 다른 박람회의 것일 때
-   * @throws {GiftPinNotConfiguredException} 박람회에 직원 PIN이 설정되지 않았을 때
-   * @throws {GiftPinLockedException} 이 토큰에서 PIN을 연속으로 틀려 잠겼을 때
-   * @throws {GiftPinInvalidException} PIN이 틀렸을 때
    */
   async confirm(
     expoId: string,
@@ -91,35 +86,16 @@ export class SurveyGiftService {
     const result = await this.giftStore.confirm(
       surveyId,
       hashGiftToken(dto.token),
-      async (pinHash) => verifyPin(dto.pin, pinHash),
     );
-
-    switch (result.status) {
-      case 'NOT_FOUND': {
-        throw new GiftPickupTokenInvalidException();
-      }
-
-      case 'NO_PIN': {
-        throw new GiftPinNotConfiguredException();
-      }
-
-      case 'LOCKED': {
-        this.logger.warn(`기념품 PIN 잠금: surveyId=${surveyId}`);
-        throw new GiftPinLockedException(result.retryAfterSeconds);
-      }
-
-      case 'INVALID': {
-        throw new GiftPinInvalidException(result.attemptsLeft);
-      }
-
-      case 'CLAIMED': {
-        if (!result.alreadyClaimed) {
-          this.logger.log(`기념품 수령 완료: surveyId=${surveyId}`);
-        }
-
-        return toStatus(result.claimedAt, true);
-      }
+    if (result.status === 'NOT_FOUND') {
+      throw new GiftPickupTokenInvalidException();
     }
+
+    if (!result.alreadyClaimed) {
+      this.logger.log(`기념품 수령 완료: surveyId=${surveyId}`);
+    }
+
+    return toStatus(result.claimedAt, await this.giftStore.hasPin(surveyId));
   }
 
   private async findSurveyId(expoId: string): Promise<string> {

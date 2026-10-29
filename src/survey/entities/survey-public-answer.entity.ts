@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -20,6 +21,8 @@ import { SurveyEntity } from './survey.entity.js';
  * 더 이상 쓰지 않는다(엔티티도 없다). 기본 키가 `(survey_id, token)`이라 공개 응답을 담으려고 바꾸면 개발
  * 서버의 자동 스키마 반영(`synchronize`)이 실패해서, 이름이 다른 새 테이블을 만들었다.
  */
+// 리포트용 커서 페이지가 `survey_id`로 거르고 `(created_at, id)` 순서로 읽는 인덱스(#248). FK 컬럼 인덱스도 겸한다.
+@Index('IX_survey_public_answer_cursor', ['surveyId', 'createdAt', 'id'])
 @Entity('survey_public_answer')
 export class SurveyPublicAnswerEntity {
   @PrimaryGeneratedColumn('uuid')

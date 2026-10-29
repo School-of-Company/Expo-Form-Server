@@ -1,0 +1,26 @@
+name: Sync project board
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-project-board
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 열린 이슈·PR을 프로젝트 보드에 추가
+        run: bash .github/scripts/sync-project-board.sh
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          OWNER: School-of-Company
+          PROJECT_NUMBER: '2'

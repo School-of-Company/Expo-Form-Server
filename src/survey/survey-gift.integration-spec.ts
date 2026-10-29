@@ -122,10 +122,10 @@ describe.skipIf(adminUrl === undefined)(
         .put(`/surveys/${expoId}/gift-pin`)
         .send({ pin });
 
-    const confirm = (expoId: string, token: string, pin: string) =>
+    const confirm = (expoId: string, token: string, pin?: string) =>
       request(app.getHttpServer())
         .post(`/surveys/${expoId}/gift-pickup/confirm`)
-        .send({ token, pin });
+        .send({ token, ...(pin !== undefined && { pin }) });
 
     const status = (expoId: string, token: string) =>
       request(app.getHttpServer())
@@ -165,60 +165,58 @@ describe.skipIf(adminUrl === undefined)(
       expect(response.headers['cache-control']).toBe('no-store');
     });
 
-    it('PIN을 설정하기 전에는 확인할 수 없고, 설정 여부만 조회된다', async () => {
+    it('PIN이 설정되지 않아도 토큰만으로 확인할 수 있다', async () => {
       const survey = await seed();
       const token = await submit(survey.expoId);
 
-      const unset = await confirm(survey.expoId, token, '1234').expect(409);
-      expect(unset.body).toMatchObject({ code: 'GIFT_PIN_NOT_CONFIGURED' });
+      const done = await confirm(survey.expoId, token).expect(200);
 
-      const saved = await setPin(survey.expoId, '1234').expect(200);
-      expect(saved.body).toEqual({ configured: true });
-      expect(saved.headers['cache-control']).toBe('no-store');
-      const pin = await dataSource
-        .getRepository(SurveyGiftPinEntity)
-        .findOneByOrFail({ surveyId: survey.id });
-      expect(pin.pinHash).not.toContain('1234');
+      expect(done.body).toMatchObject({ claimed: true, pinConfigured: false });
+      expect(done.headers['cache-control']).toBe('no-store');
+      const state = await status(survey.expoId, token);
+      expect(state.body).toEqual(done.body);
     });
 
-    it('PIN 형식이 틀리면 400이다', async () => {
-      const survey = await seed();
-
-      await setPin(survey.expoId, '12').expect(400);
-      await setPin(survey.expoId, 'abcd').expect(400);
-    });
-
-    it('틀린 PIN으로는 완료되지 않고, 맞는 PIN으로 완료하면 이후 다시 확인해도 같은 완료 상태다', async () => {
+    it('이전 클라이언트가 틀린 pin을 보내도 실패하지 않고 그 값으로 거절하지 않는다', async () => {
       const survey = await seed();
       const token = await submit(survey.expoId);
       await setPin(survey.expoId, '1234').expect(200);
 
-      const wrong = await confirm(survey.expoId, token, '9999').expect(403);
-      expect(wrong.body).toMatchObject({
-        code: 'GIFT_PIN_INVALID',
-        attemptsLeft: 4,
-      });
-      const pending = await status(survey.expoId, token);
-      expect(pending.body).toMatchObject({ claimed: false });
+      const done = await confirm(survey.expoId, token, '9999').expect(200);
 
-      const done = await confirm(survey.expoId, token, '1234').expect(200);
       expect(done.body).toMatchObject({ claimed: true });
-      // 이미 완료된 건은 PIN이 틀려도 같은 완료 상태를 돌려주고 시각이 바뀌지 않는다
-      const again = await confirm(survey.expoId, token, '0000').expect(200);
+    });
+
+    it('PIN 관리 API는 그대로 동작하고 PIN 형식이 틀리면 400이다', async () => {
+      const survey = await seed();
+
+      const saved = await setPin(survey.expoId, '1234').expect(200);
+      expect(saved.body).toEqual({ configured: true });
+      await setPin(survey.expoId, '12').expect(400);
+    });
+
+    it('이미 완료된 토큰의 반복 확인은 같은 완료 상태를 돌려주고 시각을 다시 쓰지 않는다', async () => {
+      const survey = await seed();
+      const token = await submit(survey.expoId);
+
+      const done = await confirm(survey.expoId, token).expect(200);
+      const again = await confirm(survey.expoId, token).expect(200);
+
       expect(again.body).toEqual(done.body);
-      const finished = await status(survey.expoId, token);
-      expect(finished.body).toEqual(done.body);
+      const row = await dataSource
+        .getRepository(SurveyGiftClaimEntity)
+        .findOneByOrFail({ surveyId: survey.id });
+      expect(row.claimedAt?.toISOString()).toBe(
+        (done.body as { claimedAt: string }).claimedAt,
+      );
     });
 
     it('같은 토큰으로 동시에 확인해도 한 번만 완료한다', async () => {
       const survey = await seed();
       const token = await submit(survey.expoId);
-      await setPin(survey.expoId, '1234').expect(200);
 
       const responses = await Promise.all(
-        Array.from({ length: 6 }, async () =>
-          confirm(survey.expoId, token, '1234'),
-        ),
+        Array.from({ length: 8 }, async () => confirm(survey.expoId, token)),
       );
 
       expect(responses.every((response) => response.status === 200)).toBe(true);
@@ -228,53 +226,39 @@ describe.skipIf(adminUrl === undefined)(
       expect(new Set(times).size).toBe(1);
     });
 
-    it('한 토큰에서 PIN을 연속으로 틀리면 그 토큰만 잠기고 다른 참가자의 확인은 막히지 않는다', async () => {
-      const survey = await seed();
-      const locked = await submit(survey.expoId);
-      const other = await submit(survey.expoId);
-      await setPin(survey.expoId, '1234').expect(200);
-
-      // 연속 오입력은 순서대로 쌓이는 횟수라 한 번씩 차례로 보낸다
-      /* eslint-disable no-await-in-loop -- 오입력 횟수는 순서대로 쌓인다 */
-      for (let i = 0; i < 4; i++) {
-        await confirm(survey.expoId, locked, '0000').expect(403);
-      }
-      /* eslint-enable no-await-in-loop -- 반복문 구간 끝 */
-
-      const fifth = await confirm(survey.expoId, locked, '0000').expect(429);
-      expect(fifth.body).toMatchObject({
-        code: 'GIFT_PIN_LOCKED',
-        retryAfterSeconds: 300,
-      });
-      expect(fifth.headers['retry-after']).toBe('300');
-      // 잠긴 동안은 맞는 PIN도 받지 않는다(자동 대입 방지)
-      await confirm(survey.expoId, locked, '1234').expect(429);
-      // 다른 토큰은 그대로 확인된다 — 전역 잠금이 아니다
-      await confirm(survey.expoId, other, '1234').expect(200);
-    });
-
-    it('PIN을 바꾸면 옛 PIN은 통하지 않고 이미 발급된 토큰은 새 PIN으로 쓸 수 있다', async () => {
+    it('예전 PIN 방식의 잠금이 남아 있어도 확인을 막지 않는다', async () => {
       const survey = await seed();
       const token = await submit(survey.expoId);
-      await setPin(survey.expoId, '1111').expect(200);
-      await setPin(survey.expoId, '2222').expect(200);
+      await dataSource.query(
+        `UPDATE survey_gift_claim SET failed_attempts = 4, locked_until = now() + interval '1 hour' WHERE survey_id = $1`,
+        [survey.id],
+      );
 
-      await confirm(survey.expoId, token, '1111').expect(403);
-      await confirm(survey.expoId, token, '2222').expect(200);
+      await confirm(survey.expoId, token).expect(200);
     });
 
-    it('다른 박람회의 토큰·PIN은 섞어 쓸 수 없다', async () => {
+    it('응답마다 별도 토큰과 확인 상태를 가진다', async () => {
+      const survey = await seed();
+      const first = await submit(survey.expoId);
+      const second = await submit(survey.expoId);
+
+      await confirm(survey.expoId, first).expect(200);
+
+      const other = await status(survey.expoId, second).expect(200);
+      expect(other.body).toMatchObject({ claimed: false });
+    });
+
+    it('다른 박람회의 토큰이나 잘못된 토큰은 거절하고 완료하지 않는다', async () => {
       const a = await seed();
       const b = await seed();
       const tokenOfA = await submit(a.expoId);
-      await setPin(a.expoId, '1234').expect(200);
-      await setPin(b.expoId, '5678').expect(200);
 
-      const mixed = await confirm(b.expoId, tokenOfA, '5678').expect(404);
+      const mixed = await confirm(b.expoId, tokenOfA).expect(404);
       expect(mixed.body).toMatchObject({ code: 'GIFT_PICKUP_TOKEN_INVALID' });
       await status(b.expoId, tokenOfA).expect(404);
-      await confirm(a.expoId, tokenOfA, '5678').expect(403);
-      await confirm(a.expoId, 'nonexistent', '1234').expect(404);
+      await confirm(a.expoId, 'nonexistent').expect(404);
+      const untouched = await status(a.expoId, tokenOfA).expect(200);
+      expect(untouched.body).toMatchObject({ claimed: false });
     });
 
     it('수령 기록이 없는 기존 응답과 함께 있어도 영향이 없다', async () => {
