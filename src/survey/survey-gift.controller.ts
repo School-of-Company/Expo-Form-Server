@@ -51,7 +51,7 @@ export class SurveyGiftController {
   @ApiOperation({
     summary: '기념품 직원 PIN 설정·변경',
     description:
-      '박람회의 공용 직원 PIN(숫자 4~8자리)을 설정하거나 바꾼다. 해시로만 저장하고 응답·로그에 싣지 않는다. 바꾸면 그 뒤 확인부터 옛 PIN은 통하지 않는다.',
+      '(수령 확인에는 더 이상 쓰지 않는다.) 박람회의 공용 직원 PIN(숫자 4~8자리)을 설정하거나 바꾼다. 해시로만 저장하고 응답·로그에 싣지 않는다. 바꾸면 그 뒤 확인부터 옛 PIN은 통하지 않는다.',
   })
   @ApiOkResponse({ type: GiftPinResponseDto })
   @ApiErrorResponse(400, 'PIN 형식이 맞지 않음')
@@ -90,23 +90,14 @@ export class SurveyGiftController {
   }
 
   @ApiOperation({
-    summary: '기념품 수령 확인(직원 PIN)',
+    summary: '기념품 수령 확인(직원확인)',
     description:
-      '토큰과 직원 PIN이 맞으면 수령을 완료한다. 이미 완료된 토큰은 PIN 없이 완료 상태를 그대로 돌려주고(멱등) 다시 처리하지 않는다. PIN을 한 토큰에서 5번 연속 틀리면 그 토큰만 5분간 잠기고(429, Retry-After) 박람회 전체는 막지 않는다. 틀린 횟수는 PIN이 맞으면 지워진다.',
+      '응답 토큰만으로 수령을 완료한다. 직원 PIN은 보지 않고 요청에 `pin`이 있어도 무시한다(이전 클라이언트 호환). 참가자가 직접 눌러도 처리되며 직원의 신원을 확인하지 않는다. 이미 완료된 토큰은 확인 시각을 다시 쓰지 않고 기존 완료 상태를 그대로 돌려준다(멱등). 응답마다 별도 토큰·확인 상태를 가진다.',
   })
   @ApiOkResponse({ type: GiftPickupStatusResponseDto })
   @ApiErrorResponse(
-    403,
-    '직원 PIN이 틀림 — 남은 시도 횟수는 attemptsLeft (GIFT_PIN_INVALID)',
-  )
-  @ApiErrorResponse(
     404,
     '설문이 없거나 토큰이 이 박람회의 것이 아님 (SURVEY_NOT_FOUND, GIFT_PICKUP_TOKEN_INVALID)',
-  )
-  @ApiErrorResponse(409, '직원 PIN이 설정되지 않음 (GIFT_PIN_NOT_CONFIGURED)')
-  @ApiErrorResponse(
-    429,
-    'PIN을 연속으로 틀려 이 토큰이 잠김 — retryAfterSeconds 뒤에 재시도 (GIFT_PIN_LOCKED)',
   )
   @Header('Cache-Control', 'no-store')
   @Post(':expoId/gift-pickup/confirm')

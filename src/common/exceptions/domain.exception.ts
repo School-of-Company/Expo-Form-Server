@@ -328,39 +328,3 @@ export class GiftPickupTokenInvalidException extends DomainException {
     );
   }
 }
-
-/** 박람회에 직원 PIN이 아직 설정되지 않아 수령 확인을 할 수 없을 때. */
-export class GiftPinNotConfiguredException extends DomainException {
-  constructor() {
-    super(
-      ErrorCode.GIFT_PIN_NOT_CONFIGURED,
-      '직원 PIN이 설정되지 않았습니다.',
-      HttpStatus.CONFLICT,
-    );
-  }
-}
-
-/** 직원 PIN이 틀렸을 때. 이 토큰에서 PIN을 더 시도할 수 있는 횟수를 알려 준다. */
-export class GiftPinInvalidException extends DomainException {
-  constructor(public readonly attemptsLeft: number) {
-    super(
-      ErrorCode.GIFT_PIN_INVALID,
-      '직원 PIN이 올바르지 않습니다.',
-      HttpStatus.FORBIDDEN,
-    );
-  }
-}
-
-/**
- * 한 토큰에서 PIN을 연속으로 틀려 잠깐 잠겼을 때. 잠금은 그 토큰에만 걸리고 박람회 전체의 수령 확인은 막지
- * 않는다. 다시 시도할 수 있을 때까지 남은 시간을 `Retry-After`와 바디로 알려 준다.
- */
-export class GiftPinLockedException extends DomainException {
-  constructor(public readonly retryAfterSeconds: number) {
-    super(
-      ErrorCode.GIFT_PIN_LOCKED,
-      `PIN을 여러 번 틀려 잠시 확인할 수 없습니다. ${retryAfterSeconds}초 뒤에 다시 시도해 주세요.`,
-      HttpStatus.TOO_MANY_REQUESTS,
-    );
-  }
-}

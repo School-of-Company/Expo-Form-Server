@@ -1,10 +1,6 @@
 import { ArgumentsHost, Catch, type ExceptionFilter } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  DomainException,
-  GiftPinInvalidException,
-  GiftPinLockedException,
-} from './domain.exception.js';
+import { DomainException } from './domain.exception.js';
 
 /**
  * 도메인 예외를 `{ code, message }` 형태의 응답 바디로 통일한다.
@@ -18,17 +14,9 @@ export class DomainExceptionFilter implements ExceptionFilter<DomainException> {
   catch(exception: DomainException, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
-    const body: Record<string, unknown> = {
+    response.status(exception.getStatus()).json({
       code: exception.errorCode,
       message: exception.message,
-    };
-    if (exception instanceof GiftPinLockedException) {
-      body.retryAfterSeconds = exception.retryAfterSeconds;
-      response.setHeader('Retry-After', String(exception.retryAfterSeconds));
-    } else if (exception instanceof GiftPinInvalidException) {
-      body.attemptsLeft = exception.attemptsLeft;
-    }
-
-    response.status(exception.getStatus()).json(body);
+    });
   }
 }
