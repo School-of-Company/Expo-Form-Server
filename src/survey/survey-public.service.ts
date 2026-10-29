@@ -141,6 +141,7 @@ export class SurveyPublicService {
               snapshotAt,
               createdAt: last.createdAt,
               id: last.id,
+              totalCount: page.totalCount,
             })
           : null,
     };

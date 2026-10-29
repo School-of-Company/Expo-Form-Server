@@ -140,15 +140,16 @@ export class SurveyPublicAnswerStore {
 
   /**
    * 상한 이하의 응답을 `(createdAt, id)` 순서로 `after` 다음부터 `limit`+1개까지 읽는다. 하나 더 읽는 건
-   * 다음 페이지가 있는지 보려는 것이다.
+   * 다음 페이지가 있는지 보려는 것이다. `(survey_id, created_at, id)` 인덱스를 따라 읽어 정렬하지 않는다(#248).
+   *
+   * 상한이 고정이라 전체 건수는 페이지마다 같다. `after.totalCount`(첫 페이지가 센 값)가 있으면 다시 세지 않는다.
    */
   async findPage(
     surveyId: string,
     snapshotAt: string,
-    after: { createdAt: string; id: string } | null,
+    after: { createdAt: string; id: string; totalCount?: number } | null,
     limit: number,
   ): Promise<PublicAnswerPage> {
-    // ponytail: (survey_id, created_at, id) 인덱스 없이 훑는다. 설문당 응답이 수만 건을 넘으면 인덱스를 추가한다.
     const rows = await this.dataSource.query<PublicAnswerRow[]>(
       `SELECT id, occupation, answers, to_char(created_at AT TIME ZONE 'UTC', ${UTC_MICROS}) AS "createdAt"
          FROM survey_public_answer
@@ -164,12 +165,21 @@ export class SurveyPublicAnswerStore {
         limit + 1,
       ],
     );
+    const totalCount =
+      after?.totalCount ?? (await this.countUntil(surveyId, snapshotAt));
+
+    return { snapshotAt, totalCount, rows };
+  }
+
+  private async countUntil(
+    surveyId: string,
+    snapshotAt: string,
+  ): Promise<number> {
     const [{ count }] = await this.dataSource.query<Array<{ count: number }>>(
       `SELECT count(*)::int AS count FROM survey_public_answer WHERE survey_id = $1 AND created_at <= $2::timestamptz`,
       [surveyId, snapshotAt],
     );
-
-    return { snapshotAt, totalCount: count, rows };
+    return count;
   }
 
   private async lockLottery(
