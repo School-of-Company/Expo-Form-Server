@@ -323,6 +323,33 @@ describe.skipIf(adminUrl === undefined)(
       }
     });
 
+    it('다음 페이지는 커서에 실린 전체 건수를 다시 세지 않고, 건수가 없는 옛 커서면 다시 센다', async () => {
+      const survey = await seed();
+      const [sentence] = await questionIds(survey.id);
+      for (let index = 0; index < 3; index++) {
+        // eslint-disable-next-line no-await-in-loop -- 순서대로 제출한다.
+        await submit(survey.expoId, { [sentence]: `응답 ${index}` });
+      }
+
+      const first = await readPage(survey.expoId, { limit: '1' });
+      const { totalCount, ...legacy } = JSON.parse(
+        Buffer.from(first.nextCursor ?? '', 'base64url').toString('utf8'),
+      ) as Parameters<typeof encodeCursor>[0];
+      expect(totalCount).toBe(3);
+
+      const carried = await readPage(survey.expoId, {
+        limit: '1',
+        cursor: encodeCursor({ ...legacy, totalCount: 99 }),
+      });
+      expect(carried.totalCount).toBe(99);
+
+      const recounted = await readPage(survey.expoId, {
+        limit: '1',
+        cursor: encodeCursor(legacy),
+      });
+      expect(recounted.totalCount).toBe(3);
+    });
+
     it('첫 페이지 뒤에 들어온 제출은 상한 밖이라 같은 조회에 섞이지 않고, 새 조회에는 들어온다', async () => {
       const survey = await seed();
       const [sentence] = await questionIds(survey.id);

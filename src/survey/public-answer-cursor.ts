@@ -13,11 +13,13 @@ const cursorSchema = z
     snapshotAt: micros,
     createdAt: micros,
     id: z.uuid(),
+    // 첫 페이지가 센 전체 건수. 이 필드가 생기기 전에 발급한 커서에는 없어서, 없으면 그 페이지에서 다시 센다(#248).
+    totalCount: z.number().int().nonnegative().optional(),
   })
   .strict()
   .refine((cursor) => cursor.createdAt <= cursor.snapshotAt);
 
-/** 공개 설문 응답 커서. 조회 상한과 마지막으로 준 응답의 `(createdAt, id)`를 담는다. */
+/** 공개 설문 응답 커서. 조회 상한, 마지막으로 준 응답의 `(createdAt, id)`, 전체 건수를 담는다. */
 export type PublicAnswerCursor = z.infer<typeof cursorSchema>;
 
 // ponytail: 서명 없는 base64url JSON. 내부 토큰 호출자가 같은 설문 안에서 커서를 바꿔도 원래 읽을 수 있는 것 이상은 못 얻는다.
