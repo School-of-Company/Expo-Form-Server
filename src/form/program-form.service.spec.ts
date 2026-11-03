@@ -87,7 +87,6 @@ describe('FormService 프로그램용 폼', () => {
     findProgramById: Mock;
     findProgramsByExpoId: Mock;
     updateProgramWithFields: Mock;
-    deleteProgramById: Mock;
   };
   let expoClient: {
     exists: Mock;
@@ -103,7 +102,6 @@ describe('FormService 프로그램용 폼', () => {
       findProgramById: vi.fn(),
       findProgramsByExpoId: vi.fn(),
       updateProgramWithFields: vi.fn(),
-      deleteProgramById: vi.fn(),
     };
     expoClient = {
       exists: vi.fn().mockResolvedValue(true),
@@ -428,7 +426,6 @@ describe('FormService 프로그램용 폼', () => {
       await expect(service.deleteProgram(formId)).rejects.toThrow(
         ProgramFormProtectionPendingException,
       );
-      expect(formStore.deleteProgramById).not.toHaveBeenCalled();
     });
   });
 });
