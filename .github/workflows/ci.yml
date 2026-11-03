@@ -65,8 +65,44 @@ jobs:
 
       - run: pnpm run build
 
+  # DB 통합 테스트(`*.integration-spec.ts`)는 `DATABASE_URL`이 없으면 건너뛰므로, Postgres를 띄워 따로 돌린다.
+  # 각 spec이 이 접속 정보로 임시 DB를 만들고 지운다. 버전은 로컬 `docker-compose.yml`과 맞춘다.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: DB 통합 테스트
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: pnpm run test:integration
+
   notify-discord:
-    needs: [lint, verify]
+    needs: [lint, verify, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Discord 알림 전송
