@@ -99,7 +99,7 @@ export class SurveyGiftService {
   }
 
   private async findSurveyId(expoId: string): Promise<string> {
-    const survey = await this.surveyStore.findByExpoAndType(
+    const survey = await this.surveyStore.findHeaderByExpoAndType(
       expoId,
       ParticipationType.STANDARD,
     );

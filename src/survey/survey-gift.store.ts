@@ -61,7 +61,7 @@ export class SurveyGiftStore {
     return this.dataSource.transaction(async (manager) => {
       // TypeORM은 UPDATE의 결과를 `[행들, 건수]`로 돌려준다.
       const [, updated] = await manager.query<[unknown[], number]>(
-        `UPDATE survey_gift_claim SET claimed_at = clock_timestamp(), failed_attempts = 0, locked_until = NULL
+        `UPDATE survey_gift_claim SET claimed_at = clock_timestamp()
          WHERE survey_id = $1 AND token_hash = $2 AND claimed_at IS NULL`,
         [surveyId, tokenHash],
       );

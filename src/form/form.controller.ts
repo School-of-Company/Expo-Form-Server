@@ -80,7 +80,7 @@ export class FormController {
 
   /**
    * 폼을 수정한다. 입력 필드는 병합이 아니라 통째로 교체된다.
-   * 대상 폼은 경로의 `expoId`와 바디의 `participationType`+`applicationType` 조합으로 식별한다.
+   * 대상 폼은 경로의 `expoId`와 바디의 `participantType`+`applicationType` 조합으로 식별한다.
    */
   @ApiOperation({
     summary: '폼 수정',

@@ -41,6 +41,7 @@ const existingSurvey = {
 describe('SurveyService', () => {
   let surveyStore: {
     findByExpoAndType: Mock;
+    findHeaderByExpoAndType: Mock;
     existsByExpoAndType: Mock;
     save: Mock;
     updateWithQuestions: Mock;
@@ -58,6 +59,7 @@ describe('SurveyService', () => {
   beforeEach(() => {
     surveyStore = {
       findByExpoAndType: vi.fn(),
+      findHeaderByExpoAndType: vi.fn(),
       existsByExpoAndType: vi.fn(),
       save: vi.fn(),
       updateWithQuestions: vi.fn().mockResolvedValue(true),
@@ -267,7 +269,7 @@ describe('SurveyService', () => {
 
   describe('delete', () => {
     it('설문이 없으면 예외를 던진다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(null);
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue(null);
 
       await expect(
         service.delete(expoId, ParticipationType.TRAINEE),
@@ -276,7 +278,7 @@ describe('SurveyService', () => {
     });
 
     it('찾은 설문의 id로 삭제한다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue(existingSurvey);
 
       await service.delete(expoId, ParticipationType.TRAINEE);
 
@@ -320,7 +322,7 @@ describe('SurveyService', () => {
 
   describe('countAnswers', () => {
     it('설문이 없으면 예외를 던진다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(null);
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue(null);
 
       await expect(
         service.countAnswers(expoId, { type: createDto.participationType }),
@@ -328,7 +330,7 @@ describe('SurveyService', () => {
     });
 
     it('누적 응답 수만 돌려준다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(existingSurvey);
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue(existingSurvey);
 
       await expect(
         service.countAnswers(expoId, { type: createDto.participationType }),

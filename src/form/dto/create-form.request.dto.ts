@@ -31,7 +31,7 @@ export const dynamicFormFieldSchema = z.object({
  * 폼 생성 요청의 필드 구성.
  *
  * `expoId`는 경로 파라미터로 받으므로 바디에는 없다 — 박람회 서비스 소유 값이라 컨트롤러에서
- * 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
+ * 형식(uuid)을 검증하고, 존재 여부는 서비스가 박람회 서비스에 확인한다.
  * 날짜는 JSON으로 문자열이 실려오므로 `Date`로 바꿔 받는다(`dateTimeRequestSchema`).
  *
  * 수정 요청도 이 구성을 재사용한다.

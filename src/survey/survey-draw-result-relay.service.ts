@@ -14,15 +14,10 @@ import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
 import { getMetricsRuntime } from '../metrics/metrics-runtime.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyDrawResultStore } from './survey-draw-result.store.js';
+import { resolveDrawMaxRetryCount } from './survey-draw-result-relay.config.js';
 
 /** 한 번에 처리할 최대 건수. 배치가 무한정 커지지 않게 상한을 둔다. */
 const BATCH_SIZE = 100;
-
-/**
- * 발행 실패를 몇 번까지 다시 시도할지의 기본값(`SURVEY_DRAW_RESULT_MAX_RETRY_COUNT`). 10초 주기라 100번이면 약 17분이다 —
- * Kafka가 잠깐 끊겼다고 당첨 문자를 포기하지 않을 만큼 길고, 계속 실패하는 건이 영원히 배치를 차지하지 않을 만큼 짧다.
- */
-export const DEFAULT_MAX_RETRY_COUNT = 100;
 
 /**
  * 경품 당첨 결과(아웃박스)를 알림 서비스로 발행하는 릴레이.
@@ -72,9 +67,8 @@ export class SurveyDrawResultRelayService
     let published = 0;
     let result: 'ok' | 'error' = 'ok';
     try {
-      const maxRetryCount = this.config.get<number>(
-        'SURVEY_DRAW_RESULT_MAX_RETRY_COUNT',
-        DEFAULT_MAX_RETRY_COUNT,
+      const maxRetryCount = resolveDrawMaxRetryCount((key) =>
+        this.config.get(key),
       );
       const failures = await this.store.relayUnpublished(
         BATCH_SIZE,

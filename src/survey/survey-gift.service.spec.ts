@@ -11,7 +11,7 @@ import { SurveyStore } from './survey.store.js';
 const expoId = '11111111-1111-4111-8111-111111111111';
 
 describe('SurveyGiftService', () => {
-  let surveyStore: { findByExpoAndType: Mock };
+  let surveyStore: { findHeaderByExpoAndType: Mock };
   let giftStore: {
     hasPin: Mock;
     savePin: Mock;
@@ -22,7 +22,7 @@ describe('SurveyGiftService', () => {
 
   beforeEach(() => {
     surveyStore = {
-      findByExpoAndType: vi.fn().mockResolvedValue({ id: 'survey-1' }),
+      findHeaderByExpoAndType: vi.fn().mockResolvedValue({ id: 'survey-1' }),
     };
     giftStore = {
       hasPin: vi.fn(),
@@ -37,7 +37,7 @@ describe('SurveyGiftService', () => {
   });
 
   it('설문이 없으면 어떤 동작도 404다', async () => {
-    surveyStore.findByExpoAndType.mockResolvedValue(null);
+    surveyStore.findHeaderByExpoAndType.mockResolvedValue(null);
 
     await expect(service.findPin(expoId)).rejects.toBeInstanceOf(
       SurveyNotFoundException,

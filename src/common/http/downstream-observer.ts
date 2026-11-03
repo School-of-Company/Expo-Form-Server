@@ -1,5 +1,8 @@
 import process from 'node:process';
-import { ExternalServiceError } from './external-service.error.js';
+import {
+  ExternalServiceError,
+  isTimeoutError,
+} from './external-service.error.js';
 import { BrokenCircuitError, BulkheadRejectedError } from './resilience.js';
 
 /** 외부 서비스 호출 결과 분류. 지표 라벨로 쓰므로 값은 이 목록으로 고정한다. */
@@ -34,16 +37,8 @@ export function setDownstreamObserver(
   observer = next;
 }
 
-/** `AbortSignal.timeout`이 만든 타임아웃인지. fetch는 `TimeoutError`(DOMException)로 거절한다. */
-function isTimeout(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'TimeoutError' || error.name === 'AbortError')
-  );
-}
-
 export function classifyFailure(error: unknown): DownstreamOutcome {
-  if (isTimeout(error)) {
+  if (isTimeoutError(error)) {
     return 'timeout';
   }
 

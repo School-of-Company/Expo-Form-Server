@@ -2,8 +2,8 @@ import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Gauge } from 'prom-client';
 import { DataSource } from 'typeorm';
-import { DEFAULT_MAX_RETRY_COUNT } from '../survey/survey-draw-result-relay.service.js';
 import { resolveRelaySettings } from '../survey/survey-answer-relay.config.js';
+import { resolveDrawMaxRetryCount } from '../survey/survey-draw-result-relay.config.js';
 import { getMetricsRuntime } from './metrics-runtime.js';
 
 /** 집계 결과를 이 시간 동안 재사용한다. 스크레이프가 잦아도(여러 Prometheus, 수동 조회) DB를 매번 훑지 않게 한다. */
@@ -164,10 +164,7 @@ export class MetricsCollectorsService implements OnModuleInit {
     const answerMax = resolveRelaySettings((key) =>
       this.config.get(key),
     ).maxRetryCount;
-    const drawMax = this.config.get<number>(
-      'SURVEY_DRAW_RESULT_MAX_RETRY_COUNT',
-      DEFAULT_MAX_RETRY_COUNT,
-    );
+    const drawMax = resolveDrawMaxRetryCount((key) => this.config.get(key));
 
     try {
       const [answer] = await this.dataSource.query<AnswerRow[]>(

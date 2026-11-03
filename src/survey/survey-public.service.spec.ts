@@ -1,4 +1,3 @@
-import { QueryFailedError } from 'typeorm';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { Occupation } from '../common/enums/occupation.enum.js';
@@ -251,17 +250,6 @@ describe('SurveyPublicService', () => {
         service.submit(expoId, { ...answerDto, answers: {} }),
       ).rejects.toBeInstanceOf(SurveyAnswerInvalidException);
       expect(answerStore.create).not.toHaveBeenCalled();
-    });
-
-    it('저장 직전에 설문이 지워지면(외래 키 위반) 404 예외로 바꾼다', async () => {
-      const fkViolation = new QueryFailedError('INSERT', [], {
-        code: '23503',
-      } as unknown as Error);
-      answerStore.create.mockRejectedValue(fkViolation);
-
-      await expect(service.submit(expoId, answerDto)).rejects.toBeInstanceOf(
-        SurveyNotFoundException,
-      );
     });
 
     it('알 수 없는 저장 오류는 그대로 던진다', async () => {

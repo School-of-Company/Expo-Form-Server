@@ -85,7 +85,7 @@ export class SurveyAnswerReconcileService {
     private readonly dicoshot: DicoshotService,
   ) {}
 
-  /** 재발행 상한(기본 5회 × 5분)을 다 쓴 기록이 대상이라 매시간이면 충분하다. */
+  /** 재발행 상한(기본 5회, 간격은 5분부터 두 배씩 최대 30분)을 다 쓴 기록이 대상이라 매시간이면 충분하다. */
   @Cron(CronExpression.EVERY_HOUR)
   async reconcile(): Promise<ReconcileSummary> {
     if (this.config.get<string>('SURVEY_ANSWER_RECONCILE_ENABLED') !== 'true') {
