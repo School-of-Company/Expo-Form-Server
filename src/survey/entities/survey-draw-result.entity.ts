@@ -59,6 +59,13 @@ export class SurveyDrawResultEntity {
   publishedAt: Date | null;
 
   /**
+   * 릴레이가 발행하려고 잡아 둔 기한. 이 시각까지는 다른 릴레이가 같은 결과를 읽지 않는다. 발행이 끝나거나 실패하면
+   * 비우고, 릴레이가 발행 도중 죽어 남아 있으면 기한이 지난 뒤 다시 잡힌다.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  claimedUntil: Date | null;
+
+  /**
    * 발행에 실패한 횟수. 상한(`SURVEY_DRAW_RESULT_MAX_RETRY_COUNT`)에 닿으면 릴레이가 더 보내지 않고 사람이 볼
    * 대상으로 남긴다 — 계속 실패하는 건이 배치 앞을 차지해 정상 건 발행을 밀어내지 않게 하려는 것이다.
    */

@@ -23,8 +23,8 @@ const BATCH_SIZE = 100;
  * 경품 당첨 결과(아웃박스)를 알림 서비스로 발행하는 릴레이.
  *
  * 당첨 판정이 DB에 결과만 남기고 끝나므로, 실제 발행은 이 릴레이가 주기적으로 돌면서 담당한다. 발행에
- * 실패하거나 발행 직후 표시 전에 멈춰도 다음 주기에 다시 보내는데, `eventId`가 그대로라 알림 서비스가 같은
- * 당첨 문자를 두 번 보내지 않는다.
+ * 실패하면 다음 주기에, 발행 직후 표시 전에 멈추면 잡아 둔 기한(`CLAIM_LEASE_MS`)이 지난 뒤 다시 보내는데,
+ * `eventId`가 그대로라 알림 서비스가 같은 당첨 문자를 두 번 보내지 않는다.
  */
 @Injectable()
 export class SurveyDrawResultRelayService
@@ -55,7 +55,7 @@ export class SurveyDrawResultRelayService
   async relay(): Promise<void> {
     const metrics = getMetricsRuntime()?.service;
     // 같은 인스턴스에서 이전 실행이 아직 돌고 있으면(Kafka가 느릴 때) 겹쳐 돌지 않는다. 다른 인스턴스와의
-    // 중복은 store가 행 잠금(`SKIP LOCKED`)으로 막는다.
+    // 중복은 store가 결과를 잡아 두는 표시(`claimedUntil`)로 막는다.
     if (this.running) {
       this.logger.warn('이전 당첨 결과 발행이 끝나지 않아 건너뜁니다.');
       metrics?.recordRelayRun('draw', 'skipped');
