@@ -105,8 +105,8 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
       metrics?.recordPublished('answer', published, failures.length);
 
       for (const { submission, error } of failures) {
-        // 발행 실패는 표시하지 않아 다음 주기에 그대로 다시 잡힌다(RECEIVED는 계속 RECEIVED, PUBLISHED는
-        // 재시도 대상에서 빠지지 않는다). 전화번호가 실려 있는 요청 내용은 남기지 않는다.
+        // 발행에 실패한 기록은 store가 잡기 전 상태로 되돌려 다음 주기에 그대로 다시 잡힌다(RECEIVED는 계속
+        // RECEIVED, PUBLISHED는 재시도 횟수를 쓰지 않는다). 전화번호가 실려 있는 요청 내용은 남기지 않는다.
         this.logger.error(
           `설문 답변 발행 실패: submissionId=${submission.id}`,
           error,
