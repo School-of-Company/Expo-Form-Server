@@ -10,3 +10,11 @@ export class ExternalServiceError extends Error {
     this.name = 'ExternalServiceError';
   }
 }
+
+/** `AbortSignal.timeout`이 만든 타임아웃인지. fetch는 `TimeoutError`(DOMException)로 거절한다. */
+export function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'TimeoutError' || error.name === 'AbortError')
+  );
+}
