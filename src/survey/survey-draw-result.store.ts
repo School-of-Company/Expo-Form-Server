@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
+
+/**
+ * 릴레이가 잡은 결과를 다른 인스턴스가 다시 잡지 않는 기간. 한 배치(최대 100건)를 순서대로 발행하기에 충분히 길고,
+ * 발행 도중 죽은 인스턴스의 몫을 너무 오래 묶어 두지 않을 만큼 짧다. 발행이 이보다 오래 걸려 다른 인스턴스가 다시
+ * 잡더라도 `eventId`가 같아 알림 서비스가 중복을 거른다.
+ */
+export const CLAIM_LEASE_MS = 5 * 60 * 1000;
 
 /** {@link SurveyDrawResultStore.relayUnpublished}에서 발행에 실패한 건. */
 export type DrawRelayFailure = {
@@ -23,15 +30,16 @@ export class SurveyDrawResultStore {
   ) {}
 
   /**
-   * 아직 발행하지 않았고 문자를 보낼 번호가 있는 결과를 오래된 순서로 잠가서 `publish`로 하나씩 발행한다.
+   * 아직 발행하지 않았고 문자를 보낼 번호가 있는 결과를 오래된 순서로 잡아 `publish`로 하나씩 발행한다.
    * 결과에는 설문(`survey`)이 함께 실려 있다. 번호 없이 당첨된 기록과, 실패가 `maxRetryCount`에 닿아 포기한 기록은 제외한다.
    *
-   * 조회와 발행·표시를 한 트랜잭션에 두고 행을 `FOR UPDATE SKIP LOCKED`로 잡는다. 인스턴스가 여러 대여도 같은
-   * 행을 둘이 동시에 읽지 못하므로 같은 당첨 문자를 두 번 보내지 않는다. 발행 도중 프로세스가 죽으면 잠금이 풀려
-   * 다음 주기에 다시 발행되는데, `eventId`가 그대로라 알림 서비스가 중복을 거른다. 대신 발행하는 동안 DB 연결과
-   * 행 잠금을 쥐고 있으므로 한 번에 다루는 건수(`limit`)를 작게 유지해야 한다.
+   * 짧은 트랜잭션에서 행을 `FOR UPDATE SKIP LOCKED`로 잠가 `claimedUntil`(잡은 시각 + {@link CLAIM_LEASE_MS})을
+   * 표시하고 바로 커밋한다. 발행은 트랜잭션 밖에서 하므로 Kafka가 느려도 DB 연결과 행 잠금을 쥐고 있지 않는다.
+   * 잡은 기간이 남은 행은 다른 인스턴스가 읽지 않아 같은 당첨 문자를 두 번 보내지 않는다.
    *
-   * `publish`가 던지면 그 건의 실패 횟수를 올리고 다음 건으로 넘어간다.
+   * 발행에 성공하면 `publishedAt`을 채우고, `publish`가 던지면 실패 횟수를 올리며 잡은 표시를 풀어 다음 주기에 다시
+   * 시도한다. 발행 도중 프로세스가 죽으면 잡은 기간이 지난 뒤 다시 발행되는데, `eventId`가 그대로라 알림 서비스가
+   * 중복을 거른다.
    *
    * @returns 실패한 건과, 그 실패까지 포함한 누적 실패 횟수
    */
@@ -40,6 +48,47 @@ export class SurveyDrawResultStore {
     maxRetryCount: number,
     publish: (result: SurveyDrawResultEntity) => Promise<void>,
   ): Promise<DrawRelayFailure[]> {
+    const claimedUntil = new Date(Date.now() + CLAIM_LEASE_MS);
+    const results = await this.claimUnpublished(
+      limit,
+      maxRetryCount,
+      claimedUntil,
+    );
+
+    const failures: DrawRelayFailure[] = [];
+    for (const result of results) {
+      try {
+        // 한 건씩 순서대로 발행한다. Kafka에 한꺼번에 몰아넣지 않는다.
+        // eslint-disable-next-line no-await-in-loop
+        await publish(result);
+      } catch (error) {
+        // 잡은 기간이 지나 다른 인스턴스가 다시 잡았으면 그쪽 표시를 건드리지 않는다.
+        // eslint-disable-next-line no-await-in-loop
+        await this.drawResults.update(
+          { id: result.id, claimedUntil },
+          { claimedUntil: null, retryCount: () => 'retry_count + 1' },
+        );
+        failures.push({ result, error, retryCount: result.retryCount + 1 });
+        continue;
+      }
+
+      // 표시에 실패하면(DB 오류) 잡은 기간이 지난 뒤 다시 발행한다. `eventId`가 같아 중복은 걸러진다.
+      // eslint-disable-next-line no-await-in-loop
+      await this.drawResults.update(result.id, {
+        publishedAt: new Date(),
+        claimedUntil: null,
+      });
+    }
+
+    return failures;
+  }
+
+  /** 발행할 결과를 잠가 읽고 `claimedUntil`을 표시한 뒤 커밋한다. */
+  private async claimUnpublished(
+    limit: number,
+    maxRetryCount: number,
+    claimedUntil: Date,
+  ): Promise<SurveyDrawResultEntity[]> {
     return this.dataSource.transaction(async (manager) => {
       const results = await manager
         .createQueryBuilder(SurveyDrawResultEntity, 'result')
@@ -51,36 +100,22 @@ export class SurveyDrawResultStore {
         .where('result.publishedAt IS NULL')
         .andWhere('result.phoneNumber IS NOT NULL')
         .andWhere('result.retryCount < :maxRetryCount', { maxRetryCount })
+        .andWhere(
+          '(result.claimedUntil IS NULL OR result.claimedUntil <= now())',
+        )
         .orderBy('result.createdAt', 'ASC')
         .limit(limit)
         .getMany();
 
-      const failures: DrawRelayFailure[] = [];
-      for (const result of results) {
-        try {
-          // 한 건씩 순서대로 발행한다. Kafka에 한꺼번에 몰아넣지 않는다.
-          // eslint-disable-next-line no-await-in-loop
-          await publish(result);
-        } catch (error) {
-          // eslint-disable-next-line no-await-in-loop
-          await manager.increment(
-            SurveyDrawResultEntity,
-            { id: result.id },
-            'retryCount',
-            1,
-          );
-          failures.push({ result, error, retryCount: result.retryCount + 1 });
-          continue;
-        }
-
-        // 표시에 실패하면(DB 오류) 트랜잭션이 롤백되어 다음 주기에 다시 발행한다. `eventId`가 같아 중복은 걸러진다.
-        // eslint-disable-next-line no-await-in-loop
-        await manager.update(SurveyDrawResultEntity, result.id, {
-          publishedAt: new Date(),
-        });
+      if (results.length > 0) {
+        await manager.update(
+          SurveyDrawResultEntity,
+          { id: In(results.map((result) => result.id)) },
+          { claimedUntil },
+        );
       }
 
-      return failures;
+      return results;
     });
   }
 

@@ -101,7 +101,7 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
     await seedDrawResults(6);
     const published: string[] = [];
     const publish = async (result: SurveyDrawResultEntity) => {
-      // 잠금을 쥔 채 오래 걸리는 발행을 흉내 낸다. 이 사이 다른 릴레이가 같은 행을 읽으면 중복이 난다.
+      // 오래 걸리는 발행을 흉내 낸다. 이 사이 다른 릴레이가 같은 행을 읽으면 중복이 난다.
       await delay(150);
       published.push(result.id);
     };
@@ -193,6 +193,69 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
       await runner.rollbackTransaction();
       await runner.release();
     }
+  });
+
+  it('당첨 결과를 발행하는 동안 행을 잠그지 않고, 실패한 건은 잡은 표시를 풀어 다시 시도한다', async () => {
+    await seedDrawResults(2);
+    const repository = dataSource.getRepository(SurveyDrawResultEntity);
+    const [first, second] = await repository.find({
+      order: { createdAt: 'ASC', drawNumber: 'ASC' },
+    });
+    let updatedDuringPublish = false;
+
+    await drawStore.relayUnpublished(100, 100, async (result) => {
+      // 발행 중에 다른 쓰기가 같은 행을 바꾼다. 행 잠금을 쥐고 있었다면 relayUnpublished가 끝날 때까지 여기서 멈춘다.
+      const runner = dataSource.createQueryRunner();
+      await runner.connect();
+      try {
+        await runner.query(`SET lock_timeout = '1s'`);
+        await runner.query(
+          'UPDATE survey_draw_result SET phone_number = phone_number WHERE id = $1',
+          [result.id],
+        );
+        updatedDuringPublish = true;
+      } finally {
+        await runner.release();
+      }
+
+      if (result.id === second.id) {
+        throw new Error('broker down');
+      }
+    });
+
+    expect(updatedDuringPublish).toBe(true);
+    const sent = await repository.findOneByOrFail({ id: first.id });
+    expect(sent.publishedAt).not.toBeNull();
+    expect(sent.claimedUntil).toBeNull();
+    const released = await repository.findOneByOrFail({ id: second.id });
+    expect(released).toMatchObject({
+      publishedAt: null,
+      claimedUntil: null,
+      retryCount: 1,
+    });
+  });
+
+  it('잡은 기한이 남은 결과는 건너뛰고, 기한이 지나면 다시 발행한다', async () => {
+    await seedDrawResults(1);
+    const repository = dataSource.getRepository(SurveyDrawResultEntity);
+    const [row] = await repository.find();
+    // 다른 인스턴스가 잡은 뒤 발행 도중 죽은 상황을 흉내 낸다.
+    await repository.update(row.id, {
+      claimedUntil: new Date(Date.now() + 60_000),
+    });
+    let calls = 0;
+    const publish = async () => {
+      calls += 1;
+    };
+
+    await drawStore.relayUnpublished(100, 100, publish);
+    expect(calls).toBe(0);
+
+    await repository.update(row.id, {
+      claimedUntil: new Date(Date.now() - 1000),
+    });
+    await drawStore.relayUnpublished(100, 100, publish);
+    expect(calls).toBe(1);
   });
 
   it('설문 답변 릴레이도 두 인스턴스가 같은 접수 건을 중복 발행하지 않는다', async () => {
