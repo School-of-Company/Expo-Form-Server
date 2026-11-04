@@ -23,6 +23,8 @@ const xoConfig: FlatXoConfig = [
       // 에이전트 스킬·하네스 문서와 예제는 제품 코드가 아니다.
       '.claude/**',
       '.agents/**',
+      // 부하 측정용 스크립트는 제품 코드가 아니라 일회성 하네스다.
+      'load-test/**',
       // XO는 Markdown·JSON도 검사하지만 이 설정은 JS/TS 코드만 대상으로 한다.
       '**/*.md',
       '**/*.json',
