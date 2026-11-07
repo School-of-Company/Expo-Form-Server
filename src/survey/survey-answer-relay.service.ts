@@ -15,6 +15,7 @@ import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submissio
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import {
   type AnswerRelayBatchResult,
+  type AnswerRelayFailure,
   SurveyAnswerSubmissionStore,
 } from './survey-answer-submission.store.js';
 import {
@@ -94,14 +95,9 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
     let published = 0;
     let result: 'ok' | 'error' = 'ok';
     try {
-      const failures = await this.store.relayPending(
-        { ...this.settings, limit: this.settings.batchSize, now: new Date() },
-        async (batch) => {
-          const outcome = await this.publishBatch(batch);
-          published += outcome.published.length;
-          return outcome;
-        },
-      );
+      const failures = await this.drain((count) => {
+        published += count;
+      });
       metrics?.recordPublished('answer', published, failures.length);
 
       for (const { submission, error } of failures) {
@@ -122,6 +118,50 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
         result,
         Number(process.hrtime.bigint() - startedAt) / 1e9,
       );
+    }
+  }
+
+  /**
+   * 한 배치를 발행하고, 배치가 가득 찼으면(= 적체가 더 있을 수 있으면) 다음 주기를 기다리지 않고 이어서 비운다.
+   * 이어서 처리하는 시간은 `drainBudgetMs`까지다. 주기당 `batchSize`건이 처리량의 상한이던 것을 없애, 적체가 있으면
+   * 주기와 상관없이 발행 속도가 Kafka·DB가 받는 만큼까지 올라간다.
+   *
+   * 발행이 한 건이라도 실패하면 멈춘다. 실패한 건은 claim이 되돌려져 바로 다시 잡히므로, 이어서 돌면 브로커가
+   * 아픈 동안 같은 건을 계속 다시 보내게 된다. 다음 주기에 다시 시도한다.
+   *
+   * @param onPublished 배치마다 발행에 성공한 건수를 알린다
+   * @returns 발행에 실패한 건
+   */
+  private async drain(
+    onPublished: (count: number) => void,
+  ): Promise<AnswerRelayFailure[]> {
+    const { batchSize, drainBudgetMs } = this.settings;
+    const deadline = Date.now() + drainBudgetMs;
+    const failures: AnswerRelayFailure[] = [];
+
+    for (;;) {
+      let publishedInBatch = 0;
+      // 배치마다 새로 부른다 — `now`는 재발행 시각 판단의 기준이라 오래된 값을 재사용하지 않는다.
+      // eslint-disable-next-line no-await-in-loop
+      const batchFailures = await this.store.relayPending(
+        { ...this.settings, limit: batchSize, now: new Date() },
+        async (batch) => {
+          const outcome = await this.publishBatch(batch);
+          publishedInBatch += outcome.published.length;
+          return outcome;
+        },
+      );
+      onPublished(publishedInBatch);
+      failures.push(...batchFailures);
+
+      const claimed = publishedInBatch + batchFailures.length;
+      if (
+        batchFailures.length > 0 ||
+        claimed < batchSize ||
+        Date.now() >= deadline
+      ) {
+        return failures;
+      }
     }
   }
 

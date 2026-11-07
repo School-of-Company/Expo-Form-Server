@@ -15,6 +15,7 @@ describe('resolveRelaySettings', () => {
     expect(settings).toEqual(DEFAULT_RELAY_SETTINGS);
     expect(settings.intervalMs).toBe(30_000);
     expect(settings.batchSize).toBe(100);
+    expect(settings.drainBudgetMs).toBe(20_000);
     expect(settings.staleMs).toBe(5 * minute);
     expect(settings.maxRetryCount).toBe(5);
   });
@@ -27,6 +28,7 @@ describe('resolveRelaySettings', () => {
     const env = new Map([
       ['SURVEY_ANSWER_RELAY_INTERVAL_MS', '10000'],
       ['SURVEY_ANSWER_RELAY_BATCH_SIZE', '200'],
+      ['SURVEY_ANSWER_RELAY_DRAIN_BUDGET_MS', '5000'],
       ['SURVEY_ANSWER_RELAY_SEND_BATCH_SIZE', '20'],
       ['SURVEY_ANSWER_STALE_JITTER_RATIO', '0.5'],
     ]);
@@ -36,6 +38,7 @@ describe('resolveRelaySettings', () => {
     expect(settings).toMatchObject({
       intervalMs: 10_000,
       batchSize: 200,
+      drainBudgetMs: 5000,
       sendBatchSize: 20,
       jitterRatio: 0.5,
     });
@@ -45,12 +48,21 @@ describe('resolveRelaySettings', () => {
     ['SURVEY_ANSWER_RELAY_INTERVAL_MS', '0'],
     ['SURVEY_ANSWER_RELAY_BATCH_SIZE', '-1'],
     ['SURVEY_ANSWER_RELAY_SEND_BATCH_SIZE', '1.5'],
+    ['SURVEY_ANSWER_RELAY_DRAIN_BUDGET_MS', '-1'],
     ['SURVEY_ANSWER_STALE_MS', 'abc'],
     ['SURVEY_ANSWER_STALE_JITTER_RATIO', '2'],
   ])('%s=%s 같은 잘못된 값은 거부한다', (key, value) => {
     expect(() => resolveRelaySettings((k) => (k === key ? value : undefined))).toThrow(
       `${key} must be`,
     );
+  });
+
+  it('drainBudgetMs는 0을 허용한다(이어서 처리하지 않음)', () => {
+    const settings = resolveRelaySettings((key) =>
+      key === 'SURVEY_ANSWER_RELAY_DRAIN_BUDGET_MS' ? '0' : undefined,
+    );
+
+    expect(settings.drainBudgetMs).toBe(0);
   });
 
   it('간격 상한이 기본 간격보다 작으면 기본 간격으로 올린다', () => {
