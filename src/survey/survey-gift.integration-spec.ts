@@ -95,7 +95,8 @@ describe.skipIf(adminUrl === undefined)(
       app = module.createNestApplication<INestApplication<Server>>();
       app.useGlobalPipes(new ZodValidationPipe());
       app.useGlobalFilters(new DomainExceptionFilter());
-      await app.init();
+      // 동시 요청 중 Supertest가 임시 서버를 닫지 않도록 테스트 전체에서 직접 유지한다.
+      await app.listen(0, '127.0.0.1');
     });
 
     afterAll(async () => {
