@@ -9,6 +9,7 @@ import {
   type Mock,
 } from 'vitest';
 import type { ConfigService } from '@nestjs/config';
+import { QueryFailedError } from 'typeorm';
 import type {
   EachMessageHandler,
   EachMessagePayload,
@@ -178,9 +179,28 @@ describe('ExpoChangedConsumer', () => {
     expect(producer.send).not.toHaveBeenCalled();
   });
 
-  it('반영이 끝내 실패하면 DLT로 보내고 오프셋을 넘긴다', async () => {
+  it('일시적 오류로 끝내 실패하면 DLT로 보내지 않고 던져서 오프셋을 커밋하지 않는다', async () => {
     vi.useFakeTimers();
     store.apply.mockRejectedValue(new Error('db down'));
+
+    const delivered = deliver(changed(7));
+    const assertion = expect(delivered).rejects.toThrow('db down');
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    expect(store.apply).toHaveBeenCalledTimes(APPLY_MAX_ATTEMPTS);
+    expect(producer.send).not.toHaveBeenCalled();
+  });
+
+  it('데이터 오류로 끝내 실패하면 DLT로 보내고 오프셋을 넘긴다', async () => {
+    vi.useFakeTimers();
+    store.apply.mockRejectedValue(
+      new QueryFailedError(
+        'INSERT',
+        [],
+        Object.assign(new Error('bad'), { code: '22003' }),
+      ),
+    );
 
     const delivered = deliver(changed(7));
     await vi.runAllTimersAsync();
