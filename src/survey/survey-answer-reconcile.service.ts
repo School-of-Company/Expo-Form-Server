@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DicoshotService } from 'dicoshot-nest';
+import { runExclusive } from '../database/advisory-lock.js';
 import {
   USER_CLIENT,
   type SurveyAnswerEventResult,
@@ -83,6 +85,7 @@ export class SurveyAnswerReconcileService {
     private readonly store: SurveyAnswerSubmissionStore,
     @Inject(USER_CLIENT) private readonly userClient: UserClient,
     private readonly dicoshot: DicoshotService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /** 재발행 상한(기본 5회, 간격은 5분부터 두 배씩 최대 30분)을 다 쓴 기록이 대상이라 매시간이면 충분하다. */
@@ -105,18 +108,28 @@ export class SurveyAnswerReconcileService {
 
     this.running = true;
     try {
-      const summary = await this.check();
-      this.report(summary);
-      if (
-        summary.unprocessedEventIds.length > 0 ||
-        summary.interrupted ||
-        summary.truncated
-      ) {
-        this.logAlert(summary);
-        await this.alert(summary);
-      }
+      // 인스턴스마다 같은 점검과 알림이 겹치지 않게 한 인스턴스만 돈다.
+      const outcome = await runExclusive(
+        this.dataSource,
+        'survey-answer-reconcile',
+        async () => {
+          const summary = await this.check();
+          this.report(summary);
+          if (
+            summary.unprocessedEventIds.length > 0 ||
+            summary.interrupted ||
+            summary.truncated
+          ) {
+            this.logAlert(summary);
+            await this.alert(summary);
+          }
 
-      return summary;
+          return summary;
+        },
+      );
+      return outcome.skipped
+        ? { ...emptySummary(), skipped: true }
+        : outcome.result;
     } finally {
       this.running = false;
     }

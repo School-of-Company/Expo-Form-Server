@@ -62,6 +62,12 @@ describe('SurveyAnswerReconcileService', () => {
       store as unknown as SurveyAnswerSubmissionStore,
       userClient,
       dicoshot as never,
+      {
+        createQueryRunner: () => ({
+          query: async () => [{ locked: true }],
+          release: async () => undefined,
+        }),
+      } as never,
     );
 
   /** n번째(0부터) 실행의 첫 페이지 조회에 넘긴 시작 위치. */

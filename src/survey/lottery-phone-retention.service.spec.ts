@@ -69,6 +69,12 @@ describe('LotteryPhoneRetentionService', () => {
       config,
       store as unknown as SurveyDrawResultStore,
       expoClient,
+      {
+        createQueryRunner: () => ({
+          query: async () => [{ locked: true }],
+          release: async () => undefined,
+        }),
+      } as never,
     );
   });
 
