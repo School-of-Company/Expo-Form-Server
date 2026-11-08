@@ -98,3 +98,40 @@ describe('updateFormSchema', () => {
     ).toThrow();
   });
 });
+
+describe('조건부 표시 검증', () => {
+  const withConditional = (parentIndex: number) => ({
+    ...base,
+    dynamicForm: [
+      ...base.dynamicForm,
+      {
+        title: '참석 방식',
+        formType: DynamicFormFieldType.DROPDOWN,
+        requiredStatus: true,
+        jsonData: { '1': '온라인' },
+        otherJson: null,
+        dynamicFormType: DynamicFormType.DEFAULT,
+      },
+      {
+        title: '접속 주소',
+        formType: DynamicFormFieldType.SENTENCE,
+        requiredStatus: true,
+        jsonData: {},
+        otherJson: {
+          hasEtc: false,
+          conditional: { parentIndex, triggerValue: '1' },
+        },
+        dynamicFormType: DynamicFormType.DEFAULT,
+      },
+    ],
+  });
+
+  it('앞에 있는 선택지형 기준 필드를 가리키면 받는다', () => {
+    expect(() => createFormSchema.parse(withConditional(1))).not.toThrow();
+  });
+
+  it('없는 기준 필드를 가리키면 생성·수정 모두 거부한다', () => {
+    expect(() => createFormSchema.parse(withConditional(99))).toThrow();
+    expect(() => updateFormSchema.parse(withConditional(99))).toThrow();
+  });
+});

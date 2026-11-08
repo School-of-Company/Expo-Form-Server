@@ -13,6 +13,7 @@ import { checkNameField } from './name-field.rule.js';
 import { checkCompanionField } from './companion-field.rule.js';
 import { checkRegionField } from './region-field.rule.js';
 import { checkOccupationFields } from './occupation-fields.rule.js';
+import { checkConditional, type FormLike } from './program-form-fields.rule.js';
 
 /**
  * 폼에 들어갈 입력 필드 하나.
@@ -85,12 +86,25 @@ export const withValidOccupationOpenAt = <
   value: T,
 ): boolean => isOccupationOpenAtInPeriod(value, value.occupationOpenAt);
 
+/** 조건부 표시의 기준 필드와 반응 값이 실제로 있는지 검증한다. 프로그램용 폼·설문과 같은 규칙이다. */
+export function checkConditionalFields(
+  form: FormLike,
+  ctx: z.RefinementCtx,
+): void {
+  for (const [index, field] of form.dynamicForm.entries()) {
+    checkConditional(form, field, index, (message, at) => {
+      ctx.addIssue({ code: 'custom', message, path: ['dynamicForm', at] });
+    });
+  }
+}
+
 export const createFormSchema = createFormFieldsSchema
   .refine(withValidPeriod, PERIOD_ERROR)
   .refine(withValidOccupationOpenAt, OCCUPATION_OPEN_AT_ERROR)
   .superRefine(checkNameField)
   .superRefine(checkOccupationFields)
   .superRefine(checkCompanionField)
-  .superRefine(checkRegionField);
+  .superRefine(checkRegionField)
+  .superRefine(checkConditionalFields);
 
 export class CreateFormRequestDto extends createZodDto(createFormSchema) {}
