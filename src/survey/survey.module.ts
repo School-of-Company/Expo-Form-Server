@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminAccessModule } from '../admin-access/admin-access.module.js';
 import { DeletedExpoModule } from '../deleted-expo/deleted-expo.module.js';
 import { ExpoClientModule } from '../expo-client/expo-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
@@ -36,6 +37,7 @@ import { SurveyStore } from './survey.store.js';
 /** survey 도메인(설문 정의 + 문항 + 답변 제출 + 공개 링크 응답 + 경품 추첨) 모듈. */
 @Module({
   imports: [
+    AdminAccessModule,
     TypeOrmModule.forFeature([
       SurveyEntity,
       DynamicSurveyEntity,
