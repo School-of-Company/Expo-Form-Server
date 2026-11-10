@@ -121,7 +121,7 @@ export class SurveyPublicAnswerStore {
    * @throws {SurveyNotFoundException} 설문이 그새 지워졌을 때
    */
   async snapshot(surveyId: string): Promise<string> {
-    // ponytail: 서버 시계가 뒤로 가지 않는다고 가정한다. 거꾸로 가면 순번 컬럼(sequence)으로 바꿔야 한다.
+    // shortcut: 서버 시계가 뒤로 가지 않는다고 가정한다. 거꾸로 가면 순번 컬럼(sequence)으로 바꿔야 한다.
     return this.dataSource.transaction(async (manager) => {
       const locked = await manager.query<unknown[]>(
         `SELECT id FROM survey WHERE id = $1 FOR SHARE`,

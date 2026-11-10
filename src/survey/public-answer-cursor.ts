@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { SurveyCursorInvalidException } from '../common/exceptions/domain.exception.js';
 
 /** DB가 돌려주는 마이크로초 UTC 시각. 자릿수가 고정이라 문자열 비교가 곧 시각 비교다. */
+/** 상한은 DB 시계로 정하고 여기선 앱 시계로 보므로, 인스턴스 사이 시계 차이만큼은 미래여도 받는다. */
+const CLOCK_SKEW_MS = 60_000;
+
 const micros = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u);
@@ -22,7 +25,7 @@ const cursorSchema = z
 /** 공개 설문 응답 커서. 조회 상한, 마지막으로 준 응답의 `(createdAt, id)`, 전체 건수를 담는다. */
 export type PublicAnswerCursor = z.infer<typeof cursorSchema>;
 
-// ponytail: 서명 없는 base64url JSON. 내부 토큰 호출자가 같은 설문 안에서 커서를 바꿔도 원래 읽을 수 있는 것 이상은 못 얻는다.
+// shortcut: 서명 없는 base64url JSON. 호출자가 같은 설문 안에서 커서를 바꿔도 원래 읽을 수 있는 것 이상은 못 얻고 totalCount만 틀리게 보인다, 내부 토큰 호출자 말고 외부에 열면 HMAC 서명을 붙인다.
 export function encodeCursor(cursor: PublicAnswerCursor): string {
   return Buffer.from(JSON.stringify(cursor)).toString('base64url');
 }
@@ -47,7 +50,7 @@ export function decodeCursor(
   if (
     !result.success ||
     result.data.surveyId !== surveyId ||
-    Date.parse(result.data.snapshotAt) > Date.now()
+    Date.parse(result.data.snapshotAt) > Date.now() + CLOCK_SKEW_MS
   ) {
     throw new SurveyCursorInvalidException();
   }

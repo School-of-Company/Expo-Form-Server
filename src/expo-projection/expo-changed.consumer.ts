@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Consumer, Kafka, Producer, type KafkaMessage } from 'kafkajs';
+import { isTransientDbError } from '../common/exceptions/postgres-error.util.js';
 import { KAFKA_CLIENT } from '../kafka/kafka.constants.js';
 import { parseExpoChangedEvent } from './expo-changed-event.js';
 import {
@@ -29,9 +30,10 @@ type Origin = { topic: string; partition: number; offset: string };
  * 박람회 서비스가 보내는 `expo.expo.changed`를 받아 박람회 프로젝션을 갱신한다.
  *
  * 중복·순서 뒤바뀜은 {@link ExpoProjectionStore.apply}가 박람회별 마지막 버전으로 거른다. 해석할 수 없는
- * 메시지는 바로, 반영이 {@link APPLY_MAX_ATTEMPTS}번 실패한 메시지는 `<topic>.dlt`로 보내고 넘어간다 —
- * 메시지마다 박람회 전체 상태가 실리므로 다음 변경이나 재발행(republish)이 프로젝션을 다시 맞춘다. DLT
- * 전송까지 실패하면 던져서 오프셋을 커밋하지 않는다.
+ * 메시지와 반영이 {@link APPLY_MAX_ATTEMPTS}번 실패한 메시지는 `<topic>.dlt`로 보내고 넘어간다. 단, DB 연결 끊김·
+ * 타임아웃 같은 일시적 오류({@link isTransientDbError})는 던져서 오프셋을 커밋하지 않는다 — 삭제(tombstone) 뒤에는
+ * 다음 변경이 오지 않아, 넘기면 지워진 박람회가 프로젝션에 영영 남는다. 코드 버그처럼 다시 해도 안 풀릴 오류는
+ * 파티션을 멈추지 않도록 DLT로 보낸다. DLT 전송까지 실패해도 던진다.
  *
  * `KAFKA_EXPO_PROJECTION_ENABLED=true`일 때만 이 컨슈머를 담은 모듈이 뜬다(`AppModule`).
  */
@@ -100,6 +102,11 @@ export class ExpoChangedConsumer implements OnModuleInit, OnModuleDestroy {
         return;
       } catch (error) {
         if (attempt >= APPLY_MAX_ATTEMPTS) {
+          if (isTransientDbError(error)) {
+            // 던지면 kafkajs가 같은 오프셋을 다시 처리한다.
+            throw error;
+          }
+
           this.logger.error(
             `박람회 프로젝션 반영 실패(${attempt}회): expoId=${event.expoId}, version=${event.version}`,
             error,

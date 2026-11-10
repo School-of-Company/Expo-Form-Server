@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { runExclusive } from '../database/advisory-lock.js';
 import { ExternalServiceUnavailableException } from '../common/exceptions/domain.exception.js';
 import {
   EXPO_CLIENT,
@@ -83,6 +85,7 @@ export class LotteryPhoneRetentionService {
     private readonly config: ConfigService,
     private readonly store: SurveyDrawResultStore,
     @Inject(EXPO_CLIENT) private readonly expoClient: ExpoClient,
+    private readonly dataSource: DataSource,
   ) {}
 
   /** 하루에 한 번이면 충분하다. 새벽 3시(한국 시간)에 돈다. */
@@ -105,14 +108,21 @@ export class LotteryPhoneRetentionService {
     try {
       const retentionDays = this.retentionDays();
       const today = todayInKorea(now);
-      const expoIds = await this.store.findExpoIdsWithPhoneNumbers();
-      summary.checkedExpos = expoIds.length;
+      // 인스턴스마다 같은 정리를 반복하지 않게 한 인스턴스만 돈다.
+      await runExclusive(
+        this.dataSource,
+        'lottery-phone-retention',
+        async () => {
+          const expoIds = await this.store.findExpoIdsWithPhoneNumbers();
+          summary.checkedExpos = expoIds.length;
 
-      for (const expoId of expoIds) {
-        // 박람회마다 순서대로 처리한다. 박람회 서비스를 한꺼번에 부르지 않는다.
-        // eslint-disable-next-line no-await-in-loop
-        await this.purgeExpo(expoId, today, retentionDays, summary);
-      }
+          for (const expoId of expoIds) {
+            // 박람회마다 순서대로 처리한다. 박람회 서비스를 한꺼번에 부르지 않는다.
+            // eslint-disable-next-line no-await-in-loop
+            await this.purgeExpo(expoId, today, retentionDays, summary);
+          }
+        },
+      );
     } finally {
       this.running = false;
     }

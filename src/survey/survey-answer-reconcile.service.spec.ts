@@ -15,6 +15,18 @@ import { DEFAULT_RELAY_SETTINGS } from './survey-answer-relay.config.js';
 import { SurveyAnswerReconcileService } from './survey-answer-reconcile.service.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
 
+// 잠금은 advisory-lock.spec.ts에서 본다. 여기서는 항상 잡히고 바로 풀린다고 둔다.
+vi.mock('../database/advisory-lock.js', () => ({
+  runExclusive: async (
+    _dataSource: unknown,
+    _name: string,
+    run: () => Promise<unknown>,
+  ) => ({
+    skipped: false,
+    result: await run(),
+  }),
+}));
+
 type Row = { id: string; eventId: string };
 
 const rows = (...eventIds: string[]): Row[] =>
@@ -62,6 +74,7 @@ describe('SurveyAnswerReconcileService', () => {
       store as unknown as SurveyAnswerSubmissionStore,
       userClient,
       dicoshot as never,
+      {} as never,
     );
 
   /** n번째(0부터) 실행의 첫 페이지 조회에 넘긴 시작 위치. */
