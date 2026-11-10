@@ -23,7 +23,7 @@ import { SurveyPublicController } from '../survey/survey-public.controller.js';
 import { SurveyPublicService } from '../survey/survey-public.service.js';
 import { AdminAccessModule } from './admin-access.module.js';
 
-const EXPO = '11111111-1111-4111-8111-111111111111';
+const EXPO = 'abcdef01-abcd-4abc-8abc-abcdef012345';
 const OTHER_EXPO = '22222222-2222-4222-8222-222222222222';
 const FORM = '33333333-3333-4333-8333-333333333333';
 const internalToken = 'x'.repeat(32);
@@ -67,6 +67,7 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
   let app: INestApplication<Server>;
   let downstreamStatus: number | undefined;
   let invalidResponse = false;
+  let responseExpo: string;
   let programExpo: string | null;
   const write = vi.fn();
   async function fakeExpoServer(input: string, init?: RequestInit) {
@@ -88,7 +89,7 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
       (role) => headers.get('Authorization') === authorization(role),
     );
     if (
-      url.pathname !== `/internal/expo/${EXPO}/admin-access` ||
+      url.pathname.toLowerCase() !== `/internal/expo/${EXPO}/admin-access` ||
       (!privileged && !(stats && statsAllowed))
     ) {
       return jsonResponse(403);
@@ -99,7 +100,7 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
       invalidResponse
         ? {}
         : {
-            expoId: EXPO,
+            expoId: responseExpo,
             permission: stats ? 'STATS_READ' : 'APPLICATION_READ',
             policyVersion: 'GLOBAL_ADMIN_APPLICATION_READ_V1',
             scope: 'GLOBAL_ADMIN',
@@ -203,6 +204,7 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
   beforeEach(async () => {
     downstreamStatus = undefined;
     invalidResponse = false;
+    responseExpo = EXPO;
     programExpo = EXPO;
     write.mockClear();
     fetchMock.mockReset().mockImplementation(fakeExpoServer);
@@ -248,6 +250,37 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
       expect(write).toHaveBeenCalledOnce();
     },
   );
+
+  it.each([
+    [EXPO.toUpperCase(), EXPO],
+    [EXPO, EXPO.toUpperCase()],
+    [EXPO.toUpperCase(), EXPO.toUpperCase()],
+  ])(
+    '요청 UUID %s와 응답 UUID %s의 대소문자가 달라도 허용한다',
+    async (requestedExpo, returnedExpo) => {
+      responseExpo = returnedExpo;
+
+      await request(app.getHttpServer())
+        .patch(`/forms/${requestedExpo}`)
+        .set('Authorization', authorization('MANAGER'))
+        .send({})
+        .expect(204);
+
+      expect(write).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('응답 UUID가 다른 박람회이면 대소문자와 관계없이 503으로 거부한다', async () => {
+    responseExpo = OTHER_EXPO;
+
+    await request(app.getHttpServer())
+      .patch(`/forms/${EXPO.toUpperCase()}`)
+      .set('Authorization', authorization('MANAGER'))
+      .send({})
+      .expect(503);
+
+    expect(write).not.toHaveBeenCalled();
+  });
 
   it.each(['VIEWER', 'STAFF'] as const)(
     '%s는 STATS_READ로 answer-count를 조회한다',

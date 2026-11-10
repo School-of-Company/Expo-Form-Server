@@ -121,7 +121,7 @@ export class ProgramFormController {
   @ApiErrorResponse(410, '삭제된 박람회 (EXPO_DELETED)')
   @ApiErrorResponse(
     503,
-    '박람회 서비스에 변경을 예약하지 못해 수정할 수 없음 (PROGRAM_FORM_RESERVATION_UNAVAILABLE). 박람회 서비스 설정이 없거나 변경 예약 API가 배포되지 않은 경우처럼 재시도로 풀리지 않을 수 있다',
+    '박람회 권한을 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE), 또는 박람회 서비스에 변경을 예약하지 못해 수정할 수 없음 (PROGRAM_FORM_RESERVATION_UNAVAILABLE). 박람회 서비스 설정이 없거나 변경 예약 API가 배포되지 않은 경우처럼 재시도로 풀리지 않을 수 있다',
   )
   @ApiBearerAuth()
   @ApiErrorResponse(401, '인증이 필요함')

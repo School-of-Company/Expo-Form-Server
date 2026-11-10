@@ -32,7 +32,10 @@ export class HttpAdminAccessClient implements AdminAccessClient {
       result = await fetchJson(
         url.href,
         z.looseObject({
-          expoId: z.literal(dto.expoId),
+          expoId: z
+            .string()
+            .toLowerCase()
+            .pipe(z.literal(dto.expoId.toLowerCase())),
           permission: z.literal(dto.permission ?? 'APPLICATION_READ'),
         }),
         {
