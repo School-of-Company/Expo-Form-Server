@@ -8,6 +8,18 @@ import {
 } from './lottery-phone-retention.service.js';
 import type { SurveyDrawResultStore } from './survey-draw-result.store.js';
 
+// 잠금은 advisory-lock.spec.ts에서 본다. 여기서는 항상 잡히고 바로 풀린다고 둔다.
+vi.mock('../database/advisory-lock.js', () => ({
+  runExclusive: async (
+    _dataSource: unknown,
+    _name: string,
+    run: () => Promise<unknown>,
+  ) => ({
+    skipped: false,
+    result: await run(),
+  }),
+}));
+
 describe('isRetentionExpired', () => {
   it('종료일로부터 보관 일수가 지난 다음 날부터 만료다', () => {
     // 10월 31일 종료, 30일 보관 → 11월 30일까지 보관, 12월 1일부터 만료
@@ -69,12 +81,7 @@ describe('LotteryPhoneRetentionService', () => {
       config,
       store as unknown as SurveyDrawResultStore,
       expoClient,
-      {
-        createQueryRunner: () => ({
-          query: async () => [{ locked: true }],
-          release: async () => undefined,
-        }),
-      } as never,
+      {} as never,
     );
   });
 
