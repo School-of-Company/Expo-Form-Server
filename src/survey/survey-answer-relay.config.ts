@@ -2,8 +2,13 @@
 export type SurveyAnswerRelaySettings = {
   /** 릴레이를 도는 주기(ms). */
   intervalMs: number;
-  /** 한 주기에 RECEIVED / 재발행 대상을 각각 최대 몇 건 잠글지. */
+  /** 한 번에 RECEIVED / 재발행 대상을 각각 최대 몇 건 잠글지. */
   batchSize: number;
+  /**
+   * 한 주기 안에서 적체를 이어서 비우는 최대 시간(ms). 배치가 가득 찼으면 다음 주기를 기다리지 않고 바로 다음
+   * 배치를 처리한다. 0이면 이어서 처리하지 않고 주기당 한 배치만 처리한다(예전 동작).
+   */
+  drainBudgetMs: number;
   /** Kafka `sendBatch` 한 번에 묶을 최대 건수. */
   sendBatchSize: number;
   /** 첫 재발행까지의 대기(ms). 이후 `backoffFactor`배씩 늘어난다. */
@@ -19,6 +24,7 @@ export type SurveyAnswerRelaySettings = {
 export const DEFAULT_RELAY_SETTINGS: SurveyAnswerRelaySettings = {
   intervalMs: 30_000,
   batchSize: 100,
+  drainBudgetMs: 20_000,
   sendBatchSize: 50,
   staleMs: 5 * 60 * 1000,
   staleMaxMs: 30 * 60 * 1000,
@@ -32,6 +38,7 @@ export const BACKOFF_FACTOR = 2;
 const ENV_KEYS = {
   intervalMs: 'SURVEY_ANSWER_RELAY_INTERVAL_MS',
   batchSize: 'SURVEY_ANSWER_RELAY_BATCH_SIZE',
+  drainBudgetMs: 'SURVEY_ANSWER_RELAY_DRAIN_BUDGET_MS',
   sendBatchSize: 'SURVEY_ANSWER_RELAY_SEND_BATCH_SIZE',
   staleMs: 'SURVEY_ANSWER_STALE_MS',
   staleMaxMs: 'SURVEY_ANSWER_STALE_MAX_MS',
@@ -66,10 +73,17 @@ export function resolveRelaySettings(
   };
 
   const positiveInt = (value: number) => Number.isSafeInteger(value) && value > 0;
+  const nonNegativeInt = (value: number) =>
+    Number.isSafeInteger(value) && value >= 0;
 
   const settings = {
     intervalMs: read('intervalMs', positiveInt, 'a positive integer'),
     batchSize: read('batchSize', positiveInt, 'a positive integer'),
+    drainBudgetMs: read(
+      'drainBudgetMs',
+      nonNegativeInt,
+      'a non-negative integer',
+    ),
     sendBatchSize: read('sendBatchSize', positiveInt, 'a positive integer'),
     staleMs: read('staleMs', positiveInt, 'a positive integer'),
     staleMaxMs: read('staleMaxMs', positiveInt, 'a positive integer'),

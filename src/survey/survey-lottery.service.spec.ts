@@ -17,12 +17,12 @@ const survey = {
 } as unknown as SurveyEntity;
 
 describe('SurveyLotteryService', () => {
-  let surveyStore: { findByExpoAndType: Mock; updateLottery: Mock };
+  let surveyStore: { findHeaderByExpoAndType: Mock; updateLottery: Mock };
   let service: SurveyLotteryService;
 
   beforeEach(() => {
     surveyStore = {
-      findByExpoAndType: vi.fn().mockResolvedValue(survey),
+      findHeaderByExpoAndType: vi.fn().mockResolvedValue(survey),
       updateLottery: vi.fn(),
     };
     service = new SurveyLotteryService(surveyStore as unknown as SurveyStore);
@@ -30,7 +30,7 @@ describe('SurveyLotteryService', () => {
 
   describe('find', () => {
     it('일반 참가자 설문의 설정과 현재까지 센 순번을 돌려준다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue({
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue({
         ...survey,
         lotteryEnabled: true,
         lotteryNumbers: [30, 62],
@@ -42,14 +42,14 @@ describe('SurveyLotteryService', () => {
         numbers: [30, 62],
         currentSequence: 17,
       });
-      expect(surveyStore.findByExpoAndType).toHaveBeenCalledWith(
+      expect(surveyStore.findHeaderByExpoAndType).toHaveBeenCalledWith(
         expoId,
         ParticipationType.STANDARD,
       );
     });
 
     it('설문이 없으면 404 예외를 던진다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(null);
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue(null);
 
       await expect(service.find(expoId)).rejects.toBeInstanceOf(
         SurveyNotFoundException,
@@ -59,7 +59,7 @@ describe('SurveyLotteryService', () => {
 
   describe('update', () => {
     it('당첨 번호를 작은 순서로 저장하고 바뀐 설정을 돌려준다', async () => {
-      surveyStore.findByExpoAndType
+      surveyStore.findHeaderByExpoAndType
         .mockResolvedValueOnce(survey)
         .mockResolvedValueOnce({
           ...survey,
@@ -86,7 +86,7 @@ describe('SurveyLotteryService', () => {
     });
 
     it('설문이 없으면 404 예외를 던지고 바꾸지 않는다', async () => {
-      surveyStore.findByExpoAndType.mockResolvedValue(null);
+      surveyStore.findHeaderByExpoAndType.mockResolvedValue(null);
 
       await expect(
         service.update(expoId, { enabled: true, numbers: [1] }),

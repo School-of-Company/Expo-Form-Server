@@ -12,7 +12,10 @@ import {
   type CircuitBreakerPolicy,
   type IPolicy,
 } from 'cockatiel';
-import { ExternalServiceError } from './external-service.error.js';
+import {
+  ExternalServiceError,
+  isTimeoutError,
+} from './external-service.error.js';
 
 export { BrokenCircuitError, BulkheadRejectedError } from 'cockatiel';
 
@@ -30,26 +33,14 @@ const RETRY_DELAY_MS = 200;
  * 404·409·401 같은 응답과 스키마 불일치는 서비스가 살아 있다는 증거라 회로에 반영하지 않는다.
  */
 export function isTransientFailure(error: unknown): boolean {
-  if (error instanceof ExternalServiceError) {
-    return error.status >= 500;
-  }
-
-  return (
-    error instanceof TypeError ||
-    (error instanceof Error &&
-      (error.name === 'TimeoutError' || error.name === 'AbortError'))
-  );
+  return error instanceof ExternalServiceError
+    ? error.status >= 500
+    : error instanceof TypeError || isTimeoutError(error);
 }
 
 /** 타임아웃은 이미 한도만큼 기다린 뒤라 다시 시도하면 응답 시간만 두 배가 된다. 곧바로 실패한 것만 재시도한다. */
 function isRetryable(error: unknown): boolean {
-  return (
-    isTransientFailure(error) &&
-    !(
-      error instanceof Error &&
-      (error.name === 'TimeoutError' || error.name === 'AbortError')
-    )
-  );
+  return isTransientFailure(error) && !isTimeoutError(error);
 }
 
 function readInteger(name: string, fallback: number, min: number): number {

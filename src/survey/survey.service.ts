@@ -187,7 +187,7 @@ export class SurveyService {
     expoId: string,
     participationType: ParticipationType,
   ): Promise<void> {
-    const survey = await this.surveyStore.findByExpoAndType(
+    const survey = await this.surveyStore.findHeaderByExpoAndType(
       expoId,
       participationType,
     );
@@ -236,7 +236,10 @@ export class SurveyService {
     expoId: string,
     dto: FindSurveyRequestDto,
   ): Promise<SurveyAnswerCountResponseDto> {
-    const survey = await this.surveyStore.findByExpoAndType(expoId, dto.type);
+    const survey = await this.surveyStore.findHeaderByExpoAndType(
+      expoId,
+      dto.type,
+    );
 
     if (!survey) {
       throw new SurveyNotFoundException();

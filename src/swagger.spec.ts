@@ -5,11 +5,13 @@ import type { OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
+import { ExpoAdminAccessGuard } from './admin-access/expo-admin-access.guard.js';
 import { INTERNAL_TOKEN_HEADER } from './common/http/internal-token.constants.js';
 import { InternalTokenGuard } from './common/http/internal-token.guard.js';
 import { FormController } from './form/form.controller.js';
 import { FormService } from './form/form.service.js';
 import { InternalProgramFormController } from './form/internal-program-form.controller.js';
+import { ProgramAdminAccessGuard } from './form/program-admin-access.guard.js';
 import { ProgramFormController } from './form/program-form.controller.js';
 import { SurveyPublicController } from './survey/survey-public.controller.js';
 import { SurveyPublicService } from './survey/survey-public.service.js';
@@ -38,6 +40,10 @@ async function createApp(
       { provide: SurveyPublicService, useValue: {} },
     ],
   })
+    .overrideGuard(ExpoAdminAccessGuard)
+    .useValue({ canActivate: () => true })
+    .overrideGuard(ProgramAdminAccessGuard)
+    .useValue({ canActivate: () => true })
     .overrideGuard(InternalTokenGuard)
     .useValue({ canActivate: () => true })
     .compile();

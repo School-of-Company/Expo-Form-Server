@@ -145,7 +145,7 @@ export class HttpExpoClient implements ExpoClient {
         bypassGuard: true,
       });
     } catch (error) {
-      // ponytail: 한 번만 시도한다. 풀리지 않은 예약은 박람회 서비스에서 수동으로 해제해야 한다.
+      // shortcut: 한 번만 시도한다. 실패하면 예약이 만료(5분)될 때까지 다음 수정이 막힌다, 이 409 문의가 반복되면 재시도를 붙인다.
       logDownstreamFailure(
         this.logger,
         `박람회 서비스 폼 변경 예약 해제 실패: ${url}`,

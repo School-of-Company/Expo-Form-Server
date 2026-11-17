@@ -38,14 +38,15 @@ export class SurveyGiftClaimEntity {
   @Column({ type: 'char', length: 64, unique: true })
   tokenHash: string;
 
-  /** 직원 확인으로 수령이 끝난 시각. 비어 있으면 미수령이다. */
+  /** 토큰 확인으로 수령이 끝난 시각. 비어 있으면 미수령이다. */
   @Column({ type: 'timestamptz', nullable: true })
   claimedAt: Date | null;
 
-  /** 이 토큰에서 연속으로 틀린 PIN 횟수. 토큰 단위라 한 참가자의 오입력이 행사 전체를 막지 않는다. */
+  /** 예전 PIN 방식(#267 이전)의 틀린 횟수. 지금은 읽지도 쓰지도 않으며, 컬럼 삭제 마이그레이션 전까지만 남는다. */
   @Column({ type: 'int', default: 0 })
   failedAttempts: number;
 
+  /** 예전 PIN 방식(#267 이전)의 잠금 해제 시각. `failedAttempts`와 같이 더 쓰지 않는다. */
   @Column({ type: 'timestamptz', nullable: true })
   lockedUntil: Date | null;
 

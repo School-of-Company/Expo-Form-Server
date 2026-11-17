@@ -198,15 +198,6 @@ export class FormStore {
     });
   }
 
-  /** 프로그램용 폼을 삭제한다. 등록용 폼의 id로는 지우지 않는다. 지웠으면 true, 없었으면 false. */
-  async deleteProgramById(id: string): Promise<boolean> {
-    const result = await this.forms.delete({
-      id,
-      purpose: FormPurpose.PROGRAM,
-    });
-    return (result.affected ?? 0) > 0;
-  }
-
   /** 폼을 삭제한다. 딸린 입력 필드는 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
   async deleteById(id: string): Promise<void> {
     await this.forms.delete({ id });

@@ -63,8 +63,8 @@ type DynamicFormFields = Omit<
  * 폼은 `(expoId, participationType, applicationType)` 조합당 하나만 존재한다 —
  * 예를 들어 같은 박람회라도 교육생용 사전등록 폼과 일반참가자용 사전등록 폼은 별개다.
  *
- * `expoId`가 박람회 서비스에 실제로 존재하는지는 검증하지 않는다. 박람회 서비스가 아직 없고,
- * 서비스별 DB 분리 구조라 FK로도 막을 수 없다 — uuid 형식 검증까지만 하고 값으로 신뢰한다.
+ * 서비스별 DB 분리 구조라 `expoId`를 FK로 막을 수 없어, 생성할 때 박람회 서비스에 존재 여부를
+ * 묻는다(`ExpoClient.exists`).
  */
 @Injectable()
 export class FormService {
@@ -131,7 +131,7 @@ export class FormService {
   /**
    * 폼 메타데이터를 갱신하고 입력 필드를 통째로 교체한다.
    *
-   * 대상 폼은 경로의 `expoId`와 바디의 `participationType`+`applicationType` 조합으로
+   * 대상 폼은 경로의 `expoId`와 바디의 `participantType`+`applicationType` 조합으로
    * 식별한다. 이 조합이 곧 폼을 유일하게 식별하는 키이므로, 이 요청으로 참여자군·신청방식
    * 자체를 바꿀 수는 없다 — 바디의 값이 실제 소유 폼과 다르면 그 폼을 찾지 못해 404가 난다.
    *

@@ -7,6 +7,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ADMIN_ACCESS_CLIENT } from '../admin-access/admin-access-client.interface.js';
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DomainExceptionFilter } from '../common/exceptions/domain-exception.filter.js';
@@ -72,6 +73,10 @@ describe.skipIf(adminUrl === undefined)(
         controllers: [SurveyPublicController, SurveyGiftController],
         providers: [
           {
+            provide: ADMIN_ACCESS_CLIENT,
+            useValue: { requireAccess: async () => undefined },
+          },
+          {
             provide: SurveyPublicService,
             useValue: new SurveyPublicService(
               surveyStore,
@@ -90,7 +95,8 @@ describe.skipIf(adminUrl === undefined)(
       app = module.createNestApplication<INestApplication<Server>>();
       app.useGlobalPipes(new ZodValidationPipe());
       app.useGlobalFilters(new DomainExceptionFilter());
-      await app.init();
+      // 동시 요청 중 Supertest가 임시 서버를 닫지 않도록 테스트 전체에서 직접 유지한다.
+      await app.listen(0, '127.0.0.1');
     });
 
     afterAll(async () => {
@@ -120,6 +126,7 @@ describe.skipIf(adminUrl === undefined)(
     const setPin = (expoId: string, pin: string) =>
       request(app.getHttpServer())
         .put(`/surveys/${expoId}/gift-pin`)
+        .set('Authorization', 'Bearer integration-admin')
         .send({ pin });
 
     const confirm = (expoId: string, token: string, pin?: string) =>
@@ -185,6 +192,21 @@ describe.skipIf(adminUrl === undefined)(
       const done = await confirm(survey.expoId, token, '9999').expect(200);
 
       expect(done.body).toMatchObject({ claimed: true });
+    });
+
+    it('관리자 인증 없이 PIN을 바꾸면 401이고 저장하지 않는다', async () => {
+      const survey = await seed();
+
+      await request(app.getHttpServer())
+        .put(`/surveys/${survey.expoId}/gift-pin`)
+        .send({ pin: '1234' })
+        .expect(401);
+
+      expect(
+        await dataSource
+          .getRepository(SurveyGiftPinEntity)
+          .countBy({ surveyId: survey.id }),
+      ).toBe(0);
     });
 
     it('PIN 관리 API는 그대로 동작하고 PIN 형식이 틀리면 400이다', async () => {

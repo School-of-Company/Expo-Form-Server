@@ -4,7 +4,6 @@ import {
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
-import { isForeignKeyViolation } from '../common/exceptions/postgres-error.util.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
 import { FindPublicSurveyAnswersRequestDto } from './dto/find-public-survey-answers.request.dto.js';
 import { PublicSurveyAnswerPageResponseDto } from './dto/public-survey-answer-page.response.dto.js';
@@ -18,10 +17,7 @@ import { SurveyEntity } from './entities/survey.entity.js';
 import { normalizeLotteryPhone } from './lottery-phone.js';
 import { generateGiftToken, hashGiftToken } from './gift-secret.js';
 import { decodeCursor, encodeCursor } from './public-answer-cursor.js';
-import {
-  SurveyPublicAnswerStore,
-  type DrawOutcome,
-} from './survey-public-answer.store.js';
+import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyStore } from './survey.store.js';
 
 /**
@@ -70,23 +66,14 @@ export class SurveyPublicService {
     const lotteryPhoneNumber = this.resolveLotteryPhone(survey, dto);
 
     const giftToken = generateGiftToken();
-    let outcome: DrawOutcome;
-    try {
-      outcome = await this.answerStore.create(
-        survey.id,
-        result.data,
-        dto.occupation,
-        lotteryPhoneNumber,
-        hashGiftToken(giftToken),
-      );
-    } catch (error) {
-      // 설문을 확인한 뒤 저장하기 전에 박람회 삭제로 설문이 지워진 경우다.
-      if (isForeignKeyViolation(error)) {
-        throw new SurveyNotFoundException();
-      }
-
-      throw error;
-    }
+    // 설문을 확인한 뒤 저장하기 전에 설문이 지워졌으면 store가 설문 행을 잠그는 순간 404로 알린다.
+    const outcome = await this.answerStore.create(
+      survey.id,
+      result.data,
+      dto.occupation,
+      lotteryPhoneNumber,
+      hashGiftToken(giftToken),
+    );
 
     this.logger.log(`공개 설문 답변 저장 완료: surveyId=${survey.id}`);
 

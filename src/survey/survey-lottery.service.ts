@@ -47,7 +47,7 @@ export class SurveyLotteryService {
   }
 
   private async findSurvey(expoId: string): Promise<SurveyEntity> {
-    const survey = await this.surveyStore.findByExpoAndType(
+    const survey = await this.surveyStore.findHeaderByExpoAndType(
       expoId,
       ParticipationType.STANDARD,
     );

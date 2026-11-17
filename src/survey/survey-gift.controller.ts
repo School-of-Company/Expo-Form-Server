@@ -11,6 +11,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ExpoAdminAccess } from '../admin-access/expo-admin-access.decorator.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
 import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import {
@@ -41,6 +42,7 @@ export class SurveyGiftController {
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
   )
   @Header('Cache-Control', 'no-store')
+  @ExpoAdminAccess()
   @Get(':expoId/gift-pin')
   async findPin(
     @Param('expoId', ParseUUIDPipe) expoId: string,
@@ -59,6 +61,7 @@ export class SurveyGiftController {
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
   )
+  @ExpoAdminAccess()
   @AdminChangeNotify('기념품 직원 PIN 설정')
   @Header('Cache-Control', 'no-store')
   @Put(':expoId/gift-pin')

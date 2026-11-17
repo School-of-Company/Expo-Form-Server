@@ -430,4 +430,115 @@ describe('SurveyAnswerRelayService', () => {
       expect.any(Function),
     );
   });
+
+  describe('적체 이어서 비우기', () => {
+    /** 배치마다 `size`건을 claim했다고 흉내 낸다. 큐가 비면 더 가져올 게 없다. */
+    const claimBatches = (
+      sizes: number[],
+      afterBatch: () => void = () => undefined,
+    ) => {
+      const queue = [...sizes];
+      store.relayPending.mockImplementation(
+        async (
+          _options: unknown,
+          publish: (batch: SurveyAnswerSubmissionEntity[]) => Promise<{
+            failures: unknown[];
+          }>,
+        ) => {
+          const size = queue.shift() ?? 0;
+          const batch = Array.from(
+            { length: size },
+            (_, index) => ({
+              ...submission,
+              id: `submission-${index}`,
+              eventId: `event-${index}`,
+            }),
+          );
+          const result = await publish(batch);
+          afterBatch();
+          return result.failures;
+        },
+      );
+    };
+
+    const serviceWithBudget = (drainBudgetMs: string) =>
+      new SurveyAnswerRelayService(
+        kafka as never,
+        {
+          get: vi.fn((key: string, fallback?: unknown) =>
+            key === 'SURVEY_ANSWER_RELAY_DRAIN_BUDGET_MS'
+              ? drainBudgetMs
+              : fallback,
+          ),
+          getOrThrow: vi.fn().mockReturnValue('survey.answer.submit'),
+        } as never,
+        store as unknown as SurveyAnswerSubmissionStore,
+        scheduler as unknown as SchedulerRegistry,
+      );
+
+    it('배치가 가득 차면 다음 주기를 기다리지 않고 이어서 처리한다', async () => {
+      claimBatches([100, 100, 30]);
+
+      await service.relay();
+
+      expect(store.relayPending).toHaveBeenCalledTimes(3);
+      expect(producer.sendBatch).toHaveBeenCalledTimes(3);
+    });
+
+    it('배치가 가득 차지 않으면 한 번으로 끝낸다', async () => {
+      claimBatches([99]);
+
+      await service.relay();
+
+      expect(store.relayPending).toHaveBeenCalledTimes(1);
+    });
+
+    it('배치마다 `now`를 새로 만들어 넘긴다', async () => {
+      claimBatches([100, 10]);
+
+      await service.relay();
+
+      const nows = store.relayPending.mock.calls.map(
+        (call) => (call[0] as { now: Date }).now,
+      );
+      expect(nows).toHaveLength(2);
+      expect(nows[0]).not.toBe(nows[1]);
+    });
+
+    it('발행이 실패하면 이어서 처리하지 않는다', async () => {
+      claimBatches([100, 100]);
+      producer.sendBatch.mockRejectedValue(new Error('broker unreachable'));
+
+      await service.relay();
+
+      expect(store.relayPending).toHaveBeenCalledTimes(1);
+    });
+
+    it('이어서 처리하는 시간은 drainBudgetMs까지다', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        claimBatches(
+          Array.from({ length: 50 }, () => 100),
+          () => {
+            vi.setSystemTime(Date.now() + 600);
+          },
+        );
+
+        await serviceWithBudget('1000').relay();
+
+        // 600ms씩 쓰므로 두 번째 배치 뒤에 예산(1000ms)을 넘긴다.
+        expect(store.relayPending).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('drainBudgetMs가 0이면 주기당 한 배치만 처리한다', async () => {
+      claimBatches([100, 100, 100]);
+
+      await serviceWithBudget('0').relay();
+
+      expect(store.relayPending).toHaveBeenCalledTimes(1);
+    });
+  });
 });

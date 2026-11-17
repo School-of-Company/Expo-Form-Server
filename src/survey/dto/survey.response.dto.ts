@@ -37,7 +37,7 @@ export class SurveyResponseDto extends createZodDto(surveyResponseSchema) {}
 /**
  * 엔티티를 응답 DTO로 변환한다. 엔티티를 그대로 내보내지 않는 이유는,
  * 감사 컬럼(`createdAt`/`updatedAt`)이나 양방향 관계처럼 외부에 노출할 필요 없는 것들을
- * 응답 계약에서 분리해두기 위해서다. 일반 조회와 QR 토큰 조회가 같은 응답을 쓴다.
+ * 응답 계약에서 분리해두기 위해서다.
  */
 export function toSurveyResponse(survey: SurveyEntity): SurveyResponseDto {
   return {

@@ -38,6 +38,41 @@ export function isForeignKeyViolation(err: unknown): boolean {
   );
 }
 
+/** 다시 하면 풀릴 수 있는 SQLSTATE: 연결 예외(08), 자원 부족(53), 관리자 종료(57P), 직렬화 실패·교착. */
+const TRANSIENT_SQLSTATE = /^(?:08|53|57P)|^(?:40001|40P01)$/u;
+
+/** 다시 하면 풀릴 수 있는 Node 소켓 오류 코드. */
+const TRANSIENT_SOCKET_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EPIPE',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+]);
+
+/**
+ * DB 연결 끊김·타임아웃·교착처럼 같은 작업을 다시 하면 풀릴 수 있는 오류인지 확인한다. 코드 버그나 데이터 오류처럼
+ * 다시 해도 똑같이 실패할 오류는 false다. TypeORM은 연결 오류도 `QueryFailedError`로 감싸므로 안쪽 오류를 본다.
+ */
+export function isTransientDbError(err: unknown): boolean {
+  const cause: unknown =
+    err instanceof QueryFailedError ? (err.driverError as unknown) : err;
+  if (!(cause instanceof Error)) {
+    return false;
+  }
+
+  const { code } = cause as { code?: unknown };
+  if (typeof code === 'string') {
+    return TRANSIENT_SQLSTATE.test(code) || TRANSIENT_SOCKET_CODES.has(code);
+  }
+
+  // pg 풀은 연결 대기 초과·연결 끊김을 코드 없는 Error로 던진다.
+  return /timeout exceeded when trying to connect|Connection terminated/u.test(
+    cause.message,
+  );
+}
+
 /**
  * 조회-후-저장 사이의 경합으로 유니크 제약이 위반되면 500 대신 호출부가 정한 도메인 예외(409)로 바꾼다. 다른 오류는
  * 그대로 다시 던진다. `operation`은 DB 쓰기를 포함하는 작업 하나다.

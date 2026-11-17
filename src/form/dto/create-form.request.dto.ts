@@ -13,6 +13,7 @@ import { checkNameField } from './name-field.rule.js';
 import { checkCompanionField } from './companion-field.rule.js';
 import { checkRegionField } from './region-field.rule.js';
 import { checkOccupationFields } from './occupation-fields.rule.js';
+import { checkConditional, type FormLike } from './program-form-fields.rule.js';
 
 /**
  * 폼에 들어갈 입력 필드 하나.
@@ -31,7 +32,7 @@ export const dynamicFormFieldSchema = z.object({
  * 폼 생성 요청의 필드 구성.
  *
  * `expoId`는 경로 파라미터로 받으므로 바디에는 없다 — 박람회 서비스 소유 값이라 컨트롤러에서
- * 형식(uuid)만 검증하고 존재 여부는 확인하지 않는다.
+ * 형식(uuid)을 검증하고, 존재 여부는 서비스가 박람회 서비스에 확인한다.
  * 날짜는 JSON으로 문자열이 실려오므로 `Date`로 바꿔 받는다(`dateTimeRequestSchema`).
  *
  * 수정 요청도 이 구성을 재사용한다.
@@ -85,12 +86,25 @@ export const withValidOccupationOpenAt = <
   value: T,
 ): boolean => isOccupationOpenAtInPeriod(value, value.occupationOpenAt);
 
+/** 조건부 표시의 기준 필드와 반응 값이 실제로 있는지 검증한다. 프로그램용 폼·설문과 같은 규칙이다. */
+export function checkConditionalFields(
+  form: FormLike,
+  ctx: z.RefinementCtx,
+): void {
+  for (const [index, field] of form.dynamicForm.entries()) {
+    checkConditional(form, field, index, (message, at) => {
+      ctx.addIssue({ code: 'custom', message, path: ['dynamicForm', at] });
+    });
+  }
+}
+
 export const createFormSchema = createFormFieldsSchema
   .refine(withValidPeriod, PERIOD_ERROR)
   .refine(withValidOccupationOpenAt, OCCUPATION_OPEN_AT_ERROR)
   .superRefine(checkNameField)
   .superRefine(checkOccupationFields)
   .superRefine(checkCompanionField)
-  .superRefine(checkRegionField);
+  .superRefine(checkRegionField)
+  .superRefine(checkConditionalFields);
 
 export class CreateFormRequestDto extends createZodDto(createFormSchema) {}
