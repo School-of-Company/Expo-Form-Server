@@ -19,7 +19,7 @@ def load(name, target):
 METRICS = [
     ('p95 응답시간 (ms)', lambda r: float(r['p95_ms']), 'linear'),
     ('초당 DB 쿼리 수', lambda r: float(r['db_queries_per_req']) * float(r['rps']), 'linear'),
-    ('초당 읽은 행 수', lambda r: float(r['tuples_read_per_req']) * float(r['rps']), 'log'),
+    ('초당 돌려준 행 수', lambda r: float(r['db_rows_per_req']) * float(r['rps']), 'log'),
 ]
 
 def nice_max(v):
