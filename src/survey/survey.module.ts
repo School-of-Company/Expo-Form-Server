@@ -5,7 +5,6 @@ import { ExpoClientModule } from '../expo-client/expo-client.module.js';
 import { UserClientModule } from '../user-client/user-client.module.js';
 import { InternalSurveyController } from './internal-survey.controller.js';
 import { LotteryPhoneRetentionService } from './lottery-phone-retention.service.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
@@ -38,7 +37,6 @@ import { SurveyStore } from './survey.store.js';
   imports: [
     TypeOrmModule.forFeature([
       SurveyEntity,
-      DynamicSurveyEntity,
       SurveyAnswerSubmissionEntity,
       SurveyPublicAnswerEntity,
       SurveyDrawResultEntity,

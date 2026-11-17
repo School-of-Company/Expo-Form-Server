@@ -132,12 +132,15 @@ describe('FormService 프로그램용 폼', () => {
         version: 1,
       });
 
-      const [saved] = formStore.save.mock.calls[0] as [FormEntity];
+      const [saved, fields] = formStore.save.mock.calls[0] as [
+        FormEntity,
+        unknown[],
+      ];
       expect(saved.purpose).toBe(FormPurpose.PROGRAM);
       expect(saved.applicationType).toBeNull();
       expect(saved.participationType).toBe(ParticipationType.STANDARD);
       expect(saved.expoId).toBe(expoId);
-      expect(saved.dynamicForms).toHaveLength(1);
+      expect(fields).toHaveLength(1);
     });
 
     it('참여자군 없이도(null) 저장한다', async () => {

@@ -12,7 +12,6 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DomainExceptionFilter } from '../common/exceptions/domain-exception.filter.js';
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
 import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
@@ -53,7 +52,6 @@ describe.skipIf(adminUrl === undefined)(
         namingStrategy,
         entities: [
           SurveyEntity,
-          DynamicSurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
           SurveyLotteryParticipantEntity,
@@ -106,6 +104,7 @@ describe.skipIf(adminUrl === undefined)(
         title: '공개 설문',
         informationText: '안내',
         participationType: ParticipationType.STANDARD,
+        dynamicSurveys: [],
       });
     }
 
