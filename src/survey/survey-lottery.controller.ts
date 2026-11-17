@@ -7,6 +7,7 @@ import {
   Patch,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ExpoAdminAccess } from '../admin-access/expo-admin-access.decorator.js';
 import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
 import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import {
@@ -31,6 +32,7 @@ export class SurveyLotteryController {
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
   )
+  @ExpoAdminAccess()
   @Get(':expoId/lottery')
   async find(
     @Param('expoId', ParseUUIDPipe) expoId: string,
@@ -48,6 +50,7 @@ export class SurveyLotteryController {
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
   )
+  @ExpoAdminAccess()
   @AdminChangeNotify('설문 추첨 설정 수정')
   @Patch(':expoId/lottery')
   async update(
