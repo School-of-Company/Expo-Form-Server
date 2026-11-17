@@ -1,6 +1,6 @@
 import type { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import type { JsonData, OtherJson } from '../json/field-spec.schema.js';
-import type { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
+import type { DynamicSurveyQuestion } from './dynamic-survey-question.js';
 
 /**
  * 제출 당시의 문항 하나. 설문을 수정하면 문항이 다시 만들어져 ID가 바뀌므로, 수정 전에 저장된 답변은
@@ -18,11 +18,11 @@ export type QuestionSnapshot = {
   otherJson: OtherJson | null;
 };
 
-/** 접수 시점의 설문 문항들을 스냅샷으로 바꾼다. 문항은 ID 오름차순(작성 순서)으로 들어온다고 본다. */
+/** 접수 시점의 설문 문항들을 스냅샷으로 바꾼다. 문항은 설문에 저장된 배열 순서(작성 순서)로 들어온다. */
 export function toQuestionSnapshots(
   questions: ReadonlyArray<
     Pick<
-      DynamicSurveyEntity,
+      DynamicSurveyQuestion,
       'id' | 'title' | 'formType' | 'jsonData' | 'otherJson'
     >
   >,

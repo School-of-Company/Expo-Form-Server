@@ -11,7 +11,6 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { publicSurveyAnswerResponseSchema } from './dto/public-survey-answer.response.dto.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
 import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
@@ -50,7 +49,6 @@ describe.skipIf(adminUrl === undefined)(
         namingStrategy,
         entities: [
           SurveyEntity,
-          DynamicSurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
           SurveyLotteryParticipantEntity,
@@ -96,6 +94,7 @@ describe.skipIf(adminUrl === undefined)(
         participationType: ParticipationType.STANDARD,
         lotteryEnabled: enabled,
         lotteryNumbers: numbers,
+        dynamicSurveys: [],
       });
     }
 

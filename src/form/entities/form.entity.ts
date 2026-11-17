@@ -3,18 +3,17 @@ import {
   CreateDateColumn,
   Entity,
   Index,
-  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { ParticipationType } from '../../common/enums/participation-type.enum.js';
+import type { DynamicFormField } from '../dynamic-form-field.js';
 import { ApplicationType } from './application-type.enum.js';
-import { DynamicFormEntity } from './dynamic-form.entity.js';
 import { FormPurpose } from './form-purpose.enum.js';
 
 /**
  * 하나의 박람회(expo)에서 특정 참여자군 x 신청 방식 조합에 대해 노출되는
- * 신청서 정의. 실제 입력 필드 목록은 {@link dynamicForms}로 별도 정규화되어 있다.
+ * 신청서 정의. 입력 필드 목록은 {@link dynamicForms}(jsonb 배열)에 함께 담긴다.
  *
  * 등록용 폼은 `(expoId, participationType, applicationType)`이 폼을 유일하게 식별하는 조합이라
  * DB 유니크 제약으로 막는다 — 애플리케이션 레벨 중복 검사만으로는 동시 요청을 걸러내지 못한다.
@@ -88,13 +87,12 @@ export class FormEntity {
   expoId: string;
 
   /**
-   * 이 폼을 구성하는 입력 필드 정의 목록.
-   * 필드 하나당 row 하나인 정규화 테이블 방식 — JSONB embed 전환은 TODO.local.md 참고.
+   * 이 폼을 구성하는 입력 필드 정의 목록. 컬럼 `fields`(jsonb 배열)에 담기고 배열 순서가 표시 순서다.
+   * 필드 하나당 행 하나였던 `dynamic_form` 테이블을 이 컬럼으로 옮겼다(옛 테이블은 롤백 대비로 한 릴리스 남겨 둔다).
+   * 원소의 `id` 규칙은 {@link DynamicFormField}.
    */
-  @OneToMany(() => DynamicFormEntity, (dynamicForm) => dynamicForm.form, {
-    cascade: true,
-  })
-  dynamicForms: DynamicFormEntity[];
+  @Column({ name: 'fields', type: 'jsonb' })
+  dynamicForms: DynamicFormField[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

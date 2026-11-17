@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
-import { DataSource } from 'typeorm';
+import { DataSource, type Logger } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { Occupation } from '../common/enums/occupation.enum.js';
@@ -9,17 +9,17 @@ import { SurveyAlreadyAnsweredException } from '../common/exceptions/domain.exce
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoEntity } from '../deleted-expo/entities/deleted-expo.entity.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import type { NewDynamicSurveyQuestion } from './dynamic-survey-question.js';
 import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyStore } from './survey.store.js';
 
 const adminUrl = process.env.DATABASE_URL;
 
-function question(title: string): DynamicSurveyEntity {
-  return Object.assign(new DynamicSurveyEntity(), {
+function question(title: string): NewDynamicSurveyQuestion {
+  return {
     title,
     formType: DynamicFormFieldType.DROPDOWN,
     requiredStatus: true,
@@ -30,8 +30,21 @@ function question(title: string): DynamicSurveyEntity {
       maxSelection: 1,
       conditional: { parentIndex: 0, triggerValue: '1' },
     },
-  });
+  };
 }
+
+/** 실행한 SQL을 모은다. 조회가 쿼리 몇 개로 끝나는지 단언하는 데 쓴다. */
+const queries: string[] = [];
+const queryLogger: Logger = {
+  logQuery(query) {
+    queries.push(query);
+  },
+  logQueryError: () => undefined,
+  logQuerySlow: () => undefined,
+  logSchemaBuild: () => undefined,
+  logMigration: () => undefined,
+  log: () => undefined,
+};
 
 describe.skipIf(adminUrl === undefined)(
   '설문 수정의 문항 교체 / PostgreSQL',
@@ -59,13 +72,16 @@ describe.skipIf(adminUrl === undefined)(
         entities: [
           DeletedExpoEntity,
           SurveyEntity,
-          DynamicSurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
         ],
         synchronize: true,
+        logging: ['query'],
+        logger: queryLogger,
       });
       await dataSource.initialize();
+      // 운영에서는 마이그레이션이 남겨 둔 시퀀스다. synchronize는 엔티티에 없는 시퀀스를 만들지 않는다.
+      await dataSource.query('CREATE SEQUENCE "dynamic_survey_id_seq"');
       surveyStore = new SurveyStore(
         dataSource.getRepository(SurveyEntity),
         dataSource,
@@ -81,13 +97,19 @@ describe.skipIf(adminUrl === undefined)(
     });
 
     async function seed(answered: boolean) {
-      const saved = await dataSource.getRepository(SurveyEntity).save({
-        expoId: randomUUID(),
-        title: '설문',
-        informationText: '안내',
-        participationType: ParticipationType.STANDARD,
-        dynamicSurveys: [question('만족도'), question('재방문')],
-      });
+      const saved = await surveyStore.save(
+        Object.assign(new SurveyEntity(), {
+          expoId: randomUUID(),
+          title: '설문',
+          informationText: '안내',
+          participationType: ParticipationType.STANDARD,
+          totalAnswers: 0,
+          lotteryEnabled: false,
+          lotteryNumbers: [],
+          lotterySequence: 0,
+        }),
+        [question('만족도'), question('재방문')],
+      );
       if (answered) {
         await answerStore.create(saved.id, {}, Occupation.GENERAL, null);
       }
@@ -106,6 +128,22 @@ describe.skipIf(adminUrl === undefined)(
       );
       return found!.dynamicSurveys.map(({ id, title }) => ({ id, title }));
     }
+
+    it('설문 조회는 문항 수와 상관없이 쿼리 1개로 끝난다', async () => {
+      const survey = await seed(false);
+
+      queries.length = 0;
+      const found = await surveyStore.findByExpoAndType(
+        survey.expoId,
+        ParticipationType.STANDARD,
+      );
+
+      expect(queries).toHaveLength(1);
+      expect(found!.dynamicSurveys.map(({ title }) => title)).toEqual([
+        '만족도',
+        '재방문',
+      ]);
+    });
 
     it('응답이 없으면 문항을 새로 만들어 교체한다', async () => {
       const survey = await seed(false);

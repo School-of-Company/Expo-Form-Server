@@ -4,7 +4,6 @@ import { AdminAccessModule } from '../admin-access/admin-access.module.js';
 import { DeletedExpoModule } from '../deleted-expo/deleted-expo.module.js';
 import { ExpoClientModule } from '../expo-client/expo-client.module.js';
 import { ProgramAdminAccessGuard } from './program-admin-access.guard.js';
-import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormController } from './form.controller.js';
 import { FormService } from './form.service.js';
@@ -17,7 +16,7 @@ import { ProgramFormController } from './program-form.controller.js';
 @Module({
   imports: [
     AdminAccessModule,
-    TypeOrmModule.forFeature([FormEntity, DynamicFormEntity]),
+    TypeOrmModule.forFeature([FormEntity]),
     DeletedExpoModule,
     ExpoClientModule,
   ],

@@ -9,6 +9,7 @@ import {
   FormNotFoundException,
   FormOccupationOpenAtOutOfPeriodException,
 } from '../common/exceptions/domain.exception.js';
+import type { NewDynamicFormField } from './dynamic-form-field.js';
 import { CreateFormRequestDto } from './dto/create-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { DynamicFormType } from './entities/dynamic-form-type.enum.js';
@@ -117,11 +118,14 @@ describe('FormService', () => {
 
       await service.create(expoId, createDto);
 
-      const saved = formStore.save.mock.calls[0][0] as FormEntity;
+      const [saved, fields] = formStore.save.mock.calls[0] as [
+        FormEntity,
+        NewDynamicFormField[],
+      ];
       expect(saved.expoId).toBe(expoId);
       expect(saved.purpose).toBe(FormPurpose.REGISTRATION);
-      expect(saved.dynamicForms).toHaveLength(1);
-      expect(saved.dynamicForms[0].jsonData).toEqual({
+      expect(fields).toHaveLength(1);
+      expect(fields[0].jsonData).toEqual({
         '1': '온라인',
         '2': '오프라인',
       });
