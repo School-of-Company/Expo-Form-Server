@@ -64,8 +64,8 @@ const emptySummary = (): ReconcileSummary => ({
  * - 유저 서비스가 응답하지 않으면 그 자리에서 점검을 멈춘다. 장애 중에 건마다 타임아웃을 기다리면
  *   점검 하나가 다음 주기를 넘길 수 있다.
  * - 한 번에 점검하는 상한에 걸리거나 장애로 멈추면, 다음 점검은 마지막으로 확인한 기록 다음부터
- *   이어서 본다. 끝까지 훑으면 다음 점검은 처음부터 다시 본다. 이 위치는 인스턴스 메모리에만 있어서
- *   재시작하면 처음부터이고, 인스턴스가 여러 개면 각자 따로 기억한다.
+ *   이어서 본다. 끝까지 훑으면 다음 점검은 처음부터 다시 본다. 이 위치는 DB 한 행
+ *   (`survey_answer_reconcile_cursor`)에 둬서, 재시작하거나 점검을 맡는 인스턴스가 바뀌어도 이어진다.
  * - 알림이 필요한 결과는 Discord와 별개로 항상 오류 로그로도 남긴다. 웹훅이 설정되지 않으면 Dicoshot은
  *   보내지 않고도 성공으로 돌아오기 때문이다.
  *
@@ -77,7 +77,10 @@ const emptySummary = (): ReconcileSummary => ({
 export class SurveyAnswerReconcileService {
   private readonly logger = new Logger(SurveyAnswerReconcileService.name);
   private running = false;
-  /** 다음 점검을 시작할 위치(이 id 다음부터). 끝까지 훑었으면 undefined라 처음부터 본다. */
+  /**
+   * 다음 점검을 시작할 위치(이 id 다음부터). 끝까지 훑었으면 undefined라 처음부터 본다. 점검마다 DB에서 읽고
+   * 점검이 끝나면 다시 쓴다.
+   */
   private resumeAfterId: string | undefined;
 
   constructor(
@@ -113,7 +116,9 @@ export class SurveyAnswerReconcileService {
         this.dataSource,
         'survey-answer-reconcile',
         async () => {
+          this.resumeAfterId = await this.readResumePoint();
           const summary = await this.check();
+          await this.saveResumePoint();
           this.report(summary);
           if (
             summary.unprocessedEventIds.length > 0 ||
@@ -194,6 +199,22 @@ export class SurveyAnswerReconcileService {
     summary.truncated = true;
     this.resumeAfterId = lastCheckedId;
     return summary;
+  }
+
+  private async readResumePoint(): Promise<string | undefined> {
+    const [row] = await this.dataSource.query<
+      Array<{ resumeAfterId: string | null }>
+    >(
+      'SELECT resume_after_id AS "resumeAfterId" FROM survey_answer_reconcile_cursor WHERE id = 1',
+    );
+    return row?.resumeAfterId ?? undefined;
+  }
+
+  private async saveResumePoint(): Promise<void> {
+    await this.dataSource.query(
+      'INSERT INTO survey_answer_reconcile_cursor (id, resume_after_id) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET resume_after_id = EXCLUDED.resume_after_id',
+      [this.resumeAfterId ?? null],
+    );
   }
 
   /** 결과 이벤트를 받았을 때와 같은 값으로 반영한다. 거절 사유는 `REJECTED`일 때만 남긴다. */
