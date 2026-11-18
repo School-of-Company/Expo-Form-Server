@@ -22,6 +22,15 @@ export type AnswerRelayFailure = {
   error: unknown;
 };
 
+/**
+ * 재시도해도 소용없는 발행 실패인지 본다(kafkajs가 `retriable: false`로 알린다. 예: 메시지가 너무 큼).
+ * 이런 건을 claim 전으로 되돌리면 재시도 횟수가 늘지 않아 상한·소진 알림에 잡히지 않고, 가장 오래된 건이라 매 주기 맨
+ * 앞에 다시 잡혀 적체 비우기를 멈추게 한다.
+ */
+export function isPermanentFailure({ error }: AnswerRelayFailure): boolean {
+  return (error as { retriable?: boolean } | undefined)?.retriable === false;
+}
+
 /** {@link SurveyAnswerSubmissionStore.relayPending}의 발행 콜백이 한 묶음(batch)에 대해 돌려주는 결과. */
 export type AnswerRelayBatchResult = {
   published: Array<{
@@ -134,6 +143,7 @@ export class SurveyAnswerSubmissionStore {
    *
    * `publish`는 `sendBatchSize` 건 이하의 묶음을 받아 성공한 건(발행한 이벤트 버전과 함께)과 실패한 건을
    * 돌려준다. 성공한 건은 이벤트 버전을 기록하고, 실패한 건은 claim 전 값으로 되돌려 다음 주기에 다시 잡힌다.
+   * 다만 재시도해도 소용없는 실패({@link isPermanentFailure})는 claim을 남겨 재발행 간격과 재시도 상한을 따른다.
    * claim 뒤 발행 전에 프로세스가 죽으면 그 건은 발행된 것으로 남아 재발행 시각에 다시 나간다(지연만 생기고 빠지지 않는다).
    *
    * @returns 발행에 실패한 건
@@ -154,9 +164,12 @@ export class SurveyAnswerSubmissionStore {
       failures.push(...result.failures);
       // eslint-disable-next-line no-await-in-loop
       await this.recordEventVersions(result.published);
+      // 영구 실패는 claim(`PUBLISHED`, `retryCount + 1`)을 그대로 둬 재발행 간격·상한을 따르게 한다.
       // eslint-disable-next-line no-await-in-loop
       await this.releaseClaims(
-        result.failures.map(({ submission }) => submission),
+        result.failures
+          .filter((failure) => !isPermanentFailure(failure))
+          .map(({ submission }) => submission),
       );
     }
 

@@ -8,6 +8,7 @@ import {
   EXPO_CLIENT,
   type ExpoClient,
 } from '../expo-client/expo-client.interface.js';
+import { resolveDrawMaxRetryCount } from './survey-draw-result-relay.config.js';
 import { SurveyDrawResultStore } from './survey-draw-result.store.js';
 
 /** 설정이 없거나 잘못됐을 때 쓰는 보관 일수. */
@@ -151,7 +152,10 @@ export class LotteryPhoneRetentionService {
         return;
       }
 
-      const cleared = await this.store.clearPhoneNumbers(expoId);
+      const cleared = await this.store.clearPhoneNumbers(
+        expoId,
+        resolveDrawMaxRetryCount((key) => this.config.get(key)),
+      );
       summary.clearedPhoneNumbers += cleared;
       if (cleared > 0) {
         summary.purgedExpos += 1;

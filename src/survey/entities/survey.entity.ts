@@ -3,17 +3,16 @@ import {
   CreateDateColumn,
   Entity,
   Index,
-  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { ParticipationType } from '../../common/enums/participation-type.enum.js';
-import { DynamicSurveyEntity } from './dynamic-survey.entity.js';
+import type { DynamicSurveyQuestion } from '../dynamic-survey-question.js';
 
 /**
  * 하나의 박람회(expo)에서 특정 참여자군을 대상으로 노출되는 후기/피드백 설문 정의.
  * `form`(사전신청)과 달리 접수 기간 개념이 없고, 행사 종료 후 계속 열려 있는 응답 채널이다.
- * 실제 문항 목록은 {@link dynamicSurveys}로 별도 정규화되어 있다.
+ * 문항 목록은 {@link dynamicSurveys}(jsonb 배열)에 함께 담긴다.
  *
  * `(expoId, participationType)`은 설문을 유일하게 식별하는 조합이라 DB 유니크 제약으로 막는다 —
  * 애플리케이션 레벨 중복 검사만으로는 동시에 들어온 생성 요청을 걸러내지 못한다.
@@ -62,17 +61,12 @@ export class SurveyEntity {
   expoId: string;
 
   /**
-   * 이 설문을 구성하는 문항 정의 목록.
-   * 문항 하나당 row 하나인 정규화 테이블 방식 — JSONB embed 전환은 TODO.local.md 참고.
+   * 이 설문을 구성하는 문항 정의 목록. 컬럼 `questions`(jsonb 배열)에 담기고 배열 순서가 표시 순서다.
+   * 문항 하나당 행 하나였던 `dynamic_survey` 테이블을 이 컬럼으로 옮겼다(옛 테이블은 롤백 대비로 한 릴리스 남겨 둔다).
+   * 원소의 `id` 규칙은 {@link DynamicSurveyQuestion}.
    */
-  @OneToMany(
-    () => DynamicSurveyEntity,
-    (dynamicSurvey) => dynamicSurvey.survey,
-    {
-      cascade: true,
-    },
-  )
-  dynamicSurveys: DynamicSurveyEntity[];
+  @Column({ name: 'questions', type: 'jsonb' })
+  dynamicSurveys: DynamicSurveyQuestion[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

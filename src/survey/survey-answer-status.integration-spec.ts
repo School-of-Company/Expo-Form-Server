@@ -4,7 +4,6 @@ import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { namingStrategy } from '../database/database.config.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
@@ -37,7 +36,6 @@ describe.skipIf(adminUrl === undefined)('설문 응답 상태 조회', () => {
       url: url.href,
       entities: [
         SurveyEntity,
-        DynamicSurveyEntity,
         SurveyDrawResultEntity,
         SurveyAnswerSubmissionEntity,
       ],
@@ -56,6 +54,7 @@ describe.skipIf(adminUrl === undefined)('설문 응답 상태 조회', () => {
         title: '설문',
         informationText: '안내',
         participationType: ParticipationType.STANDARD,
+        dynamicSurveys: [],
       }),
     );
     surveyId = survey.id;

@@ -17,7 +17,6 @@ import { InternalTokenGuard } from '../common/http/internal-token.guard.js';
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { publicSurveyAnswerPageSchema } from './dto/public-survey-answer-page.response.dto.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
 import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
@@ -60,7 +59,6 @@ describe.skipIf(adminUrl === undefined)(
         namingStrategy,
         entities: [
           SurveyEntity,
-          DynamicSurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
           SurveyLotteryParticipantEntity,
@@ -114,6 +112,7 @@ describe.skipIf(adminUrl === undefined)(
         participationType,
         dynamicSurveys: [
           {
+            id: 1,
             title: '소감',
             formType: DynamicFormFieldType.SENTENCE,
             requiredStatus: true,
@@ -121,6 +120,7 @@ describe.skipIf(adminUrl === undefined)(
             otherJson: null,
           },
           {
+            id: 2,
             title: '재방문',
             formType: DynamicFormFieldType.CHECKBOX,
             requiredStatus: false,
@@ -128,6 +128,7 @@ describe.skipIf(adminUrl === undefined)(
             otherJson: null,
           },
           {
+            id: 3,
             title: '만족도',
             formType: DynamicFormFieldType.DROPDOWN,
             requiredStatus: false,
@@ -139,10 +140,10 @@ describe.skipIf(adminUrl === undefined)(
     }
 
     async function questionIds(surveyId: string) {
-      const questions = await dataSource
-        .getRepository(DynamicSurveyEntity)
-        .find({ where: { survey: { id: surveyId } }, order: { id: 'ASC' } });
-      return questions.map((question) => String(question.id));
+      const survey = await dataSource
+        .getRepository(SurveyEntity)
+        .findOneByOrFail({ id: surveyId });
+      return survey.dynamicSurveys.map((question) => String(question.id));
     }
 
     async function submit(

@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="370" viewBox="0 0 1560 370" font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif">
+<rect width="1560" height="370" fill="#ffffff"/>
+<text x="40" y="44" font-size="26" fill="#222222">AS-IS</text>
+<text x="150" y="44" font-size="13" fill="#8a8a90">공개 설문 조회 · 필드 20개</text>
+<text x="90" y="88" font-size="13" font-weight="700" fill="#222222">p95 응답시간 (ms)</text>
+<line x1="90" y1="300.0" x2="270" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="82" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">0</text>
+<line x1="90" y1="262.0" x2="270" y2="262.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="82" y="266.0" font-size="11" text-anchor="end" fill="#8a8a90">2</text>
+<line x1="90" y1="224.0" x2="270" y2="224.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="82" y="228.0" font-size="11" text-anchor="end" fill="#8a8a90">4</text>
+<line x1="90" y1="186.0" x2="270" y2="186.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="82" y="190.0" font-size="11" text-anchor="end" fill="#8a8a90">6</text>
+<line x1="90" y1="148.0" x2="270" y2="148.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="82" y="152.0" font-size="11" text-anchor="end" fill="#8a8a90">8</text>
+<line x1="90" y1="110.0" x2="270" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="82" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">10</text>
+<rect x="94.9" y="148.0" width="16" height="152.0" rx="3" fill="#b8564b"/>
+<text x="102.9" y="142.0" font-size="11" text-anchor="middle" fill="#222222">8</text>
+<text x="102.9" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<rect x="120.6" y="167.0" width="16" height="133.0" rx="3" fill="#b8564b"/>
+<text x="128.6" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<rect x="146.3" y="148.0" width="16" height="152.0" rx="3" fill="#b8564b"/>
+<text x="154.3" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">150</text>
+<rect x="172.0" y="110.0" width="16" height="190.0" rx="3" fill="#b8564b"/>
+<text x="180.0" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">200</text>
+<rect x="197.7" y="167.0" width="16" height="133.0" rx="3" fill="#b8564b"/>
+<text x="205.7" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">250</text>
+<rect x="223.4" y="148.0" width="16" height="152.0" rx="3" fill="#b8564b"/>
+<text x="231.4" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">300</text>
+<rect x="249.1" y="186.0" width="16" height="114.0" rx="3" fill="#b8564b"/>
+<text x="257.1" y="180.0" font-size="11" text-anchor="middle" fill="#222222">6</text>
+<text x="257.1" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">400</text>
+<text x="335" y="88" font-size="13" font-weight="700" fill="#222222">초당 DB 쿼리 수</text>
+<line x1="335" y1="300.0" x2="515" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="327" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">0</text>
+<line x1="335" y1="262.0" x2="515" y2="262.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="327" y="266.0" font-size="11" text-anchor="end" fill="#8a8a90">200</text>
+<line x1="335" y1="224.0" x2="515" y2="224.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="327" y="228.0" font-size="11" text-anchor="end" fill="#8a8a90">400</text>
+<line x1="335" y1="186.0" x2="515" y2="186.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="327" y="190.0" font-size="11" text-anchor="end" fill="#8a8a90">600</text>
+<line x1="335" y1="148.0" x2="515" y2="148.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="327" y="152.0" font-size="11" text-anchor="end" fill="#8a8a90">800</text>
+<line x1="335" y1="110.0" x2="515" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="327" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">1k</text>
+<rect x="339.9" y="280.8" width="16" height="19.2" rx="3" fill="#b8564b"/>
+<text x="347.9" y="274.8" font-size="11" text-anchor="middle" fill="#222222">101</text>
+<text x="347.9" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<rect x="365.6" y="261.9" width="16" height="38.1" rx="3" fill="#b8564b"/>
+<text x="373.6" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<rect x="391.3" y="242.8" width="16" height="57.2" rx="3" fill="#b8564b"/>
+<text x="399.3" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">150</text>
+<rect x="417.0" y="223.8" width="16" height="76.2" rx="3" fill="#b8564b"/>
+<text x="425.0" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">200</text>
+<rect x="442.7" y="204.7" width="16" height="95.3" rx="3" fill="#b8564b"/>
+<text x="450.7" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">250</text>
+<rect x="468.4" y="185.7" width="16" height="114.3" rx="3" fill="#b8564b"/>
+<text x="476.4" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">300</text>
+<rect x="494.1" y="147.7" width="16" height="152.3" rx="3" fill="#b8564b"/>
+<text x="502.1" y="141.7" font-size="11" text-anchor="middle" fill="#222222">802</text>
+<text x="502.1" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">400</text>
+<text x="580" y="88" font-size="13" font-weight="700" fill="#222222">초당 읽은 행 수</text>
+<line x1="580" y1="300.0" x2="760" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">1</text>
+<line x1="580" y1="268.3" x2="760" y2="268.3" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="272.3" font-size="11" text-anchor="end" fill="#8a8a90">10</text>
+<line x1="580" y1="236.7" x2="760" y2="236.7" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="240.7" font-size="11" text-anchor="end" fill="#8a8a90">100</text>
+<line x1="580" y1="205.0" x2="760" y2="205.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="209.0" font-size="11" text-anchor="end" fill="#8a8a90">1k</text>
+<line x1="580" y1="173.3" x2="760" y2="173.3" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="177.3" font-size="11" text-anchor="end" fill="#8a8a90">10k</text>
+<line x1="580" y1="141.7" x2="760" y2="141.7" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="145.7" font-size="11" text-anchor="end" fill="#8a8a90">100k</text>
+<line x1="580" y1="110.0" x2="760" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="572" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">1M</text>
+<rect x="584.9" y="161.2" width="16" height="138.8" rx="3" fill="#b8564b"/>
+<text x="592.9" y="155.2" font-size="11" text-anchor="middle" fill="#222222">24,132</text>
+<text x="592.9" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<rect x="610.6" y="153.2" width="16" height="146.8" rx="3" fill="#b8564b"/>
+<text x="618.6" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<rect x="636.3" y="147.3" width="16" height="152.7" rx="3" fill="#b8564b"/>
+<text x="644.3" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">150</text>
+<rect x="662.0" y="143.6" width="16" height="156.4" rx="3" fill="#b8564b"/>
+<text x="670.0" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">200</text>
+<rect x="687.7" y="140.2" width="16" height="159.8" rx="3" fill="#b8564b"/>
+<text x="695.7" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">250</text>
+<rect x="713.4" y="137.6" width="16" height="162.4" rx="3" fill="#b8564b"/>
+<text x="721.4" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">300</text>
+<rect x="739.1" y="134.1" width="16" height="165.9" rx="3" fill="#b8564b"/>
+<text x="747.1" y="128.1" font-size="11" text-anchor="middle" fill="#222222">173,137</text>
+<text x="747.1" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">400</text>
+<text x="420" y="348" font-size="11" text-anchor="middle" fill="#8a8a90">초당 요청 수</text>
+<text x="820" y="44" font-size="26" fill="#222222">TO-BE</text>
+<text x="930" y="44" font-size="13" fill="#8a8a90">공개 설문 조회 · 필드 20개</text>
+<text x="870" y="88" font-size="13" font-weight="700" fill="#222222">p95 응답시간 (ms)</text>
+<line x1="870" y1="300.0" x2="1050" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="862" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">0</text>
+<line x1="870" y1="262.0" x2="1050" y2="262.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="862" y="266.0" font-size="11" text-anchor="end" fill="#8a8a90">2</text>
+<line x1="870" y1="224.0" x2="1050" y2="224.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="862" y="228.0" font-size="11" text-anchor="end" fill="#8a8a90">4</text>
+<line x1="870" y1="186.0" x2="1050" y2="186.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="862" y="190.0" font-size="11" text-anchor="end" fill="#8a8a90">6</text>
+<line x1="870" y1="148.0" x2="1050" y2="148.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="862" y="152.0" font-size="11" text-anchor="end" fill="#8a8a90">8</text>
+<line x1="870" y1="110.0" x2="1050" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="862" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">10</text>
+<rect x="874.9" y="205.0" width="16" height="95.0" rx="3" fill="#4f6fc4"/>
+<text x="882.9" y="199.0" font-size="11" text-anchor="middle" fill="#222222">5</text>
+<text x="882.9" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<rect x="900.6" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="908.6" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<rect x="926.3" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="934.3" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">150</text>
+<rect x="952.0" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="960.0" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">200</text>
+<rect x="977.7" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="985.7" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">250</text>
+<rect x="1003.4" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="1011.4" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">300</text>
+<rect x="1029.1" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="1037.1" y="218.0" font-size="11" text-anchor="middle" fill="#222222">4</text>
+<text x="1037.1" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">400</text>
+<text x="1115" y="88" font-size="13" font-weight="700" fill="#222222">초당 DB 쿼리 수</text>
+<line x1="1115" y1="300.0" x2="1295" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1107" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">0</text>
+<line x1="1115" y1="262.0" x2="1295" y2="262.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1107" y="266.0" font-size="11" text-anchor="end" fill="#8a8a90">200</text>
+<line x1="1115" y1="224.0" x2="1295" y2="224.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1107" y="228.0" font-size="11" text-anchor="end" fill="#8a8a90">400</text>
+<line x1="1115" y1="186.0" x2="1295" y2="186.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1107" y="190.0" font-size="11" text-anchor="end" fill="#8a8a90">600</text>
+<line x1="1115" y1="148.0" x2="1295" y2="148.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1107" y="152.0" font-size="11" text-anchor="end" fill="#8a8a90">800</text>
+<line x1="1115" y1="110.0" x2="1295" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1107" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">1k</text>
+<rect x="1119.9" y="290.4" width="16" height="9.6" rx="3" fill="#4f6fc4"/>
+<text x="1127.9" y="284.4" font-size="11" text-anchor="middle" fill="#222222">51</text>
+<text x="1127.9" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<rect x="1145.6" y="280.9" width="16" height="19.1" rx="3" fill="#4f6fc4"/>
+<text x="1153.6" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<rect x="1171.3" y="271.4" width="16" height="28.6" rx="3" fill="#4f6fc4"/>
+<text x="1179.3" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">150</text>
+<rect x="1197.0" y="261.8" width="16" height="38.2" rx="3" fill="#4f6fc4"/>
+<text x="1205.0" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">200</text>
+<rect x="1222.7" y="252.3" width="16" height="47.7" rx="3" fill="#4f6fc4"/>
+<text x="1230.7" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">250</text>
+<rect x="1248.4" y="242.7" width="16" height="57.3" rx="3" fill="#4f6fc4"/>
+<text x="1256.4" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">300</text>
+<rect x="1274.1" y="223.8" width="16" height="76.2" rx="3" fill="#4f6fc4"/>
+<text x="1282.1" y="217.8" font-size="11" text-anchor="middle" fill="#222222">401</text>
+<text x="1282.1" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">400</text>
+<text x="1360" y="88" font-size="13" font-weight="700" fill="#222222">초당 읽은 행 수</text>
+<line x1="1360" y1="300.0" x2="1540" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">1</text>
+<line x1="1360" y1="268.3" x2="1540" y2="268.3" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="272.3" font-size="11" text-anchor="end" fill="#8a8a90">10</text>
+<line x1="1360" y1="236.7" x2="1540" y2="236.7" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="240.7" font-size="11" text-anchor="end" fill="#8a8a90">100</text>
+<line x1="1360" y1="205.0" x2="1540" y2="205.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="209.0" font-size="11" text-anchor="end" fill="#8a8a90">1k</text>
+<line x1="1360" y1="173.3" x2="1540" y2="173.3" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="177.3" font-size="11" text-anchor="end" fill="#8a8a90">10k</text>
+<line x1="1360" y1="141.7" x2="1540" y2="141.7" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="145.7" font-size="11" text-anchor="end" fill="#8a8a90">100k</text>
+<line x1="1360" y1="110.0" x2="1540" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="1352" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">1M</text>
+<rect x="1364.9" y="244.7" width="16" height="55.3" rx="3" fill="#4f6fc4"/>
+<text x="1372.9" y="238.7" font-size="11" text-anchor="middle" fill="#222222">56</text>
+<text x="1372.9" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<rect x="1390.6" y="237.0" width="16" height="63.0" rx="3" fill="#4f6fc4"/>
+<text x="1398.6" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<rect x="1416.3" y="231.1" width="16" height="68.9" rx="3" fill="#4f6fc4"/>
+<text x="1424.3" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">150</text>
+<rect x="1442.0" y="227.2" width="16" height="72.8" rx="3" fill="#4f6fc4"/>
+<text x="1450.0" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">200</text>
+<rect x="1467.7" y="224.0" width="16" height="76.0" rx="3" fill="#4f6fc4"/>
+<text x="1475.7" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">250</text>
+<rect x="1493.4" y="221.9" width="16" height="78.1" rx="3" fill="#4f6fc4"/>
+<text x="1501.4" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">300</text>
+<rect x="1519.1" y="217.7" width="16" height="82.3" rx="3" fill="#4f6fc4"/>
+<text x="1527.1" y="211.7" font-size="11" text-anchor="middle" fill="#222222">397</text>
+<text x="1527.1" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">400</text>
+<text x="1200" y="348" font-size="11" text-anchor="middle" fill="#8a8a90">초당 요청 수</text>
+</svg>

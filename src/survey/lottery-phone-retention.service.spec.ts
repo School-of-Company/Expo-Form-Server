@@ -75,7 +75,9 @@ describe('LotteryPhoneRetentionService', () => {
       releaseProgramFormChange: vi.fn(),
     };
     const config = {
-      get: vi.fn(() => configValue),
+      get: vi.fn((key: string) =>
+        key === 'LOTTERY_PHONE_RETENTION_DAYS' ? configValue : undefined,
+      ),
     } as unknown as ConfigService;
     service = new LotteryPhoneRetentionService(
       config,
@@ -113,7 +115,7 @@ describe('LotteryPhoneRetentionService', () => {
     const summary = await service.purgeExpired(now);
 
     expect(store.clearPhoneNumbers).toHaveBeenCalledTimes(1);
-    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoA);
+    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoA, 100);
     expect(summary).toMatchObject({
       checkedExpos: 2,
       purgedExpos: 1,
@@ -130,7 +132,7 @@ describe('LotteryPhoneRetentionService', () => {
 
     await service.purgeExpired(now);
 
-    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoB);
+    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoB, 100);
   });
 
   it.each(['0', '-3', '1.5', 'abc'])(
@@ -155,7 +157,7 @@ describe('LotteryPhoneRetentionService', () => {
 
     const summary = await service.purgeExpired(now);
 
-    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoA);
+    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoA, 100);
     expect(summary.clearedPhoneNumbers).toBe(2);
   });
 
@@ -185,7 +187,7 @@ describe('LotteryPhoneRetentionService', () => {
     const summary = await service.purgeExpired(now);
 
     expect(store.clearPhoneNumbers).toHaveBeenCalledTimes(1);
-    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoB);
+    expect(store.clearPhoneNumbers).toHaveBeenCalledWith(expoB, 100);
     expect(summary).toEqual({
       checkedExpos: 2,
       purgedExpos: 1,

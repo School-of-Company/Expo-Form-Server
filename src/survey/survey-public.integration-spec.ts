@@ -11,7 +11,6 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { publicSurveyAnswerResponseSchema } from './dto/public-survey-answer.response.dto.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyGiftClaimEntity } from './entities/survey-gift-claim.entity.js';
 import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
@@ -50,7 +49,6 @@ describe.skipIf(adminUrl === undefined)(
         namingStrategy,
         entities: [
           SurveyEntity,
-          DynamicSurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
           SurveyLotteryParticipantEntity,
@@ -96,6 +94,7 @@ describe.skipIf(adminUrl === undefined)(
         participationType: ParticipationType.STANDARD,
         lotteryEnabled: enabled,
         lotteryNumbers: numbers,
+        dynamicSurveys: [],
       });
     }
 
@@ -261,7 +260,10 @@ describe.skipIf(adminUrl === undefined)(
       expect(await drawStore.findExpoIdsWithPhoneNumbers()).toContain(
         survey.expoId,
       );
-      expect(await drawStore.clearPhoneNumbers(survey.expoId)).toBe(3);
+      await dataSource
+        .getRepository(SurveyDrawResultEntity)
+        .update({ surveyId: survey.id }, { publishedAt: new Date() });
+      expect(await drawStore.clearPhoneNumbers(survey.expoId, 100)).toBe(3);
       expect(
         await dataSource.getRepository(SurveyLotteryParticipantEntity).countBy({
           surveyId: survey.id,
@@ -275,6 +277,27 @@ describe.skipIf(adminUrl === undefined)(
       expect(await drawStore.findExpoIdsWithPhoneNumbers()).not.toContain(
         survey.expoId,
       );
+    });
+
+    it('보관 기간 정리는 아직 문자를 보내는 중인 당첨 번호를 남기고, 포기한 번호는 지운다', async () => {
+      const survey = await seed([1]);
+      await submit(survey.expoId, '01012345678');
+      const drawStore = new SurveyDrawResultStore(
+        dataSource.getRepository(SurveyDrawResultEntity),
+        dataSource,
+      );
+      const results = dataSource.getRepository(SurveyDrawResultEntity);
+
+      expect(await drawStore.clearPhoneNumbers(survey.expoId, 100)).toBe(1);
+      expect(
+        await results.findOneByOrFail({ surveyId: survey.id }),
+      ).toMatchObject({ phoneNumber: '01012345678' });
+
+      await results.update({ surveyId: survey.id }, { retryCount: 100 });
+      expect(await drawStore.clearPhoneNumbers(survey.expoId, 100)).toBe(1);
+      expect(
+        await results.findOneByOrFail({ surveyId: survey.id }),
+      ).toMatchObject({ phoneNumber: null });
     });
 
     it('당첨 없이 참여 번호만 남은 박람회도 정리 대상이다', async () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
-import { DataSource } from 'typeorm';
+import { DataSource, type Logger } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
@@ -8,9 +8,9 @@ import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoEntity } from '../deleted-expo/entities/deleted-expo.entity.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { DynamicFormType } from './entities/dynamic-form-type.enum.js';
-import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
+import type { NewDynamicFormField } from './dynamic-form-field.js';
 import { FormStore } from './form.store.js';
 
 /**
@@ -19,16 +19,29 @@ import { FormStore } from './form.store.js';
  */
 const adminUrl = process.env.DATABASE_URL;
 
-function field(title: string): DynamicFormEntity {
-  return Object.assign(new DynamicFormEntity(), {
+function field(title: string): NewDynamicFormField {
+  return {
     title,
     formType: DynamicFormFieldType.SENTENCE,
     requiredStatus: true,
     jsonData: {},
     otherJson: null,
     dynamicFormType: DynamicFormType.DEFAULT,
-  });
+  };
 }
+
+/** 실행한 SQL을 모은다. 조회가 쿼리 몇 개로 끝나는지 단언하는 데 쓴다. */
+const queries: string[] = [];
+const queryLogger: Logger = {
+  logQuery(query) {
+    queries.push(query);
+  },
+  logQueryError: () => undefined,
+  logQuerySlow: () => undefined,
+  logSchemaBuild: () => undefined,
+  logMigration: () => undefined,
+  log: () => undefined,
+};
 
 describe.skipIf(adminUrl === undefined)(
   '프로그램용 폼 동시 수정 / PostgreSQL',
@@ -53,10 +66,14 @@ describe.skipIf(adminUrl === undefined)(
         type: 'postgres',
         url: url.href,
         namingStrategy,
-        entities: [DeletedExpoEntity, FormEntity, DynamicFormEntity],
+        entities: [DeletedExpoEntity, FormEntity],
         synchronize: true,
+        logging: ['query'],
+        logger: queryLogger,
       });
       await dataSource.initialize();
+      // 운영에서는 마이그레이션이 남겨 둔 시퀀스다. synchronize는 엔티티에 없는 시퀀스를 만들지 않는다.
+      await dataSource.query('CREATE SEQUENCE "dynamic_form_id_seq"');
       store = new FormStore(
         dataSource.getRepository(FormEntity),
         dataSource,
@@ -82,8 +99,8 @@ describe.skipIf(adminUrl === undefined)(
           startDate: new Date('2026-10-01T00:00:00Z'),
           endDate: new Date('2026-10-31T00:00:00Z'),
           occupationOpenAt: null,
-          dynamicForms: [field('이름')],
         }),
+        [field('이름')],
       );
     }
 
@@ -123,6 +140,27 @@ describe.skipIf(adminUrl === undefined)(
       );
     });
 
+    it('폼 조회는 필드 수와 상관없이 쿼리 1개로 끝나고, 필드 id는 작성 순서대로 오른다', async () => {
+      const created = await createProgramForm('쿼리 수');
+      await store.updateProgramWithFields(
+        await load(created.id),
+        1,
+        ['첫째', '둘째', '셋째'].map((title) => field(title)),
+      );
+
+      queries.length = 0;
+      const saved = await load(created.id);
+
+      expect(queries).toHaveLength(1);
+      const ids = saved.dynamicForms.map((item) => item.id);
+      expect(ids).toEqual(ids.toSorted((a, b) => a - b));
+      expect(saved.dynamicForms.map((item) => item.title)).toEqual([
+        '첫째',
+        '둘째',
+        '셋째',
+      ]);
+    });
+
     it('먼저 저장된 뒤 늦게 도착한 옛 version 저장은 CONFLICT고 아무것도 바꾸지 않는다', async () => {
       const created = await createProgramForm('늦은 저장');
       const [a, b] = await Promise.all([load(created.id), load(created.id)]);
@@ -142,6 +180,23 @@ describe.skipIf(adminUrl === undefined)(
       expect(saved.dynamicForms.map((item) => item.title)).toEqual([
         '먼저 문항',
       ]);
+    });
+
+    it('잠그기 전에 읽은 기간이 낡았어도 현재 기간보다 줄이면 PERIOD_SHRUNK고 아무것도 바꾸지 않는다', async () => {
+      const created = await createProgramForm('기간 축소');
+      const [a, b] = await Promise.all([load(created.id), load(created.id)]);
+      a.endDate = new Date('2026-11-30T00:00:00Z');
+      await store.updateProgramWithFields(a, 1, [field('늘린 문항')]);
+
+      // b는 옛 기간(10/31)을 읽었다. 서비스 사전 검사는 통과하지만 현재 기간(11/30)보다는 줄어든다.
+      b.endDate = new Date('2026-11-15T00:00:00Z');
+      await expect(
+        store.updateProgramWithFields(b, 2, [field('줄인 문항')]),
+      ).resolves.toEqual({ status: 'PERIOD_SHRUNK' });
+
+      const saved = await load(created.id);
+      expect(saved.endDate).toEqual(new Date('2026-11-30T00:00:00Z'));
+      expect(saved.version).toBe(2);
     });
   },
 );

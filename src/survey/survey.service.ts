@@ -20,12 +20,17 @@ import {
   toSurveyResponse,
 } from './dto/survey.response.dto.js';
 import { UpdateSurveyRequestDto } from './dto/update-survey.request.dto.js';
-import { DynamicSurveyEntity } from './entities/dynamic-survey.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyStore } from './survey.store.js';
 
-/** 설문을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
-type SurveyFields = Omit<SurveyEntity, 'id' | 'createdAt' | 'updatedAt'>;
+/**
+ * 설문을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. 문항은 id를
+ * 받아야 해서 store에 따로 넘긴다.
+ */
+type SurveyFields = Omit<
+  SurveyEntity,
+  'id' | 'createdAt' | 'updatedAt' | 'dynamicSurveys'
+>;
 
 /**
  * 수정 요청으로 바꿀 수 있는 설문 메타데이터. 소속 박람회와 문항 목록은 여기 포함되지 않고,
@@ -41,12 +46,6 @@ type UpdatableSurveyFields = Omit<
   | 'lotteryEnabled'
   | 'lotteryNumbers'
   | 'lotterySequence'
->;
-
-/** 문항을 새로 만들 때 채워야 하는 값들 — 부모 관계(`survey`)는 저장 시점에 TypeORM이 연결한다. */
-type DynamicSurveyFields = Omit<
-  DynamicSurveyEntity,
-  'id' | 'survey' | 'createdAt' | 'updatedAt'
 >;
 
 /**
@@ -108,16 +107,13 @@ export class SurveyService {
       lotteryEnabled: lotteryEnabled ?? false,
       lotteryNumbers: lotteryNumbers?.toSorted((a, b) => a - b) ?? [],
       lotterySequence: 0,
-      dynamicSurveys: dynamicSurveyRequestDto.map((question) =>
-        this.toQuestionEntity(question),
-      ),
     } satisfies SurveyFields);
 
     // 위 existsByExpoAndType 검사와 이 save 사이에 다른 요청이 끼어들면 둘 다 통과한 채로
     // 여기까지 올 수 있다. 그럴 땐 DB 유니크 제약이 마지막으로 걸러주는데, 그 위반을 그대로
     // 두면 409가 아니라 500이 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
     const saved = await mapUniqueViolation(
-      async () => this.surveyStore.save(survey),
+      async () => this.surveyStore.save(survey, dynamicSurveyRequestDto),
       () => new SurveyAlreadyExistsException(),
     );
 
@@ -155,14 +151,10 @@ export class SurveyService {
       dto;
     Object.assign(survey, meta satisfies UpdatableSurveyFields);
 
-    const questions = dynamicSurveyRequestDto.map((question) =>
-      this.toQuestionEntity(question),
-    );
-
     // 설문을 읽은 뒤 그 설문이 삭제됐다면 아무것도 바꾸지 않고 false가 온다.
     const updated = await this.surveyStore.updateWithQuestions(
       survey,
-      questions,
+      dynamicSurveyRequestDto,
       {
         enabled: lotteryEnabled,
         numbers: lotteryNumbers?.toSorted((a, b) => a - b),
@@ -173,12 +165,12 @@ export class SurveyService {
     }
 
     this.logger.log(
-      `설문 수정 완료: surveyId=${survey.id}, 문항 ${questions.length}개`,
+      `설문 수정 완료: surveyId=${survey.id}, 문항 ${dynamicSurveyRequestDto.length}개`,
     );
   }
 
   /**
-   * 설문을 삭제한다. 딸린 문항은 DB의 FK CASCADE로 함께 지워진다.
+   * 설문을 삭제한다. 문항은 설문 행 안(`questions`)에 있어 함께 지워진다.
    * 대상 설문은 (박람회, 참여자군) 조합으로 식별한다.
    *
    * @throws {SurveyNotFoundException} 해당 조합의 설문이 없을 때
@@ -246,18 +238,5 @@ export class SurveyService {
     }
 
     return { totalAnswers: survey.totalAnswers };
-  }
-
-  /**
-   * 요청 DTO의 문항 하나를 엔티티로 옮긴다.
-   * id와 부모 관계(`survey`)는 여기서 채우지 않는다 — 저장 시점에 TypeORM이 정한다.
-   */
-  private toQuestionEntity(
-    question: CreateSurveyRequestDto['dynamicSurveyRequestDto'][number],
-  ): DynamicSurveyEntity {
-    return Object.assign(
-      new DynamicSurveyEntity(),
-      question satisfies DynamicSurveyFields,
-    );
   }
 }

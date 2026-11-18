@@ -16,6 +16,7 @@ import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submissio
 import {
   type AnswerRelayBatchResult,
   type AnswerRelayFailure,
+  isPermanentFailure,
   SurveyAnswerSubmissionStore,
 } from './survey-answer-submission.store.js';
 import {
@@ -101,8 +102,9 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
       metrics?.recordPublished('answer', published, failures.length);
 
       for (const { submission, error } of failures) {
-        // 발행에 실패한 기록은 store가 잡기 전 상태로 되돌려 다음 주기에 그대로 다시 잡힌다(RECEIVED는 계속
-        // RECEIVED, PUBLISHED는 재시도 횟수를 쓰지 않는다). 전화번호가 실려 있는 요청 내용은 남기지 않는다.
+        // 일시 실패는 store가 잡기 전 상태로 되돌려 다음 주기에 그대로 다시 잡힌다(RECEIVED는 계속 RECEIVED,
+        // PUBLISHED는 재시도 횟수를 쓰지 않는다). 영구 실패는 재시도 횟수를 쓰고 재발행 간격을 따른다.
+        // 전화번호가 실려 있는 요청 내용은 남기지 않는다.
         this.logger.error(
           `설문 답변 발행 실패: submissionId=${submission.id}`,
           error,
@@ -126,8 +128,9 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
    * 이어서 처리하는 시간은 `drainBudgetMs`까지다. 주기당 `batchSize`건이 처리량의 상한이던 것을 없애, 적체가 있으면
    * 주기와 상관없이 발행 속도가 Kafka·DB가 받는 만큼까지 올라간다.
    *
-   * 발행이 한 건이라도 실패하면 멈춘다. 실패한 건은 claim이 되돌려져 바로 다시 잡히므로, 이어서 돌면 브로커가
-   * 아픈 동안 같은 건을 계속 다시 보내게 된다. 다음 주기에 다시 시도한다.
+   * 일시 실패가 한 건이라도 있으면 멈춘다. 실패한 건은 claim이 되돌려져 바로 다시 잡히므로, 이어서 돌면 브로커가
+   * 아픈 동안 같은 건을 계속 다시 보내게 된다. 다음 주기에 다시 시도한다. 재시도해도 소용없는 실패는 claim이 남아
+   * 바로 다시 잡히지 않으므로 멈추지 않는다.
    *
    * @param onPublished 배치마다 발행에 성공한 건수를 알린다
    * @returns 발행에 실패한 건
@@ -155,8 +158,9 @@ export class SurveyAnswerRelayService implements OnModuleInit, OnModuleDestroy {
       failures.push(...batchFailures);
 
       const claimed = publishedInBatch + batchFailures.length;
+      // 영구 실패는 claim이 남아 바로 다시 잡히지 않으므로, 적체를 이어서 비우는 것을 막지 않는다.
       if (
-        batchFailures.length > 0 ||
+        batchFailures.some((failure) => !isPermanentFailure(failure)) ||
         claimed < batchSize ||
         Date.now() >= deadline
       ) {

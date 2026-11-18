@@ -1,24 +1,49 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository, type EntityManager } from 'typeorm';
+import {
+  DataSource,
+  In,
+  Repository,
+  type EntityManager,
+  type FindOptionsSelect,
+} from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
-import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
+import { allocateFieldIds } from '../database/dynamic-field-ids.js';
+import { isOccupationOpenAtInPeriod } from './dto/create-form.request.dto.js';
+import {
+  toStoredField,
+  type NewDynamicFormField,
+} from './dynamic-form-field.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 
-/**
- * 필드 순서는 별도 컬럼 없이 삽입 순서(= auto-increment PK 오름차순)로 유지한다.
- * 명시하지 않으면 DB가 임의 순서로 돌려줄 수 있어서, 조회마다 이 정렬을 붙인다.
- */
-const DYNAMIC_FORM_ORDER = { dynamicForms: { id: 'ASC' } } as const;
+/** 입력 필드 배열(`fields`)만 뺀 폼 행 컬럼. 필드가 필요 없는 목록 조회가 배열을 읽지 않게 한다. */
+const HEADER_COLUMNS = {
+  id: true,
+  purpose: true,
+  version: true,
+  title: true,
+  informationText: true,
+  participationType: true,
+  applicationType: true,
+  startDate: true,
+  endDate: true,
+  occupationOpenAt: true,
+  expoId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const satisfies FindOptionsSelect<FormEntity>;
 
 /** {@link FormStore.updateProgramWithFields}의 결과. */
 export type ProgramFormUpdateResult =
   | { status: 'UPDATED'; version: number }
   | { status: 'NOT_FOUND' }
-  | { status: 'CONFLICT' };
+  | { status: 'CONFLICT' }
+  | { status: 'PERIOD_SHRUNK' };
+
+export type FormUpdateResult = 'UPDATED' | 'NOT_FOUND' | 'OUT_OF_PERIOD';
 
 /**
  * 폼 영속성 접근을 한 곳에 모아둔 store.
@@ -51,8 +76,6 @@ export class FormStore {
         applicationType,
         purpose: FormPurpose.REGISTRATION,
       },
-      relations: { dynamicForms: true },
-      order: DYNAMIC_FORM_ORDER,
     });
   }
 
@@ -74,65 +97,73 @@ export class FormStore {
   }
 
   /**
-   * 폼과 입력 필드를 함께 저장한다.
-   * `dynamicForms` 관계에 cascade가 걸려 있어서, 자식 필드도 이 한 번의 호출로 같이 들어간다.
+   * 폼과 입력 필드를 함께 저장한다. 새 필드의 id는 {@link allocateFieldIds}로 받아 작성 순서대로 붙인다.
    *
    * 삭제된 박람회에는 저장하지 않는다. 박람회 삭제와 같은 잠금 안에서 확인하고 저장하므로, 삭제가
    * 끝나는 순간 폼이 새로 생기는 일이 없다.
    *
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
-  async save(form: FormEntity): Promise<FormEntity> {
+  async save(
+    form: FormEntity,
+    fields: NewDynamicFormField[],
+  ): Promise<FormEntity> {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
 
+      form.dynamicForms = await this.withNewIds(manager, fields);
       return manager.save(FormEntity, form);
     });
   }
 
   /**
-   * 폼 메타를 갱신하면서 입력 필드를 통째로 교체한다.
-   *
-   * 삭제와 재삽입 사이에 다른 요청이 폼을 조회하면 필드가 하나도 없는 상태를 보게 되므로,
-   * 두 작업을 한 트랜잭션으로 묶는다.
+   * 폼 메타를 갱신하면서 입력 필드를 통째로 교체한다. 새 필드는 모두 새 id를 받는다(수정하면 문항 id가 바뀐다는
+   * 지금까지의 동작 그대로다).
    *
    * 폼을 읽은 뒤 그 폼이 삭제됐다면 아래 `save`가 지워진 폼을 다시 INSERT해 버린다. 그래서 박람회
    * 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 폼 row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
    *
    * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
+   * `keepOccupationOpenAt`이면 오픈 시각은 잠근 뒤 읽은 현재 값을 유지하고, 그 값이 새 접수 기간 안인지 다시 본다.
+   * 조회한 뒤 다른 요청이 오픈 시각을 바꿨을 수 있어서다.
+   *
    * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
-   * @returns 갱신했으면 true, 그 사이 폼이 삭제돼 아무것도 바꾸지 않았으면 false
+   * @param keepOccupationOpenAt 요청이 오픈 시각을 생략했는지
+   * @returns 갱신했으면 `UPDATED`, 그 사이 폼이 삭제됐으면 `NOT_FOUND`, 유지한 오픈 시각이 기간 밖이면 `OUT_OF_PERIOD`
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithFields(
     form: FormEntity,
-    fields: DynamicFormEntity[],
-  ): Promise<boolean> {
+    fields: NewDynamicFormField[],
+    keepOccupationOpenAt = false,
+  ): Promise<FormUpdateResult> {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id },
-        select: { id: true, version: true },
+        select: { id: true, version: true, occupationOpenAt: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
-        return false;
+        return 'NOT_FOUND';
+      }
+
+      if (keepOccupationOpenAt) {
+        form.occupationOpenAt = locked.occupationOpenAt;
+        if (!isOccupationOpenAtInPeriod(form, form.occupationOpenAt)) {
+          return 'OUT_OF_PERIOD';
+        }
       }
 
       // 폼을 읽은 뒤 다른 요청이 먼저 고쳤다면 `form.version`은 낡은 값이다. 그대로 저장한 뒤 +1 하면
       // 버전이 거꾸로 가므로, 잠근 뒤 읽은 현재 값으로 맞춘 다음 올린다.
       form.version = locked.version;
-
-      await manager.delete(DynamicFormEntity, { form: { id: form.id } });
-
-      // 조회해온 form에는 방금 지운 옛 필드들이 매달려 있다. 새 필드로 바꿔놓지 않으면
-      // dynamicForms의 cascade가 옛 필드를 그대로 되살려버린다.
-      form.dynamicForms = fields;
+      form.dynamicForms = await this.withNewIds(manager, fields);
       await manager.save(FormEntity, form);
       await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
-      return true;
+      return 'UPDATED';
     });
   }
 
@@ -140,14 +171,13 @@ export class FormStore {
   async findProgramById(id: string): Promise<FormEntity | null> {
     return this.forms.findOne({
       where: { id, purpose: FormPurpose.PROGRAM },
-      relations: { dynamicForms: true },
-      order: DYNAMIC_FORM_ORDER,
     });
   }
 
   /** 박람회의 프로그램용 폼을 생성순으로 모두 조회한다. 입력 필드는 불러오지 않는다. */
   async findProgramsByExpoId(expoId: string): Promise<FormEntity[]> {
     return this.forms.find({
+      select: HEADER_COLUMNS,
       where: { expoId, purpose: FormPurpose.PROGRAM },
       order: { createdAt: 'ASC', id: 'ASC' },
     });
@@ -163,20 +193,20 @@ export class FormStore {
    * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
    * @param expectedVersion 수정할 때 기준으로 삼은 버전
    * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
-   * @returns 갱신했으면 새 버전, 그 사이 삭제됐으면 `NOT_FOUND`, 버전이 다르면 `CONFLICT`
+   * @returns 갱신했으면 새 버전, 그 사이 삭제됐으면 `NOT_FOUND`, 버전이 다르면 `CONFLICT`, 현재 기간보다 줄면 `PERIOD_SHRUNK`
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateProgramWithFields(
     form: FormEntity,
     expectedVersion: number,
-    fields: DynamicFormEntity[],
+    fields: NewDynamicFormField[],
   ): Promise<ProgramFormUpdateResult> {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id, purpose: FormPurpose.PROGRAM },
-        select: { id: true, version: true },
+        select: { id: true, version: true, startDate: true, endDate: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
@@ -187,10 +217,13 @@ export class FormStore {
         return { status: 'CONFLICT' };
       }
 
-      await manager.delete(DynamicFormEntity, { form: { id: form.id } });
+      // 서비스의 사전 검사는 잠그기 전에 읽은 기간과 비교한다. 그 사이 다른 수정이 기간을 바꿨을 수 있어 다시 본다.
+      if (form.startDate > locked.startDate || form.endDate < locked.endDate) {
+        return { status: 'PERIOD_SHRUNK' };
+      }
 
       form.version = locked.version;
-      form.dynamicForms = fields;
+      form.dynamicForms = await this.withNewIds(manager, fields);
       await manager.save(FormEntity, form);
       await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
@@ -198,7 +231,20 @@ export class FormStore {
     });
   }
 
-  /** 폼을 삭제한다. 딸린 입력 필드는 FK의 `ON DELETE CASCADE`로 DB가 알아서 지운다. */
+  /** 새 필드들에 `dynamic_form_id_seq`에서 받은 id를 작성 순서대로 붙인다. */
+  private async withNewIds(
+    manager: EntityManager,
+    fields: NewDynamicFormField[],
+  ) {
+    const ids = await allocateFieldIds(
+      manager,
+      'dynamic_form_id_seq',
+      fields.length,
+    );
+    return fields.map((field, index) => toStoredField(field, ids[index]));
+  }
+
+  /** 폼을 삭제한다. 입력 필드는 폼 행 안(`fields`)에 있어 함께 지워진다. */
   async deleteById(id: string): Promise<void> {
     await this.forms.delete({ id });
   }
@@ -216,7 +262,7 @@ export class FormStore {
   }
 
   /**
-   * 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 FK CASCADE로 함께 지워진다.
+   * 박람회의 폼을 모두 삭제하고 지운 개수를 돌려준다. 입력 필드는 폼 행 안에 있어 함께 지워진다.
    * 박람회 삭제 트랜잭션(`ExpoPurgeService`) 안에서 부르므로 그 트랜잭션의 `manager`로 지운다.
    */
   async deleteByExpoId(
