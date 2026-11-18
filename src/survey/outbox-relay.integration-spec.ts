@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
 import { DataSource } from 'typeorm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { namingStrategy } from '../database/database.config.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
@@ -10,7 +10,10 @@ import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js'
 import { SurveyEntity } from './entities/survey.entity.js';
 import { DEFAULT_RELAY_SETTINGS } from './survey-answer-relay.config.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
-import { SurveyDrawResultStore } from './survey-draw-result.store.js';
+import {
+  CLAIM_LEASE_MS,
+  SurveyDrawResultStore,
+} from './survey-draw-result.store.js';
 
 /**
  * Outbox 릴레이의 "같은 행을 두 번 발행하지 않는다"를 실제 Postgres의 `FOR UPDATE SKIP LOCKED`로 확인한다.
@@ -232,6 +235,34 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
       claimedUntil: null,
       retryCount: 1,
     });
+  });
+
+  it('발행이 늦어져 잡은 기한이 다 되면 남은 건은 보내지 않고 풀어 두어 다음 실행에서 보낸다', async () => {
+    await seedDrawResults(3);
+    const start = Date.now();
+    let calls = 0;
+    const slowFirst = async () => {
+      calls += 1;
+      // 첫 건이 기한 직전까지 걸린 상황을 흉내 낸다.
+      vi.spyOn(Date, 'now').mockReturnValue(start + CLAIM_LEASE_MS);
+    };
+
+    try {
+      await drawStore.relayUnpublished(100, 100, slowFirst);
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    expect(calls).toBe(1);
+    const rows = await dataSource.getRepository(SurveyDrawResultEntity).find();
+    expect(rows.filter((row) => row.publishedAt !== null)).toHaveLength(1);
+    expect(rows.every((row) => row.claimedUntil === null)).toBe(true);
+    expect(rows.every((row) => row.retryCount === 0)).toBe(true);
+
+    await drawStore.relayUnpublished(100, 100, async () => {
+      calls += 1;
+    });
+    expect(calls).toBe(3);
   });
 
   it('잡은 기한이 남은 결과는 건너뛰고, 기한이 지나면 다시 발행한다', async () => {
