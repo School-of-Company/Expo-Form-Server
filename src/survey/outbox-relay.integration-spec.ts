@@ -402,6 +402,37 @@ describe.skipIf(adminUrl === undefined)('Outbox 릴레이 중복 발행 방지',
     });
   });
 
+  it('재시도해도 소용없는 실패는 claim 전으로 되돌리지 않고 재시도 횟수를 쓴다', async () => {
+    const repository = dataSource.getRepository(SurveyAnswerSubmissionEntity);
+    await repository.clear();
+    const eventId = randomUUID();
+    await repository.insert({
+      surveyId,
+      eventId,
+      expoId: randomUUID(),
+      participationType: ParticipationType.STANDARD,
+      phoneNumber: '01012345999',
+      status: SurveyAnswerSubmissionStatus.RECEIVED,
+      payload: { answers: {}, personalInformationStatus: true },
+    });
+
+    await answerStore.relayPending(
+      { ...DEFAULT_RELAY_SETTINGS, now: new Date(), limit: 100 },
+      async (batch) => ({
+        published: [],
+        failures: batch.map((submission) => ({
+          submission,
+          error: Object.assign(new Error('too large'), { retriable: false }),
+        })),
+      }),
+    );
+
+    expect(await repository.findOneByOrFail({ eventId })).toMatchObject({
+      status: SurveyAnswerSubmissionStatus.PUBLISHED,
+      retryCount: 1,
+    });
+  });
+
   it('재발행은 retryCount가 늘수록 더 오래 기다린 뒤에 다시 잡는다', async () => {
     const repository = dataSource.getRepository(SurveyAnswerSubmissionEntity);
     await repository.clear();

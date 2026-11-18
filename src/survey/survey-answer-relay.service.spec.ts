@@ -514,6 +514,19 @@ describe('SurveyAnswerRelayService', () => {
       expect(store.relayPending).toHaveBeenCalledTimes(1);
     });
 
+    it('재시도해도 소용없는 실패만 있으면 멈추지 않고 이어서 처리한다', async () => {
+      claimBatches([100, 100, 30]);
+      const tooLarge = Object.assign(new Error('too large'), {
+        retriable: false,
+      });
+      producer.sendBatch.mockRejectedValue(tooLarge);
+      producer.send.mockRejectedValue(tooLarge);
+
+      await service.relay();
+
+      expect(store.relayPending).toHaveBeenCalledTimes(3);
+    });
+
     it('이어서 처리하는 시간은 drainBudgetMs까지다', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       try {
