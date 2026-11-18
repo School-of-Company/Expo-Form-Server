@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="370" viewBox="0 0 780 370" font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif">
+<rect width="780" height="370" fill="#ffffff"/>
+<text x="40" y="44" font-size="26" fill="#222222">AS-IS</text>
+<text x="80" y="88" font-size="13" font-weight="700" fill="#222222">p95 응답시간</text>
+<line x1="80" y1="300.0" x2="370" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="72" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">0</text>
+<line x1="80" y1="236.7" x2="370" y2="236.7" stroke="#e6e6ea" stroke-width="1"/>
+<text x="72" y="240.7" font-size="11" text-anchor="end" fill="#8a8a90">5</text>
+<line x1="80" y1="173.3" x2="370" y2="173.3" stroke="#e6e6ea" stroke-width="1"/>
+<text x="72" y="177.3" font-size="11" text-anchor="end" fill="#8a8a90">10</text>
+<line x1="80" y1="110.0" x2="370" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="72" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">15</text>
+<polyline fill="none" stroke="#b8564b" stroke-width="2" points="116.2,217.7 188.8,211.3 261.2,179.7 333.8,148.0"/>
+<circle cx="116.2" cy="217.7" r="4" fill="#fff" stroke="#b8564b" stroke-width="2"/>
+<text x="116.2" y="207.7" font-size="11" text-anchor="middle" fill="#b8564b">6.5ms</text>
+<text x="116.2" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">5</text>
+<circle cx="188.8" cy="211.3" r="4" fill="#fff" stroke="#b8564b" stroke-width="2"/>
+<text x="188.8" y="201.3" font-size="11" text-anchor="middle" fill="#b8564b">7ms</text>
+<text x="188.8" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">20</text>
+<circle cx="261.2" cy="179.7" r="4" fill="#fff" stroke="#b8564b" stroke-width="2"/>
+<text x="261.2" y="169.7" font-size="11" text-anchor="middle" fill="#b8564b">9.5ms</text>
+<text x="261.2" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<circle cx="333.8" cy="148.0" r="4" fill="#fff" stroke="#b8564b" stroke-width="2"/>
+<text x="333.8" y="138.0" font-size="11" text-anchor="middle" fill="#b8564b">12ms</text>
+<text x="333.8" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<text x="80" y="348" font-size="11" fill="#8a8a90">단위: ms</text>
+<text x="225.0" y="348" font-size="11" text-anchor="middle" fill="#8a8a90">폼 필드 수</text>
+<text x="420" y="44" font-size="26" fill="#222222">TO-BE</text>
+<text x="460" y="88" font-size="13" font-weight="700" fill="#222222">p95 응답시간</text>
+<line x1="460" y1="300.0" x2="750" y2="300.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="452" y="304.0" font-size="11" text-anchor="end" fill="#8a8a90">0</text>
+<line x1="460" y1="236.7" x2="750" y2="236.7" stroke="#e6e6ea" stroke-width="1"/>
+<text x="452" y="240.7" font-size="11" text-anchor="end" fill="#8a8a90">5</text>
+<line x1="460" y1="173.3" x2="750" y2="173.3" stroke="#e6e6ea" stroke-width="1"/>
+<text x="452" y="177.3" font-size="11" text-anchor="end" fill="#8a8a90">10</text>
+<line x1="460" y1="110.0" x2="750" y2="110.0" stroke="#e6e6ea" stroke-width="1"/>
+<text x="452" y="114.0" font-size="11" text-anchor="end" fill="#8a8a90">15</text>
+<polyline fill="none" stroke="#4f6fc4" stroke-width="2" points="496.2,249.3 568.8,249.3 641.2,236.7 713.8,224.0"/>
+<circle cx="496.2" cy="249.3" r="4" fill="#fff" stroke="#4f6fc4" stroke-width="2"/>
+<text x="496.2" y="239.3" font-size="11" text-anchor="middle" fill="#4f6fc4">4ms</text>
+<text x="496.2" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">5</text>
+<circle cx="568.8" cy="249.3" r="4" fill="#fff" stroke="#4f6fc4" stroke-width="2"/>
+<text x="568.8" y="239.3" font-size="11" text-anchor="middle" fill="#4f6fc4">4ms</text>
+<text x="568.8" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">20</text>
+<circle cx="641.2" cy="236.7" r="4" fill="#fff" stroke="#4f6fc4" stroke-width="2"/>
+<text x="641.2" y="226.7" font-size="11" text-anchor="middle" fill="#4f6fc4">5ms</text>
+<text x="641.2" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">50</text>
+<circle cx="713.8" cy="224.0" r="4" fill="#fff" stroke="#4f6fc4" stroke-width="2"/>
+<text x="713.8" y="214.0" font-size="11" text-anchor="middle" fill="#4f6fc4">6ms</text>
+<text x="713.8" y="318" font-size="11" text-anchor="middle" fill="#8a8a90">100</text>
+<text x="460" y="348" font-size="11" fill="#8a8a90">단위: ms</text>
+<text x="605.0" y="348" font-size="11" text-anchor="middle" fill="#8a8a90">폼 필드 수</text>
+</svg>
