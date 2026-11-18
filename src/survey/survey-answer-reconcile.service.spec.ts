@@ -51,6 +51,21 @@ const pagedStore = (all: Row[]) =>
       .slice(0, limit),
   );
 
+/** 점검 위치 한 행만 흉내 낸다. 같은 값을 넘기면 인스턴스끼리 위치를 공유한다. */
+const cursorDb = () => {
+  let resumeAfterId: string | null = null;
+  return {
+    query: vi.fn(async (sql: string, params?: unknown[]) => {
+      if (sql.startsWith('SELECT')) {
+        return [{ resumeAfterId }];
+      }
+
+      resumeAfterId = (params?.[0] as string | null) ?? null;
+      return [];
+    }),
+  };
+};
+
 const dataset = (count: number): Row[] =>
   Array.from({ length: count }, (_, index) => {
     const id = `r${String(index).padStart(4, '0')}`;
@@ -67,6 +82,7 @@ describe('SurveyAnswerReconcileService', () => {
   let dicoshot: { sendCustom: Mock };
   let service: SurveyAnswerReconcileService;
   let errorLog: MockInstance<Logger['error']>;
+  let db: ReturnType<typeof cursorDb>;
 
   const createService = (env: Env) =>
     new SurveyAnswerReconcileService(
@@ -74,7 +90,7 @@ describe('SurveyAnswerReconcileService', () => {
       store as unknown as SurveyAnswerSubmissionStore,
       userClient,
       dicoshot as never,
-      {} as never,
+      db as never,
     );
 
   /** n번째(0부터) 실행의 첫 페이지 조회에 넘긴 시작 위치. */
@@ -104,6 +120,7 @@ describe('SurveyAnswerReconcileService', () => {
       findSurveyAnswerResult: vi.fn(),
     };
     dicoshot = { sendCustom: vi.fn().mockResolvedValue(true) };
+    db = cursorDb();
     errorLog = vi
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
@@ -360,6 +377,18 @@ describe('SurveyAnswerReconcileService', () => {
       // 남은 100건만 확인하고 끝까지 훑었다.
       expect(second).toMatchObject({ checked: 100, truncated: false });
       expect(second.unprocessedEventIds[0]).toBe('event-r1000');
+    });
+
+    it('다음 점검을 다른 인스턴스가 맡아도 마지막으로 확인한 기록 다음부터 이어 본다', async () => {
+      store.findExhausted = pagedStore(dataset(1100));
+      userClient.findSurveyAnswerResult.mockResolvedValue(null);
+
+      await service.reconcile();
+      const firstRunCalls = store.findExhausted.mock.calls.length;
+      const second = await createService(enabledEnv).reconcile();
+
+      expect(firstAfterIdOfRun(firstRunCalls)).toBe('r0999');
+      expect(second).toMatchObject({ checked: 100, truncated: false });
     });
 
     it('끝까지 훑었으면 다음 점검은 처음부터 다시 본다', async () => {
