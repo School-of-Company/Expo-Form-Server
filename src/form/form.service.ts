@@ -34,27 +34,23 @@ import {
 } from './dto/program-form.response.dto.js';
 import { UpdateFormRequestDto } from './dto/update-form.request.dto.js';
 import { ApplicationType } from './entities/application-type.enum.js';
-import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
 import { FormStore } from './form.store.js';
 
-/** 폼을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
+/**
+ * 폼을 새로 만들 때 우리가 직접 채워야 하는 필드들 — id와 감사 컬럼은 DB/TypeORM이 정한다. 입력 필드는 id를
+ * 받아야 해서 store에 따로 넘긴다.
+ */
 type FormFields = Omit<
   FormEntity,
-  'id' | 'version' | 'createdAt' | 'updatedAt'
+  'id' | 'version' | 'createdAt' | 'updatedAt' | 'dynamicForms'
 >;
 
 /** 수정 요청으로 바꿀 수 있는 폼 메타데이터. 소속 박람회와 필드 목록은 여기 포함되지 않는다. */
 type UpdatableFormFields = Omit<
   FormFields,
   'expoId' | 'purpose' | 'dynamicForms'
->;
-
-/** 입력 필드를 새로 만들 때 채워야 하는 값들 — 부모 관계(`form`)는 저장 시점에 TypeORM이 연결한다. */
-type DynamicFormFields = Omit<
-  DynamicFormEntity,
-  'id' | 'form' | 'createdAt' | 'updatedAt'
 >;
 
 /**
@@ -112,14 +108,17 @@ export class FormService {
       occupationOpenAt: occupationOpenAt ?? null,
       purpose: FormPurpose.REGISTRATION,
       expoId,
-      dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
 
     // 위 existsByExpoAndTypes 검사와 이 save 사이에 다른 요청이 끼어들면 둘 다 통과한 채로
     // 여기까지 올 수 있다. 그럴 땐 DB 유니크 제약이 마지막으로 걸러주는데, 그 위반을 그대로
     // 두면 409가 아니라 500이 나간다 — 여기서 잡아 도메인 예외로 바꾼다.
     const saved = await mapUniqueViolation(
-      async () => this.formStore.save(form),
+      async () =>
+        this.formStore.save(
+          form,
+          dynamicForm,
+        ),
       () => new FormAlreadyExistsException(),
     );
 
@@ -172,7 +171,7 @@ export class FormService {
       occupationOpenAt,
     } satisfies UpdatableFormFields);
 
-    const fields = dynamicForm.map((field) => this.toFieldEntity(field));
+    const fields = dynamicForm;
 
     // 폼을 읽은 뒤 그 폼이 삭제됐다면 아무것도 바꾸지 않고 NOT_FOUND가 온다.
     const result = await this.formStore.updateWithFields(
@@ -194,7 +193,7 @@ export class FormService {
   }
 
   /**
-   * 폼을 삭제한다. 딸린 입력 필드는 DB의 FK CASCADE로 함께 지워진다.
+   * 폼을 삭제한다. 입력 필드는 폼 행 안(`fields`)에 있어 함께 지워진다.
    * 대상 폼은 (박람회, 참여자군, 신청방식) 조합으로 식별한다.
    *
    * @throws {FormNotFoundException} 해당 조합의 폼이 없을 때
@@ -275,11 +274,14 @@ export class FormService {
       applicationType: null,
       occupationOpenAt: null,
       expoId,
-      dynamicForms: dynamicForm.map((field) => this.toFieldEntity(field)),
     } satisfies FormFields);
 
     const saved = await mapUniqueViolation(
-      async () => this.formStore.save(form),
+      async () =>
+        this.formStore.save(
+          form,
+          dynamicForm,
+        ),
       () => new ProgramFormTitleDuplicatedException(),
     );
 
@@ -360,7 +362,7 @@ export class FormService {
       participationType: participantType,
     } satisfies Partial<FormFields>);
 
-    const fields = dynamicForm.map((field) => this.toFieldEntity(field));
+    const fields = dynamicForm;
 
     // 예약 응답이 타임아웃이어도 박람회 서비스에는 예약이 남았을 수 있어서, 예약 실패도 해제한다(미등록 키 해제는 204).
     const changeId = randomUUID();
@@ -401,7 +403,7 @@ export class FormService {
   }
 
   /**
-   * 프로그램용 폼을 삭제한다. 딸린 입력 필드는 DB의 FK CASCADE로 함께 지워진다.
+   * 프로그램용 폼을 삭제한다. 입력 필드는 폼 행 안(`fields`)에 있어 함께 지워진다.
    *
    * 폼을 가리키는 회차가 있는지는 박람회 서비스가 알고 있다. 그 확인과 변경 예약(조회만 붙이면 조회 직후 회차가
    * 새로 연결되는 경합이 남아서, 연결·삭제·기간 축소가 같은 예약 계약을 써야 한다)이 연결되기 전에는 삭제를
@@ -417,19 +419,6 @@ export class FormService {
     }
 
     throw new ProgramFormProtectionPendingException();
-  }
-
-  /**
-   * 요청 DTO의 필드 하나를 엔티티로 옮긴다.
-   * id와 부모 관계(`form`)는 여기서 채우지 않는다 — 저장 시점에 TypeORM이 정한다.
-   */
-  private toFieldEntity(
-    field: CreateFormRequestDto['dynamicForm'][number],
-  ): DynamicFormEntity {
-    return Object.assign(
-      new DynamicFormEntity(),
-      field satisfies DynamicFormFields,
-    );
   }
 
   /**

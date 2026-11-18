@@ -33,7 +33,7 @@ export const DEFAULT_RELAY_SETTINGS: SurveyAnswerRelaySettings = {
 };
 
 /** 재발행 간격이 늘어나는 배수. */
-export const BACKOFF_FACTOR = 2;
+const BACKOFF_FACTOR = 2;
 
 const ENV_KEYS = {
   intervalMs: 'SURVEY_ANSWER_RELAY_INTERVAL_MS',

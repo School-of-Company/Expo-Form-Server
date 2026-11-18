@@ -8,6 +8,7 @@ import {
   SurveyAlreadyExistsException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import type { NewDynamicSurveyQuestion } from './dynamic-survey-question.js';
 import { CreateSurveyRequestDto } from './dto/create-survey.request.dto.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { SurveyService } from './survey.service.js';
@@ -116,10 +117,13 @@ describe('SurveyService', () => {
 
       await service.create(expoId, createDto);
 
-      const saved = surveyStore.save.mock.calls[0][0] as SurveyEntity;
+      const [saved, questions] = surveyStore.save.mock.calls[0] as [
+        SurveyEntity,
+        NewDynamicSurveyQuestion[],
+      ];
       expect(saved.expoId).toBe(expoId);
-      expect(saved.dynamicSurveys).toHaveLength(1);
-      expect(saved.dynamicSurveys[0].jsonData).toEqual({
+      expect(questions).toHaveLength(1);
+      expect(questions[0].jsonData).toEqual({
         '1': '만족',
         '2': '불만족',
       });

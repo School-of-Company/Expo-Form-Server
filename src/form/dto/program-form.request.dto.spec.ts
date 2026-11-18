@@ -213,4 +213,22 @@ describe('프로그램용 폼 요청 검증', () => {
       expect(updateProgramFormSchema.safeParse(body).success).toBe(false);
     });
   });
+
+  describe('title', () => {
+    it('앞뒤 공백을 지워 저장해 공백만 다른 제목이 따로 생기지 않는다', () => {
+      const result = createProgramFormSchema.parse({
+        ...formWith([]),
+        title: '  Workshop  ',
+      });
+
+      expect(result.title).toBe('Workshop');
+    });
+
+    it('공백만 있는 제목은 거절한다', () => {
+      expect(
+        createProgramFormSchema.safeParse({ ...formWith([]), title: ' '.repeat(3) })
+          .success,
+      ).toBe(false);
+    });
+  });
 });

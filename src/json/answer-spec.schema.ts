@@ -10,7 +10,7 @@ import {
 
 /**
  * 답변을 검증하는 데 필요한 문항 정보만 담은 최소 스펙.
- * `DynamicFormEntity`/`DynamicSurveyEntity` 양쪽 다 이 모양을 만족하므로, 폼 제출과 설문 제출이
+ * 폼 필드(`DynamicFormField`)와 설문 문항(`DynamicSurveyQuestion`) 양쪽 다 이 모양을 만족하므로, 폼 제출과 설문 제출이
  * 이 스펙 조립기를 그대로 공유할 수 있다.
  */
 export interface QuestionSpec {
