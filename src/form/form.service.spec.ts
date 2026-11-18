@@ -66,7 +66,7 @@ describe('FormService', () => {
       findByExpoAndTypes: vi.fn(),
       existsByExpoAndTypes: vi.fn(),
       save: vi.fn(),
-      updateWithFields: vi.fn().mockResolvedValue(true),
+      updateWithFields: vi.fn().mockResolvedValue('UPDATED'),
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
     };
@@ -187,7 +187,7 @@ describe('FormService', () => {
 
     it('수정하는 사이 폼이 삭제됐으면 예외를 던진다', async () => {
       formStore.findByExpoAndTypes.mockResolvedValue(existingForm);
-      formStore.updateWithFields.mockResolvedValue(false);
+      formStore.updateWithFields.mockResolvedValue('NOT_FOUND');
 
       await expect(service.update(expoId, createDto)).rejects.toThrow(
         FormNotFoundException,
@@ -246,6 +246,24 @@ describe('FormService', () => {
         }),
       ).rejects.toThrow(FormOccupationOpenAtOutOfPeriodException);
       expect(formStore.updateWithFields).not.toHaveBeenCalled();
+    });
+
+    it('생략했을 때만 잠근 뒤 현재 값으로 다시 확인하게 한다', async () => {
+      await savedOpenAt(createDto);
+      await savedOpenAt({ ...createDto, occupationOpenAt: null });
+
+      const keeps = formStore.updateWithFields.mock.calls.map(
+        (call) => call[2] as boolean,
+      );
+      expect(keeps).toEqual([true, false]);
+    });
+
+    it('잠근 뒤 다시 본 현재 값이 기간을 벗어나면 거부한다', async () => {
+      formStore.updateWithFields.mockResolvedValue('OUT_OF_PERIOD');
+
+      await expect(savedOpenAt(createDto)).rejects.toThrow(
+        FormOccupationOpenAtOutOfPeriodException,
+      );
     });
   });
 

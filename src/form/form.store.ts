@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository, type EntityManager } from 'typeorm';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
+import { isOccupationOpenAtInPeriod } from './dto/create-form.request.dto.js';
 import { DynamicFormEntity } from './entities/dynamic-form.entity.js';
 import { ApplicationType } from './entities/application-type.enum.js';
 import { FormPurpose } from './entities/form-purpose.enum.js';
@@ -18,7 +19,10 @@ const DYNAMIC_FORM_ORDER = { dynamicForms: { id: 'ASC' } } as const;
 export type ProgramFormUpdateResult =
   | { status: 'UPDATED'; version: number }
   | { status: 'NOT_FOUND' }
-  | { status: 'CONFLICT' };
+  | { status: 'CONFLICT' }
+  | { status: 'PERIOD_SHRUNK' };
+
+export type FormUpdateResult = 'UPDATED' | 'NOT_FOUND' | 'OUT_OF_PERIOD';
 
 /**
  * 폼 영속성 접근을 한 곳에 모아둔 store.
@@ -100,24 +104,36 @@ export class FormStore {
    * 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 폼 row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
    *
    * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
+   * `keepOccupationOpenAt`이면 오픈 시각은 잠근 뒤 읽은 현재 값을 유지하고, 그 값이 새 접수 기간 안인지 다시 본다.
+   * 조회한 뒤 다른 요청이 오픈 시각을 바꿨을 수 있어서다.
+   *
    * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
-   * @returns 갱신했으면 true, 그 사이 폼이 삭제돼 아무것도 바꾸지 않았으면 false
+   * @param keepOccupationOpenAt 요청이 오픈 시각을 생략했는지
+   * @returns 갱신했으면 `UPDATED`, 그 사이 폼이 삭제됐으면 `NOT_FOUND`, 유지한 오픈 시각이 기간 밖이면 `OUT_OF_PERIOD`
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateWithFields(
     form: FormEntity,
     fields: DynamicFormEntity[],
-  ): Promise<boolean> {
+    keepOccupationOpenAt = false,
+  ): Promise<FormUpdateResult> {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id },
-        select: { id: true, version: true },
+        select: { id: true, version: true, occupationOpenAt: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
-        return false;
+        return 'NOT_FOUND';
+      }
+
+      if (keepOccupationOpenAt) {
+        form.occupationOpenAt = locked.occupationOpenAt;
+        if (!isOccupationOpenAtInPeriod(form, form.occupationOpenAt)) {
+          return 'OUT_OF_PERIOD';
+        }
       }
 
       // 폼을 읽은 뒤 다른 요청이 먼저 고쳤다면 `form.version`은 낡은 값이다. 그대로 저장한 뒤 +1 하면
@@ -132,7 +148,7 @@ export class FormStore {
       await manager.save(FormEntity, form);
       await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
-      return true;
+      return 'UPDATED';
     });
   }
 
@@ -163,7 +179,7 @@ export class FormStore {
    * @param form 조회해온 폼 엔티티(메타데이터는 이미 갱신된 상태)
    * @param expectedVersion 수정할 때 기준으로 삼은 버전
    * @param fields 이 폼의 입력 필드를 전부 대체할 새 필드들
-   * @returns 갱신했으면 새 버전, 그 사이 삭제됐으면 `NOT_FOUND`, 버전이 다르면 `CONFLICT`
+   * @returns 갱신했으면 새 버전, 그 사이 삭제됐으면 `NOT_FOUND`, 버전이 다르면 `CONFLICT`, 현재 기간보다 줄면 `PERIOD_SHRUNK`
    * @throws {ExpoDeletedException} 삭제된 박람회일 때
    */
   async updateProgramWithFields(
@@ -176,7 +192,7 @@ export class FormStore {
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id, purpose: FormPurpose.PROGRAM },
-        select: { id: true, version: true },
+        select: { id: true, version: true, startDate: true, endDate: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
@@ -185,6 +201,11 @@ export class FormStore {
 
       if (locked.version !== expectedVersion) {
         return { status: 'CONFLICT' };
+      }
+
+      // 서비스의 사전 검사는 잠그기 전에 읽은 기간과 비교한다. 그 사이 다른 수정이 기간을 바꿨을 수 있어 다시 본다.
+      if (form.startDate > locked.startDate || form.endDate < locked.endDate) {
+        return { status: 'PERIOD_SHRUNK' };
       }
 
       await manager.delete(DynamicFormEntity, { form: { id: form.id } });
