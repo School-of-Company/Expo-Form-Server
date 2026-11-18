@@ -300,6 +300,17 @@ describe('FormService 프로그램용 폼', () => {
       );
     });
 
+    it('잠근 뒤 읽은 현재 기간보다 줄었으면 거절한다', async () => {
+      formStore.findProgramById.mockResolvedValue(existingForm());
+      formStore.updateProgramWithFields.mockResolvedValue({
+        status: 'PERIOD_SHRUNK',
+      });
+
+      await expect(service.updateProgram(formId, updateDto)).rejects.toThrow(
+        ProgramFormProtectionPendingException,
+      );
+    });
+
     it('수정하는 사이 폼이 삭제됐으면 404로 거절한다', async () => {
       formStore.findProgramById.mockResolvedValue(existingForm());
       formStore.updateProgramWithFields.mockResolvedValue({

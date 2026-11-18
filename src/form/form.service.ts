@@ -154,6 +154,7 @@ export class FormService {
       throw new FormNotFoundException();
     }
 
+    const keepOccupationOpenAt = dto.occupationOpenAt === undefined;
     const {
       dynamicForm,
       participantType,
@@ -172,10 +173,18 @@ export class FormService {
 
     const fields = dynamicForm;
 
-    // 폼을 읽은 뒤 그 폼이 삭제됐다면 아무것도 바꾸지 않고 false가 온다.
-    const updated = await this.formStore.updateWithFields(form, fields);
-    if (!updated) {
+    // 폼을 읽은 뒤 그 폼이 삭제됐다면 아무것도 바꾸지 않고 NOT_FOUND가 온다.
+    const result = await this.formStore.updateWithFields(
+      form,
+      fields,
+      keepOccupationOpenAt,
+    );
+    if (result === 'NOT_FOUND') {
       throw new FormNotFoundException();
+    }
+
+    if (result === 'OUT_OF_PERIOD') {
+      throw new FormOccupationOpenAtOutOfPeriodException();
     }
 
     this.logger.log(
@@ -380,6 +389,10 @@ export class FormService {
 
     if (result.status === 'CONFLICT') {
       throw new FormVersionConflictException();
+    }
+
+    if (result.status === 'PERIOD_SHRUNK') {
+      throw new ProgramFormProtectionPendingException();
     }
 
     this.logger.log(

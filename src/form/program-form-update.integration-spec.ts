@@ -181,5 +181,22 @@ describe.skipIf(adminUrl === undefined)(
         '먼저 문항',
       ]);
     });
+
+    it('잠그기 전에 읽은 기간이 낡았어도 현재 기간보다 줄이면 PERIOD_SHRUNK고 아무것도 바꾸지 않는다', async () => {
+      const created = await createProgramForm('기간 축소');
+      const [a, b] = await Promise.all([load(created.id), load(created.id)]);
+      a.endDate = new Date('2026-11-30T00:00:00Z');
+      await store.updateProgramWithFields(a, 1, [field('늘린 문항')]);
+
+      // b는 옛 기간(10/31)을 읽었다. 서비스 사전 검사는 통과하지만 현재 기간(11/30)보다는 줄어든다.
+      b.endDate = new Date('2026-11-15T00:00:00Z');
+      await expect(
+        store.updateProgramWithFields(b, 2, [field('줄인 문항')]),
+      ).resolves.toEqual({ status: 'PERIOD_SHRUNK' });
+
+      const saved = await load(created.id);
+      expect(saved.endDate).toEqual(new Date('2026-11-30T00:00:00Z'));
+      expect(saved.version).toBe(2);
+    });
   },
 );
