@@ -12,6 +12,12 @@ import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-partic
  */
 export const CLAIM_LEASE_MS = 5 * 60 * 1000;
 
+/**
+ * 잡은 기간이 이만큼도 남지 않으면 다음 건을 발행하지 않고 남은 건의 잡은 표시를 푼다. 발행 한 건이 Kafka 요청 제한
+ * 시간(기본 30초)만큼 걸려도 기간 안에 끝나게 해, 다른 인스턴스가 같은 결과를 다시 잡아 보내지 않게 한다.
+ */
+export const CLAIM_DEADLINE_MARGIN_MS = 30 * 1000;
+
 /** {@link SurveyDrawResultStore.relayUnpublished}에서 발행에 실패한 건. */
 export type DrawRelayFailure = {
   result: SurveyDrawResultEntity;
@@ -38,7 +44,7 @@ export class SurveyDrawResultStore {
    * 잡은 기간이 남은 행은 다른 인스턴스가 읽지 않아 같은 당첨 문자를 두 번 보내지 않는다.
    *
    * 발행에 성공하면 `publishedAt`을 채우고, `publish`가 던지면 실패 횟수를 올리며 잡은 표시를 풀어 다음 주기에 다시
-   * 시도한다. 발행 도중 프로세스가 죽으면 잡은 기간이 지난 뒤 다시 발행되는데, `eventId`가 그대로라 알림 서비스가
+   * 시도한다. 잡은 기간이 {@link CLAIM_DEADLINE_MARGIN_MS}도 남지 않으면 나머지는 발행하지 않고 풀어 둔다. 발행 도중 프로세스가 죽으면 잡은 기간이 지난 뒤 다시 발행되는데, `eventId`가 그대로라 알림 서비스가
    * 중복을 거른다.
    *
    * @returns 실패한 건과, 그 실패까지 포함한 누적 실패 횟수
@@ -56,7 +62,20 @@ export class SurveyDrawResultStore {
     );
 
     const failures: DrawRelayFailure[] = [];
-    for (const result of results) {
+    for (const [index, result] of results.entries()) {
+      if (Date.now() >= claimedUntil.getTime() - CLAIM_DEADLINE_MARGIN_MS) {
+        // 남은 건은 실패로 세지 않고 풀어 둔다 — 다음 주기에 어느 인스턴스든 바로 다시 잡는다.
+        // eslint-disable-next-line no-await-in-loop
+        await this.drawResults.update(
+          {
+            id: In(results.slice(index).map(({ id }) => id)),
+            claimedUntil,
+          },
+          { claimedUntil: null },
+        );
+        break;
+      }
+
       try {
         // 한 건씩 순서대로 발행한다. Kafka에 한꺼번에 몰아넣지 않는다.
         // eslint-disable-next-line no-await-in-loop
@@ -135,11 +154,15 @@ export class SurveyDrawResultStore {
 
   /**
    * 박람회의 전화번호를 지운다. 당첨 결과에서는 번호만 지워 당첨 순번과 발행 기록을 남기고, 추첨 참여 기록은
-   * 번호뿐이라 행을 지운다.
+   * 번호뿐이라 행을 지운다. 아직 당첨 문자를 보내는 중인 결과(미발행이고 실패가 `maxRetryCount`에 닿지 않음)의 번호는
+   * 남긴다 — 지우면 그 당첨자에게 문자를 보낼 수 없다. 발행되거나 포기되면 다음 정리에서 지운다.
    *
    * @returns 지운 번호 건수(당첨 결과 + 참여 기록)
    */
-  async clearPhoneNumbers(expoId: string): Promise<number> {
+  async clearPhoneNumbers(
+    expoId: string,
+    maxRetryCount: number,
+  ): Promise<number> {
     return this.dataSource.transaction(async (manager) => {
       // 서브쿼리를 문자열로 직접 쓰면 `survey`가 이 엔티티의 관계 속성 이름과 같아 TypeORM이 컬럼명으로 바꿔 버린다.
       // 엔티티로 만든 서브쿼리를 쓰면 테이블 이름이 정확히 나간다.
@@ -155,6 +178,10 @@ export class SurveyDrawResultStore {
         .update(SurveyDrawResultEntity)
         .set({ phoneNumber: null })
         .where('phone_number IS NOT NULL')
+        .andWhere(
+          '(published_at IS NOT NULL OR retry_count >= :maxRetryCount)',
+          { maxRetryCount },
+        )
         .andWhere(`survey_id IN (${surveyIds})`)
         .setParameter('expoId', expoId)
         .execute();
