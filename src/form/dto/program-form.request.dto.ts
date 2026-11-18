@@ -28,7 +28,7 @@ export const programFormFieldSchema = dynamicFormFieldSchema.extend({
  * `expoId`는 생성에서만 경로로 받는다 — 수정·삭제·조회는 `formId`로 폼을 식별한다.
  */
 const programFormFieldsSchema = z.object({
-  title: z.string().min(1).max(100),
+  title: z.string().trim().min(1).max(100),
   informationText: z.string().max(500),
   // 프로그램의 대상 역할은 박람회 서비스 회차의 `allowedOccupations`가 정한다. 생략하거나 null이면 대상을 정하지 않는다.
   participantType: z.enum(ParticipationType).nullable().default(null),
