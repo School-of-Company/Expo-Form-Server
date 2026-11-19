@@ -8,6 +8,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ADMIN_ACCESS_CLIENT } from '../admin-access/admin-access-client.interface.js';
+import type { ExpoClient } from '../expo-client/expo-client.interface.js';
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DomainExceptionFilter } from '../common/exceptions/domain-exception.filter.js';
@@ -28,6 +29,9 @@ import { SurveyPublicService } from './survey-public.service.js';
 import { SurveyStore } from './survey.store.js';
 
 const adminUrl = process.env.DATABASE_URL;
+const featuresOn = {
+  findFeatures: async () => ({ survey: true, surveyLottery: true }),
+} as unknown as ExpoClient;
 
 describe.skipIf(adminUrl === undefined)(
   '기념품 수령 확인 HTTP / PostgreSQL',
@@ -79,6 +83,7 @@ describe.skipIf(adminUrl === undefined)(
             useValue: new SurveyPublicService(
               surveyStore,
               new SurveyPublicAnswerStore(dataSource),
+              featuresOn,
             ),
           },
           {

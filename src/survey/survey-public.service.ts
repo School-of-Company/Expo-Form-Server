@@ -1,9 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
   SurveyAnswerInvalidException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import {
+  EXPO_CLIENT,
+  type ExpoClient,
+} from '../expo-client/expo-client.interface.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
 import { FindPublicSurveyAnswersRequestDto } from './dto/find-public-survey-answers.request.dto.js';
 import { PublicSurveyAnswerPageResponseDto } from './dto/public-survey-answer-page.response.dto.js';
@@ -17,6 +21,7 @@ import { SurveyEntity } from './entities/survey.entity.js';
 import { normalizeLotteryPhone } from './lottery-phone.js';
 import { generateGiftToken, hashGiftToken } from './gift-secret.js';
 import { decodeCursor, encodeCursor } from './public-answer-cursor.js';
+import { assertSurveyAcceptsAnswers } from './survey-feature-policy.js';
 import { SurveyPublicAnswerStore } from './survey-public-answer.store.js';
 import { SurveyStore } from './survey.store.js';
 
@@ -33,6 +38,7 @@ export class SurveyPublicService {
   constructor(
     private readonly surveyStore: SurveyStore,
     private readonly answerStore: SurveyPublicAnswerStore,
+    @Inject(EXPO_CLIENT) private readonly expoClient: ExpoClient,
   ) {}
 
   /**
@@ -50,12 +56,17 @@ export class SurveyPublicService {
    * @throws {SurveyNotFoundException} 그 박람회에 일반 참가자 설문이 없을 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙과 맞지 않거나, 경품 번호의 형식이 틀리거나
    *   개인정보 수집 동의 없이 번호를 보냈을 때
+   * @throws {SurveyFeatureDisabledException} 박람회 설정에서 설문이 꺼져 있을 때(409)
    */
   async submit(
     expoId: string,
     dto: SubmitPublicSurveyAnswerRequestDto,
   ): Promise<PublicSurveyAnswerResponseDto> {
     const survey = await this.findPublicSurvey(expoId);
+    const features = await assertSurveyAcceptsAnswers(
+      this.expoClient,
+      survey.expoId,
+    );
 
     const schema = buildAnswerSchema(survey.dynamicSurveys);
     const result = schema.safeParse(dto.answers);
@@ -63,7 +74,10 @@ export class SurveyPublicService {
       throw new SurveyAnswerInvalidException(result.error.message);
     }
 
-    const lotteryPhoneNumber = this.resolveLotteryPhone(survey, dto);
+    // 박람회 설정의 추첨 허용과 이 설문의 추첨 운영(lotteryEnabled)이 둘 다 켜져야 새 추첨에 참여한다.
+    const lotteryPhoneNumber = features.surveyLottery
+      ? this.resolveLotteryPhone(survey, dto)
+      : null;
 
     const giftToken = generateGiftToken();
     // 설문을 확인한 뒤 저장하기 전에 설문이 지워졌으면 store가 설문 행을 잠그는 순간 404로 알린다.

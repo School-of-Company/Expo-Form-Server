@@ -284,6 +284,20 @@ export class ParticipantSessionException extends DomainException {
  * "찾을 수 없음"(404)과 구분하는 이유: 장애를 "없음"으로 돌려보내면 정상 응답자가 거절된다.
  * 클라이언트는 이 코드를 받으면 잠시 후 다시 시도하면 된다.
  */
+/**
+ * 박람회 기능 설정에서 설문(`SURVEY`)이 꺼져 있어 새 응답을 받지 않을 때. 권한 부족(401/403)이나 설정 조회
+ * 장애(503)와 구분한다(Expo-Expo-Server#265 공통 동작 계약). 기존 응답·당첨·수령 조회는 막지 않는다.
+ */
+export class SurveyFeatureDisabledException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.SURVEY_FEATURE_DISABLED,
+      '이 박람회는 현재 설문을 받지 않습니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
 export class ExternalServiceUnavailableException extends DomainException {
   constructor() {
     super(

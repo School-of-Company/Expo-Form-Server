@@ -253,9 +253,21 @@ export class SurveyStore {
   /** 여러 박람회의 설문을 식별 값만 골라 조회한다. 문항은 끌고 오지 않는다. */
   async findSummariesByExpoIds(
     expoIds: string[],
-  ): Promise<Array<Pick<SurveyEntity, 'expoId' | 'participationType'>>> {
+  ): Promise<
+    Array<
+      Pick<
+        SurveyEntity,
+        'expoId' | 'participationType' | 'lotteryEnabled' | 'lotteryNumbers'
+      >
+    >
+  > {
     return this.surveys.find({
-      select: { expoId: true, participationType: true },
+      select: {
+        expoId: true,
+        participationType: true,
+        lotteryEnabled: true,
+        lotteryNumbers: true,
+      },
       where: { expoId: In(expoIds) },
     });
   }

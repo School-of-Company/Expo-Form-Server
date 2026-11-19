@@ -9,6 +9,7 @@ import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.en
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DomainExceptionFilter } from '../common/exceptions/domain-exception.filter.js';
 import { HttpUserClient } from '../user-client/http-user-client.js';
+import { EXPO_CLIENT } from '../expo-client/expo-client.interface.js';
 import { USER_CLIENT } from '../user-client/user-client.interface.js';
 import type { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import {
@@ -82,6 +83,12 @@ describe('SurveyAnswerController (#147 참가자 세션)', () => {
       controllers: [SurveyAnswerController],
       providers: [
         SurveyAnswerService,
+        {
+          provide: EXPO_CLIENT,
+          useValue: {
+            findFeatures: async () => ({ survey: true, surveyLottery: true }),
+          },
+        },
         { provide: ConfigService, useValue: { get: () => undefined } },
         {
           provide: USER_CLIENT,
@@ -205,6 +212,12 @@ describe('SurveyAnswerController 본인 응답 상태 조회 (#203)', () => {
       controllers: [SurveyAnswerController],
       providers: [
         SurveyAnswerService,
+        {
+          provide: EXPO_CLIENT,
+          useValue: {
+            findFeatures: async () => ({ survey: true, surveyLottery: true }),
+          },
+        },
         { provide: ConfigService, useValue: { get: () => undefined } },
         {
           provide: USER_CLIENT,
