@@ -13,6 +13,7 @@ describe('ProjectedExpoClient', () => {
     findPeriod: Mock;
     reserveProgramFormUpdate: Mock;
     releaseProgramFormChange: Mock;
+    findFeatures: Mock;
   };
   let client: ProjectedExpoClient;
 
@@ -23,6 +24,7 @@ describe('ProjectedExpoClient', () => {
       findPeriod: vi.fn(),
       reserveProgramFormUpdate: vi.fn(),
       releaseProgramFormChange: vi.fn(),
+      findFeatures: vi.fn(),
     };
     client = new ProjectedExpoClient(
       delegate,

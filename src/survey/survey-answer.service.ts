@@ -10,6 +10,10 @@ import {
 } from '../common/exceptions/domain.exception.js';
 import { mapUniqueViolation } from '../common/exceptions/postgres-error.util.js';
 import { normalizePhoneNumber } from '../common/phone-number.util.js';
+import {
+  EXPO_CLIENT,
+  type ExpoClient,
+} from '../expo-client/expo-client.interface.js';
 import { buildAnswerSchema } from '../json/answer-spec.schema.js';
 import {
   USER_CLIENT,
@@ -22,6 +26,7 @@ import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submissio
 import { toQuestionSnapshots } from './question-snapshot.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionStore } from './survey-answer-submission.store.js';
+import { assertSurveyAcceptsAnswers } from './survey-feature-policy.js';
 import { SurveyStore } from './survey.store.js';
 
 /** 제출 기록을 새로 만들 때 채워야 하는 값들 — id와 감사 컬럼은 DB/TypeORM이 정한다. */
@@ -46,6 +51,7 @@ export class SurveyAnswerService {
     private readonly surveyStore: SurveyStore,
     private readonly submissionStore: SurveyAnswerSubmissionStore,
     @Inject(USER_CLIENT) private readonly userClient: UserClient,
+    @Inject(EXPO_CLIENT) private readonly expoClient: ExpoClient,
   ) {}
 
   /**
@@ -105,6 +111,7 @@ export class SurveyAnswerService {
    * @throws {ExternalServiceUnavailableException} 유저 서비스에서 응답을 받지 못했을 때
    * @throws {SurveyAnswerInvalidException} 답변이 문항 스펙(필수 여부·선택지·최대 선택 개수)과
    *   맞지 않을 때
+   * @throws {SurveyFeatureDisabledException} 박람회 설정에서 설문이 꺼져 있을 때(409)
    * @throws {SurveyAnswerAlreadyExistsException} 같은 응답자의 활성(= 거절되지 않은) 제출
    *   기록이 이미 있을 때
    */
@@ -119,6 +126,7 @@ export class SurveyAnswerService {
       participationType,
       sessionId,
     );
+    await assertSurveyAcceptsAnswers(this.expoClient, survey.expoId);
 
     // 이 설문의 참여자군 테이블에서만 찾는다. 다른 참여자군으로 등록된 번호도 "없음"으로 돌아오므로,
     // 등록되지 않은 경우와 참여자군이 안 맞는 경우가 같은 예외로 묶인다.

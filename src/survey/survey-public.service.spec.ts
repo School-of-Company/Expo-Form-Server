@@ -3,9 +3,12 @@ import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.en
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import {
+  ExternalServiceUnavailableException,
   SurveyAnswerInvalidException,
+  SurveyFeatureDisabledException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import type { ExpoClient } from '../expo-client/expo-client.interface.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 import { hashGiftToken } from './gift-secret.js';
 import { SurveyPublicService } from './survey-public.service.js';
@@ -38,6 +41,7 @@ const answerDto = {
 describe('SurveyPublicService', () => {
   let surveyStore: { findByExpoAndType: Mock };
   let answerStore: { create: Mock };
+  let expoClient: { findFeatures: Mock };
   let service: SurveyPublicService;
 
   beforeEach(() => {
@@ -45,9 +49,15 @@ describe('SurveyPublicService', () => {
     answerStore = {
       create: vi.fn().mockResolvedValue({ won: false, drawNumber: null }),
     };
+    expoClient = {
+      findFeatures: vi
+        .fn()
+        .mockResolvedValue({ survey: true, surveyLottery: true }),
+    };
     service = new SurveyPublicService(
       surveyStore as unknown as SurveyStore,
       answerStore as unknown as SurveyPublicAnswerStore,
+      expoClient as unknown as ExpoClient,
     );
   });
 
@@ -173,6 +183,23 @@ describe('SurveyPublicService', () => {
         );
       });
 
+      it('박람회 설정에서 추첨이 꺼져 있으면 설문의 추첨이 켜져 있어도 번호 없이 응답만 받는다', async () => {
+        expoClient.findFeatures.mockResolvedValue({
+          survey: true,
+          surveyLottery: false,
+        });
+
+        await service.submit(expoId, consented);
+
+        expect(answerStore.create).toHaveBeenCalledWith(
+          'survey-1',
+          { '1': '좋았습니다' },
+          Occupation.ELEMENTARY_STUDENT,
+          null,
+          expect.any(String),
+        );
+      });
+
       it('번호를 보내지 않으면 번호 없이 응답만 받는다', async () => {
         await service.submit(expoId, answerDto);
         await service.submit(expoId, { ...answerDto, phoneNumber: '  ' });
@@ -234,6 +261,29 @@ describe('SurveyPublicService', () => {
         expect(JSON.stringify(error)).not.toContain('02-123-4567');
         expect((error as Error).message).not.toContain('4567');
       });
+    });
+
+    it('박람회 설정에서 설문이 꺼져 있으면 409로 거부하고 저장하지 않는다', async () => {
+      expoClient.findFeatures.mockResolvedValue({
+        survey: false,
+        surveyLottery: true,
+      });
+
+      await expect(service.submit(expoId, answerDto)).rejects.toThrow(
+        SurveyFeatureDisabledException,
+      );
+      expect(answerStore.create).not.toHaveBeenCalled();
+    });
+
+    it('설정을 확인할 수 없으면 허용으로 보지 않고 저장하지 않는다', async () => {
+      expoClient.findFeatures.mockRejectedValue(
+        new ExternalServiceUnavailableException(),
+      );
+
+      await expect(service.submit(expoId, answerDto)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+      expect(answerStore.create).not.toHaveBeenCalled();
     });
 
     it('설문이 없으면 404 예외를 던지고 저장하지 않는다', async () => {

@@ -8,8 +8,10 @@ import {
   ParticipantSessionException,
   SurveyAnswerAlreadyExistsException,
   SurveyAnswerInvalidException,
+  SurveyFeatureDisabledException,
   SurveyNotFoundException,
 } from '../common/exceptions/domain.exception.js';
+import type { ExpoClient } from '../expo-client/expo-client.interface.js';
 import { SubmitSurveyAnswerRequestDto } from './dto/submit-survey-answer.request.dto.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
@@ -54,6 +56,7 @@ describe('SurveyAnswerService', () => {
     findParticipant: Mock;
     findSurveyAnswerResult: Mock;
   };
+  let expoClient: { findFeatures: Mock };
   let service: SurveyAnswerService;
 
   beforeEach(() => {
@@ -69,10 +72,16 @@ describe('SurveyAnswerService', () => {
       findSurveyAnswerResult: vi.fn(),
     };
     submissionStore.findActiveByKey.mockResolvedValue(null);
+    expoClient = {
+      findFeatures: vi
+        .fn()
+        .mockResolvedValue({ survey: true, surveyLottery: true }),
+    };
     service = new SurveyAnswerService(
       surveyStore as unknown as SurveyStore,
       submissionStore as unknown as SurveyAnswerSubmissionStore,
       userClient,
+      expoClient as unknown as ExpoClient,
     );
   });
 
@@ -253,6 +262,87 @@ describe('SurveyAnswerService', () => {
         submitDto,
       ),
     ).rejects.toThrow(SurveyNotFoundException);
+  });
+
+  describe('박람회 기능 설정(#302)', () => {
+    beforeEach(() => {
+      surveyStore.findByExpoAndType.mockResolvedValue(survey);
+      userClient.findParticipant.mockResolvedValue(participant);
+    });
+
+    it('설문이 꺼져 있으면 응답자 조회·접수 기록 없이 409로 거부한다', async () => {
+      expoClient.findFeatures.mockResolvedValue({
+        survey: false,
+        surveyLottery: true,
+      });
+
+      await expect(
+        service.submit(
+          survey.expoId,
+          ParticipationType.TRAINEE,
+          sessionId,
+          submitDto,
+        ),
+      ).rejects.toThrow(SurveyFeatureDisabledException);
+      expect(userClient.findParticipant).not.toHaveBeenCalled();
+      expect(submissionStore.createReceived).not.toHaveBeenCalled();
+    });
+
+    it('추첨만 꺼져 있으면 응답은 받는다', async () => {
+      expoClient.findFeatures.mockResolvedValue({
+        survey: true,
+        surveyLottery: false,
+      });
+
+      await service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      );
+
+      expect(submissionStore.createReceived).toHaveBeenCalledOnce();
+    });
+
+    it('설정을 확인할 수 없으면 허용으로 보지 않고 기록 없이 그대로 던진다', async () => {
+      expoClient.findFeatures.mockRejectedValue(
+        new ExternalServiceUnavailableException(),
+      );
+
+      await expect(
+        service.submit(
+          survey.expoId,
+          ParticipationType.TRAINEE,
+          sessionId,
+          submitDto,
+        ),
+      ).rejects.toThrow(ExternalServiceUnavailableException);
+      expect(submissionStore.createReceived).not.toHaveBeenCalled();
+    });
+
+    it('박람회가 없으면 404', async () => {
+      expoClient.findFeatures.mockResolvedValue(null);
+
+      await expect(
+        service.submit(
+          survey.expoId,
+          ParticipationType.TRAINEE,
+          sessionId,
+          submitDto,
+        ),
+      ).rejects.toThrow(SurveyNotFoundException);
+    });
+
+    it('설문의 박람회로 설정을 조회한다', async () => {
+      await service.submit(
+        survey.expoId,
+        ParticipationType.TRAINEE,
+        sessionId,
+        submitDto,
+      );
+
+      expect(expoClient.findFeatures).toHaveBeenCalledWith(survey.expoId);
+    });
   });
 
   it('검증을 통과하면 접수 기록을 RECEIVED로 저장한다', async () => {

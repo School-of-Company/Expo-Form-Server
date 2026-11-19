@@ -278,6 +278,20 @@ export class ParticipantSessionException extends DomainException {
 }
 
 /**
+ * 박람회 기능 설정에서 설문(`SURVEY`)이 꺼져 있어 새 응답을 받지 않을 때. 권한 부족(401/403)이나 설정 조회
+ * 장애(503)와 구분한다(Expo-Expo-Server#265 공통 동작 계약). 기존 응답·당첨·수령 조회는 막지 않는다.
+ */
+export class SurveyFeatureDisabledException extends DomainException {
+  constructor() {
+    super(
+      ErrorCode.FEATURE_DISABLED,
+      '이 박람회는 현재 설문을 받지 않습니다.',
+      HttpStatus.CONFLICT,
+    );
+  }
+}
+
+/**
  * 다른 서비스(유저·참여 서비스)를 호출했는데 응답을 받지 못했을 때. 비정상 응답, 타임아웃,
  * 연결 실패, 계약과 다른 응답 모양을 모두 포함한다.
  *

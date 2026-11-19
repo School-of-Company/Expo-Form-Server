@@ -54,6 +54,7 @@ describe('SurveyService', () => {
     findPeriod: Mock;
     reserveProgramFormUpdate: Mock;
     releaseProgramFormChange: Mock;
+    findFeatures: Mock;
   };
   let service: SurveyService;
 
@@ -72,11 +73,46 @@ describe('SurveyService', () => {
       findPeriod: vi.fn(),
       reserveProgramFormUpdate: vi.fn(),
       releaseProgramFormChange: vi.fn(),
+      findFeatures: vi.fn(),
     };
     service = new SurveyService(
       surveyStore as unknown as SurveyStore,
       expoClient,
     );
+  });
+
+  describe('summarize', () => {
+    it('설문마다 로컬 추첨 운영 여부와 당첨 번호 준비 여부를 함께 알려 준다', async () => {
+      surveyStore.findSummariesByExpoIds.mockResolvedValue([
+        {
+          expoId,
+          participationType: ParticipationType.STANDARD,
+          lotteryEnabled: true,
+          lotteryNumbers: [],
+        },
+        {
+          expoId,
+          participationType: ParticipationType.TRAINEE,
+          lotteryEnabled: false,
+          lotteryNumbers: [3, 7],
+        },
+      ]);
+
+      await expect(service.summarize([expoId])).resolves.toEqual([
+        {
+          expoId,
+          participationType: ParticipationType.STANDARD,
+          lotteryEnabled: true,
+          lotteryNumbersConfigured: false,
+        },
+        {
+          expoId,
+          participationType: ParticipationType.TRAINEE,
+          lotteryEnabled: false,
+          lotteryNumbersConfigured: true,
+        },
+      ]);
+    });
   });
 
   describe('create', () => {
@@ -342,20 +378,4 @@ describe('SurveyService', () => {
     });
   });
 
-  describe('summarize', () => {
-    it('저장소가 준 행에서 식별 값만 골라 돌려준다', async () => {
-      surveyStore.findSummariesByExpoIds.mockResolvedValue([
-        {
-          expoId,
-          participationType: ParticipationType.TRAINEE,
-          title: '섞여 들어온 값',
-        },
-      ]);
-
-      await expect(service.summarize([expoId])).resolves.toEqual([
-        { expoId, participationType: ParticipationType.TRAINEE },
-      ]);
-      expect(surveyStore.findSummariesByExpoIds).toHaveBeenCalledWith([expoId]);
-    });
-  });
 });

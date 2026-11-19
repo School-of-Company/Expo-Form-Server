@@ -5,7 +5,15 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+} from 'vitest';
+import type { ExpoClient } from '../expo-client/expo-client.interface.js';
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { namingStrategy } from '../database/database.config.js';
@@ -24,6 +32,11 @@ import { SurveyPublicService } from './survey-public.service.js';
 import { SurveyStore } from './survey.store.js';
 
 const adminUrl = process.env.DATABASE_URL;
+// 박람회 기능 설정(#302). 테스트가 바꾼 값은 afterEach에서 되돌린다.
+const features = { survey: true, surveyLottery: true };
+const featuresOn = {
+  findFeatures: async () => ({ ...features }),
+} as unknown as ExpoClient;
 
 describe.skipIf(adminUrl === undefined)(
   '공개 설문 추첨 HTTP / PostgreSQL',
@@ -71,6 +84,7 @@ describe.skipIf(adminUrl === undefined)(
             useValue: new SurveyPublicService(
               surveyStore,
               new SurveyPublicAnswerStore(dataSource),
+              featuresOn,
             ),
           },
         ],
@@ -228,6 +242,66 @@ describe.skipIf(adminUrl === undefined)(
           id: survey.id,
         }),
       ).toMatchObject({ lotterySequence: 1, totalAnswers: 3 });
+    });
+
+    describe('박람회 기능 설정(#302)', () => {
+      afterEach(() => {
+        features.survey = true;
+        features.surveyLottery = true;
+      });
+
+      it('설문이 꺼져 있으면 409이고 응답·순번·수령 기록을 남기지 않는다', async () => {
+        const survey = await seed([1]);
+        features.survey = false;
+
+        const response = await request(app.getHttpServer())
+          .post(`/surveys/answer/public/${survey.expoId}`)
+          .send({
+            answers: {},
+            occupation: Occupation.GENERAL,
+            phoneNumber: '01012345678',
+            personalInformationStatus: true,
+          })
+          .expect(409);
+
+        expect(response.body).toMatchObject({
+          code: 'FEATURE_DISABLED',
+        });
+        expect(
+          await dataSource.getRepository(SurveyEntity).findOneByOrFail({
+            id: survey.id,
+          }),
+        ).toMatchObject({ lotterySequence: 0, totalAnswers: 0 });
+        expect(
+          await dataSource
+            .getRepository(SurveyLotteryParticipantEntity)
+            .countBy({ surveyId: survey.id }),
+        ).toBe(0);
+      });
+
+      it('추첨만 꺼져 있으면 응답은 받되 순번을 쓰지 않고, 다시 켜면 순번이 이어져 당첨된다', async () => {
+        const survey = await seed([1]);
+        features.surveyLottery = false;
+
+        const off = await submit(survey.expoId, '01011112222');
+
+        expect(off).toEqual({ won: false });
+        expect(
+          await dataSource.getRepository(SurveyEntity).findOneByOrFail({
+            id: survey.id,
+          }),
+        ).toMatchObject({ lotterySequence: 0, totalAnswers: 1 });
+
+        features.surveyLottery = true;
+        const on = await submit(survey.expoId, '01033334444');
+
+        expect(on).toEqual({ won: true });
+        expect(
+          await dataSource.getRepository(SurveyEntity).findOneByOrFail({
+            id: survey.id,
+          }),
+        ).toMatchObject({ lotterySequence: 1, totalAnswers: 2 });
+      });
     });
 
     it('추첨이 꺼져 있으면 당첨되지 않고 순번도 소비하지 않는다', async () => {

@@ -10,6 +10,7 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DynamicFormFieldType } from '../common/enums/dynamic-form-field-type.enum.js';
+import type { ExpoClient } from '../expo-client/expo-client.interface.js';
 import { Occupation } from '../common/enums/occupation.enum.js';
 import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { DomainExceptionFilter } from '../common/exceptions/domain-exception.filter.js';
@@ -32,6 +33,9 @@ import { SurveyService } from './survey.service.js';
 import { SurveyStore } from './survey.store.js';
 
 const adminUrl = process.env.DATABASE_URL;
+const featuresOn = {
+  findFeatures: async () => ({ survey: true, surveyLottery: true }),
+} as unknown as ExpoClient;
 const TOKEN = 'synthetic-internal-token-for-tests-0000';
 
 describe.skipIf(adminUrl === undefined)(
@@ -76,6 +80,7 @@ describe.skipIf(adminUrl === undefined)(
           new DeletedExpoStore(),
         ),
         answerStore,
+        featuresOn,
       );
       const module = await Test.createTestingModule({
         controllers: [SurveyPublicController, InternalSurveyController],

@@ -58,6 +58,7 @@ describe('LotteryPhoneRetentionService', () => {
     findPeriod: Mock;
     reserveProgramFormUpdate: Mock;
     releaseProgramFormChange: Mock;
+    findFeatures: Mock;
   };
   let configValue: string | undefined;
   let service: LotteryPhoneRetentionService;
@@ -73,6 +74,7 @@ describe('LotteryPhoneRetentionService', () => {
       findPeriod: vi.fn(),
       reserveProgramFormUpdate: vi.fn(),
       releaseProgramFormChange: vi.fn(),
+      findFeatures: vi.fn(),
     };
     const config = {
       get: vi.fn((key: string) =>
