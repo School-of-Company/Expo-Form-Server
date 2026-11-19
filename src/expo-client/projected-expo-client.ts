@@ -1,7 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { ProjectionMissLogger } from '../common/projection/projection-miss-logger.js';
 import type { ExpoProjectionStore } from '../expo-projection/expo-projection.store.js';
-import type { ExpoClient, ExpoPeriod } from './expo-client.interface.js';
+import type {
+  ExpoClient,
+  ExpoFeatures,
+  ExpoPeriod,
+} from './expo-client.interface.js';
 
 /**
  * 박람회 조회(`exists`, `findPeriod`)를 `expo.expo.changed`로 채운 로컬 프로젝션에서 읽는 {@link ExpoClient}.
@@ -38,6 +42,11 @@ export class ProjectedExpoClient implements ExpoClient {
     }
 
     return found.state === 'present' ? found.period : null;
+  }
+
+  /** 기능 설정은 복제본이 늦을 수 있어 늘 박람회 서비스에서 직접 읽는다. */
+  async findFeatures(expoId: string): Promise<ExpoFeatures | null> {
+    return this.delegate.findFeatures(expoId);
   }
 
   async reserveProgramFormUpdate(

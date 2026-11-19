@@ -59,6 +59,7 @@ describe('FormService', () => {
     findPeriod: Mock;
     reserveProgramFormUpdate: Mock;
     releaseProgramFormChange: Mock;
+    findFeatures: Mock;
   };
   let service: FormService;
 
@@ -76,6 +77,7 @@ describe('FormService', () => {
       findPeriod: vi.fn(),
       reserveProgramFormUpdate: vi.fn(),
       releaseProgramFormChange: vi.fn(),
+      findFeatures: vi.fn(),
     };
     service = new FormService(formStore as unknown as FormStore, expoClient);
   });
