@@ -265,7 +265,7 @@ describe.skipIf(adminUrl === undefined)(
           .expect(409);
 
         expect(response.body).toMatchObject({
-          code: 'SURVEY_FEATURE_DISABLED',
+          code: 'FEATURE_DISABLED',
         });
         expect(
           await dataSource.getRepository(SurveyEntity).findOneByOrFail({

@@ -26,9 +26,9 @@ const skippingExpoClient: ExpoClient = {
   async findPeriod() {
     throw new ExternalServiceUnavailableException();
   },
-  // 연동 전과 같은 동작으로 설문·추첨을 켜 둔다. 운영은 설정이 있어 이 구현을 쓰지 않는다.
+  // 기능 설정은 모르는 상태를 ON/OFF로 대신하지 않는다(공통 계약). 설정 없이 배포되면 새 설문 응답은 503이다.
   async findFeatures() {
-    return { survey: true, surveyLottery: true };
+    throw new ExternalServiceUnavailableException();
   },
   // 보호자 동반 정책 참조를 확인할 수 없으니 프로그램용 폼 수정을 막는다(fail-closed).
   async reserveProgramFormUpdate() {
