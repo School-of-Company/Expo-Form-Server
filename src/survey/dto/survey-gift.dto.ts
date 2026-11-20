@@ -27,8 +27,7 @@ export class GiftPickupStatusRequestDto extends createZodDto(
 
 export const confirmGiftPickupRequestSchema = z.object({
   token: tokenSchema,
-  /** 사용하지 않는다. 이전 클라이언트가 보내도 실패하지 않게 받기만 하고 무시한다(#267). */
-  pin: z.unknown().optional(),
+  pin: pinSchema,
 });
 export class ConfirmGiftPickupRequestDto extends createZodDto(
   confirmGiftPickupRequestSchema,
