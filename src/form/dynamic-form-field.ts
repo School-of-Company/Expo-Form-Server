@@ -55,8 +55,6 @@ export function toStoredField(
  * 수정 요청의 필드마다 유지할 기존 id를 찾는다(#290). 요청에 id가 없어서 내용으로 짝짓는다. 먼저 제목·종류가 같은
  * 필드를 위치와 상관없이 짝짓고(순서 변경·선택지 수정), 남은 필드는 같은 위치에서 종류가 같으면 짝짓는다(제목 수정).
  * 기존 id는 한 번만 쓴다. 짝이 없으면 `undefined`이고 새 id를 받는다.
- *
- * shortcut: 같은 위치의 필드를 지우고 같은 종류의 다른 필드를 넣으면 옛 id를 이어받는다, 요청이 id를 실어 보내게 되면 그 id로 바꾼다.
  */
 export function matchExistingIds(
   fields: readonly NewDynamicFormField[],
