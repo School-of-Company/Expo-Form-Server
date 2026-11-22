@@ -250,7 +250,7 @@ export class SurveyStore {
     });
   }
 
-  /** 여러 박람회의 설문을 식별 값만 골라 조회한다. 문항은 끌고 오지 않는다. */
+  /** 여러 박람회의 설문을 식별 값과 추첨 준비 상태만 골라 조회한다. 문항은 끌고 오지 않는다. */
   async findSummariesByExpoIds(
     expoIds: string[],
   ): Promise<
