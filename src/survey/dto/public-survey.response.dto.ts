@@ -20,6 +20,10 @@ export class PublicSurveyResponseDto extends createZodDto(
 
 export function toPublicSurveyResponse(
   survey: SurveyEntity,
+  lotteryAllowed: boolean,
 ): PublicSurveyResponseDto {
-  return { ...toSurveyResponse(survey), lotteryEnabled: survey.lotteryEnabled };
+  return {
+    ...toSurveyResponse(survey),
+    lotteryEnabled: lotteryAllowed && survey.lotteryEnabled,
+  };
 }

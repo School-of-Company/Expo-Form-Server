@@ -143,11 +143,11 @@ export class SurveyAnswerController {
   )
   @ApiErrorResponse(
     409,
-    '이미 제출한 응답자, 또는 전화번호로 응답자를 하나로 특정할 수 없음 (SURVEY_ANSWER_ALREADY_EXISTS, PARTICIPANT_AMBIGUOUS)',
+    '이미 제출한 응답자, 전화번호로 응답자를 하나로 특정할 수 없음, 또는 박람회 설정에서 설문이 꺼져 있음 (SURVEY_ANSWER_ALREADY_EXISTS, PARTICIPANT_AMBIGUOUS, FEATURE_DISABLED)',
   )
   @ApiErrorResponse(
     503,
-    '유저 서비스에서 응답자를 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+    '유저 서비스에서 응답자를, 또는 박람회 서비스에서 기능 설정을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
   @Post('standard/:expoId')
   @HttpCode(HttpStatus.ACCEPTED)
@@ -181,11 +181,11 @@ export class SurveyAnswerController {
   )
   @ApiErrorResponse(
     409,
-    '이미 제출한 응답자, 또는 전화번호로 응답자를 하나로 특정할 수 없음 (SURVEY_ANSWER_ALREADY_EXISTS, PARTICIPANT_AMBIGUOUS)',
+    '이미 제출한 응답자, 전화번호로 응답자를 하나로 특정할 수 없음, 또는 박람회 설정에서 설문이 꺼져 있음 (SURVEY_ANSWER_ALREADY_EXISTS, PARTICIPANT_AMBIGUOUS, FEATURE_DISABLED)',
   )
   @ApiErrorResponse(
     503,
-    '유저 서비스에서 응답자를 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
+    '유저 서비스에서 응답자를, 또는 박람회 서비스에서 기능 설정을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
   @Post('trainee/:expoId')
   @HttpCode(HttpStatus.ACCEPTED)

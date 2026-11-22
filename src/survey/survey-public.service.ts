@@ -47,7 +47,12 @@ export class SurveyPublicService {
    * @throws {SurveyNotFoundException} 그 박람회에 일반 참가자 설문이 없을 때
    */
   async findSurvey(expoId: string): Promise<PublicSurveyResponseDto> {
-    return toPublicSurveyResponse(await this.findPublicSurvey(expoId));
+    const survey = await this.findPublicSurvey(expoId);
+    const features = await assertSurveyAcceptsAnswers(
+      this.expoClient,
+      survey.expoId,
+    );
+    return toPublicSurveyResponse(survey, features.surveyLottery);
   }
 
   /**

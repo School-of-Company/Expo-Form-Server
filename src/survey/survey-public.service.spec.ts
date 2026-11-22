@@ -84,6 +84,32 @@ describe('SurveyPublicService', () => {
       expect(result.lotteryEnabled).toBe(true);
     });
 
+    it('박람회 추첨 기능이 꺼져 있으면 lotteryEnabled는 false다', async () => {
+      surveyStore.findByExpoAndType.mockResolvedValue({
+        ...survey,
+        lotteryEnabled: true,
+      });
+      expoClient.findFeatures.mockResolvedValue({
+        survey: true,
+        surveyLottery: false,
+      });
+
+      const result = await service.findSurvey(expoId);
+
+      expect(result.lotteryEnabled).toBe(false);
+    });
+
+    it('박람회 설문 기능이 꺼져 있으면 409', async () => {
+      expoClient.findFeatures.mockResolvedValue({
+        survey: false,
+        surveyLottery: true,
+      });
+
+      await expect(service.findSurvey(expoId)).rejects.toBeInstanceOf(
+        SurveyFeatureDisabledException,
+      );
+    });
+
     it('그 박람회에 일반 참가자 설문이 없으면 404 예외를 던진다', async () => {
       surveyStore.findByExpoAndType.mockResolvedValue(null);
 
