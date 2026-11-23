@@ -15,7 +15,11 @@ skip=$(comm -23 <(printf '%s\n' "$all") <(printf '%s\n' "$run"))
 changed=$(git diff --name-only "$base"...HEAD)
 
 count() { grep -c . <<<"$1" || true; }
-block() { [[ -n "$2" ]] && printf '<details><summary>%s (%s)</summary>\n\n```\n%s\n```\n</details>\n\n' "$1" "$(count "$2")" "$2"; }
+block() {
+  if [[ -n "$2" ]]; then
+    printf '<details><summary>%s (%s)</summary>\n\n```\n%s\n```\n</details>\n\n' "$1" "$(count "$2")" "$2"
+  fi
+}
 
 summary=$(
   printf '### %s 영향 범위 (기준: `%s`)\n\n' "$title" "$base"
