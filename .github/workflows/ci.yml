@@ -78,6 +78,10 @@ jobs:
 
       # PR에서는 바뀐 파일을 import 그래프로 따라가 영향받는 테스트만 돌린다(vitest --changed). import로 이어지지 않는
       # 변경(마이그레이션·JSON 등)은 놓칠 수 있어, 병합 대기열에서는 전체를 돌린다.
+      - name: 단위 테스트 영향 범위
+        if: github.event_name == 'pull_request'
+        run: .github/scripts/affected-tests.sh "단위 테스트" "origin/${{ github.base_ref }}"
+
       - name: 단위 테스트
         env:
           EVENT: ${{ github.event_name }}
@@ -123,6 +127,10 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: 통합 테스트 영향 범위
+        if: github.event_name == 'pull_request'
+        run: .github/scripts/affected-tests.sh "통합 테스트" "origin/${{ github.base_ref }}" --config ./vitest.config.integration.ts
 
       - name: DB 통합 테스트
         env:
