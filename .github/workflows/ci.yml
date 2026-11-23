@@ -225,7 +225,7 @@ jobs:
 
       - name: Kafka 기동
         if: needs.scope.outputs.e2e == 'full'
-        run: .github/scripts/start-kafka.sh
+        run: .github/scripts/start-kafka.sh "$KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC" "$KAFKA_SURVEY_ANSWER_RESULT_TOPIC" "$KAFKA_SMS_REQUESTED_TOPIC"
 
       - name: 스모크 e2e
         if: needs.scope.outputs.e2e == 'smoke'
@@ -279,7 +279,7 @@ jobs:
 
       - name: 엔티티와 스키마 차이 확인
         if: needs.scope.outputs.migration == 'run'
-        run: pnpm typeorm migration:generate src/database/migrations/Drift -d dist/database/data-source.js --dryrun --check
+        run: .github/scripts/check-migration-drift.sh
 
   # 실패했을 때만 알린다.
   notify-discord:
