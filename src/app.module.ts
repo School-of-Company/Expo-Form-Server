@@ -63,7 +63,7 @@ import { SurveyModule } from './survey/survey.module.js';
           ),
       }),
       // 문자열 조건은 "값이 'false'가 아니면 등록"이라 키가 없어도 등록된다. 값이 있을 때만 등록하도록 함수로 쓴다.
-      (env) => Boolean(env[EUREKA_SERVICE_URL_ENV]),
+      (env) => (env[EUREKA_SERVICE_URL_ENV] ?? '') !== '',
     ),
     KafkaModule,
     DatabaseModule,
