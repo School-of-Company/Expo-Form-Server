@@ -1,0 +1,66 @@
+name: E2E (async)
+
+# PR을 막지 않는 전체 e2e. 매일 밤(KST 00:00) develop을 대상으로 Postgres·Kafka를 실제로 띄워 돌린다.
+# 머지 전 전체 e2e는 ci.yml이 병합 대기열에서 돌린다.
+on:
+  schedule:
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-async-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      kafka:
+        image: apache/kafka:3.9.1
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 전체 e2e
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          KAFKA_BROKERS: localhost:9092
+          KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC: survey.answer.submit
+          KAFKA_SURVEY_ANSWER_RESULT_TOPIC: survey.answer.result
+          KAFKA_SURVEY_ANSWER_RESULT_GROUP_ID: expo-form-server.survey-answer-result
+          KAFKA_SMS_REQUESTED_TOPIC: notification.sms.requested
+        run: pnpm run test:e2e
+
+      - name: 실패 알림
+        if: failure()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          status: failure
+          title: Expo Form E2E (async)
