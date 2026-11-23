@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ExpoAdminAccess } from '../admin-access/expo-admin-access.decorator.js';
-import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import {
+  ApiErrorResponse,
+  ApiHttpErrorResponse,
+} from '../common/swagger/api-error-response.decorator.js';
 import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import {
   ConfirmGiftPickupRequestDto,
@@ -56,7 +59,7 @@ export class SurveyGiftController {
       '(수령 확인에는 더 이상 쓰지 않는다.) 박람회의 공용 직원 PIN(숫자 4~8자리)을 설정하거나 바꾼다. 해시로만 저장하고 응답·로그에 싣지 않는다. 바꾸면 그 뒤 확인부터 옛 PIN은 통하지 않는다.',
   })
   @ApiOkResponse({ type: GiftPinResponseDto })
-  @ApiErrorResponse(400, 'PIN 형식이 맞지 않음')
+  @ApiHttpErrorResponse(400, 'PIN 형식이 맞지 않음')
   @ApiErrorResponse(
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',

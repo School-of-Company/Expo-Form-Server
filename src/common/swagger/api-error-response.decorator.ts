@@ -13,3 +13,27 @@ export function ApiErrorResponse(status: number, description: string) {
     ApiResponse({ status, description, type: ErrorResponseDto }),
   );
 }
+
+/**
+ * 가드나 요청 검증처럼 도메인 예외가 아닌 곳에서 나는 실패 응답을 문서화한다. 이 응답은
+ * `DomainExceptionFilter`를 거치지 않아 Nest 기본 바디(`{ statusCode, message }`)이고 `code`가 없다.
+ */
+// eslint-disable-next-line @typescript-eslint/naming-convention
+export function ApiHttpErrorResponse(status: number, description: string) {
+  return applyDecorators(
+    ApiResponse({
+      status,
+      description,
+      schema: {
+        type: 'object',
+        required: ['statusCode', 'message'],
+        properties: {
+          statusCode: { type: 'number', example: status },
+          message: { type: 'string' },
+          error: { type: 'string' },
+          errors: { type: 'array', items: { type: 'object' } },
+        },
+      },
+    }),
+  );
+}
