@@ -40,6 +40,6 @@ describe('AppController (e2e smoke)', () => {
     request(app.getHttpServer()).get('/').expect(200).expect('Hello World!'));
 
   afterEach(async () => {
-    await app.close();
+    await app?.close();
   });
 });

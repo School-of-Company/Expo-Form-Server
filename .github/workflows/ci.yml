@@ -141,6 +141,11 @@ jobs:
   # (잡은 성공으로 끝나 필수 체크와 호환된다). Kafka는 전체 e2e일 때만 띄우려고 서비스가 아니라 단계에서 띄운다.
   e2e:
     runs-on: ubuntu-latest
+    # 부팅 때 필수로 검사하는 설정. 외부 서비스는 호출하지 않으므로 형식만 맞는 가짜 값이다.
+    env:
+      USER_SERVICE_URL: http://localhost:1
+      USER_SERVICE_INTERNAL_TOKEN: e2e-user-service-token-0123456789abcdef
+      INTERNAL_TOKEN: e2e-internal-token-0123456789abcdef0123
     services:
       postgres:
         image: postgres:17-alpine
