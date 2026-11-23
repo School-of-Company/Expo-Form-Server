@@ -1,7 +1,7 @@
 name: E2E (async)
 
-# PR을 막지 않는 전체 e2e. 매일 밤(KST 00:00) develop을 대상으로 Postgres·Kafka를 실제로 띄워 돌린다.
-# 머지 전 전체 e2e는 ci.yml이 병합 대기열에서 돌린다.
+# PR을 막지 않는 e2e. 매일 밤(KST 00:00) develop을 대상으로 돌린다. 지금 e2e는 Kafka를 가짜로 바꾼 스모크뿐이라
+# Kafka는 띄우지 않는다. 실제 Kafka를 쓰는 e2e를 추가하면 Kafka 서비스와 준비 대기 단계를 함께 넣는다.
 on:
   schedule:
     - cron: '0 15 * * *'
@@ -32,10 +32,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      kafka:
-        image: apache/kafka:3.9.1
-        ports:
-          - 9092:9092
     steps:
       - uses: actions/checkout@v4
         with:

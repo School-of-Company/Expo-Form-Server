@@ -7,12 +7,12 @@ title=$1
 base=$2
 shift 2
 
-list() { pnpm exec vitest list --filesOnly "$@" 2>/dev/null | sed "s#^$PWD/##" | sort -u; }
+list() { pnpm exec vitest list --filesOnly "$@" | sed "s#^$PWD/##" | sort -u; }
 
 all=$(list "$@")
 run=$(list "$@" --changed "$base")
 skip=$(comm -23 <(printf '%s\n' "$all") <(printf '%s\n' "$run"))
-changed=$(git diff --name-only "$base"...HEAD)
+changed=$(git diff --name-only "$base")
 
 count() { grep -c . <<<"$1" || true; }
 block() {

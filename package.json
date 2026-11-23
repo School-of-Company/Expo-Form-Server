@@ -23,7 +23,6 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:integration": "vitest run --config ./vitest.config.integration.ts",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "test:e2e:smoke": "vitest run --config ./vitest.config.e2e.ts test/smoke",
     "typeorm": "node --env-file-if-exists=.env ./node_modules/typeorm/cli.js",
     "migration:generate": "pnpm build:clean && pnpm typeorm migration:generate -d dist/database/data-source.js",
     "migration:run": "pnpm build:clean && pnpm typeorm migration:run -d dist/database/data-source.js",
