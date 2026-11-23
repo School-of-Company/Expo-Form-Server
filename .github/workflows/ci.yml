@@ -45,6 +45,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # XO는 파일 내용 기준으로 결과를 캐시한다. 다만 다른 파일의 타입 변경은 캐시가 감지하지 못하므로
+      # PR에서만 캐시를 쓰고, 병합 대기열에서는 캐시 없이 전체를 검사해 놓친 오류를 막는다.
+      - name: XO 캐시
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/xo-linter
+          key: xo-${{ hashFiles('pnpm-lock.yaml', 'xo.config.ts', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: xo-${{ hashFiles('pnpm-lock.yaml', 'xo.config.ts', 'tsconfig.json') }}-
+
       - name: XO 린트
         run: pnpm run lint
 
