@@ -2,7 +2,6 @@ import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import { SurveyCursorInvalidException } from '../common/exceptions/domain.exception.js';
 
-/** DB가 돌려주는 마이크로초 UTC 시각. 자릿수가 고정이라 문자열 비교가 곧 시각 비교다. */
 /** 상한은 DB 시계로 정하고 여기선 앱 시계로 보므로, 인스턴스 사이 시계 차이만큼은 미래여도 받는다. */
 const CLOCK_SKEW_MS = 60_000;
 

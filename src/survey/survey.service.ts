@@ -35,8 +35,7 @@ type SurveyFields = Omit<
 /**
  * 수정 요청으로 바꿀 수 있는 설문 메타데이터. 소속 박람회와 문항 목록은 여기 포함되지 않고,
  * `totalAnswers`도 빠진다 — 누적 응답 수는 응답 제출이 만들어내는 값이지 설문 작성자가
- * 요청으로 덮어쓸 값이 아니다. 경품 추첨 설정과 순번(`lottery*`)도 설문 수정이 아니라 별도 설정 API가
- * 다룬다.
+ * 요청으로 덮어쓸 값이 아니다.
  */
 type UpdatableSurveyFields = Omit<
   SurveyFields,
@@ -53,9 +52,6 @@ type UpdatableSurveyFields = Omit<
  *
  * 설문은 `(expoId, participationType)` 조합당 하나만 존재한다 — 폼과 달리 신청 방식 구분이
  * 없어서, 같은 박람회라도 교육생용 설문과 일반참가자용 설문 둘로만 나뉜다.
- *
- * `expoId`가 박람회 서비스에 실제로 존재하는지는 검증하지 않는다. 박람회 서비스가 아직 없고,
- * 서비스별 DB 분리 구조라 FK로도 막을 수 없다 — uuid 형식 검증까지만 하고 값으로 신뢰한다.
  */
 @Injectable()
 export class SurveyService {
