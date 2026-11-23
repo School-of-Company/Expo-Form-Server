@@ -52,8 +52,6 @@ const protectedRoutes = [
   ['delete', `/surveys/${EXPO}/STANDARD`],
   ['get', `/surveys/${EXPO}/lottery`],
   ['patch', `/surveys/${EXPO}/lottery`],
-  ['get', `/surveys/${EXPO}/gift-pin`],
-  ['put', `/surveys/${EXPO}/gift-pin`],
 ] as const;
 
 function jsonResponse(status: number, body?: unknown): Response {

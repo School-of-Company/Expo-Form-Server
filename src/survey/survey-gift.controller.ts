@@ -8,21 +8,13 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Put,
 } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ExpoAdminAccess } from '../admin-access/expo-admin-access.decorator.js';
-import {
-  ApiErrorResponse,
-  ApiHttpErrorResponse,
-} from '../common/swagger/api-error-response.decorator.js';
-import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
+import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
 import {
   ConfirmGiftPickupRequestDto,
   GiftPickupStatusRequestDto,
   GiftPickupStatusResponseDto,
-  GiftPinResponseDto,
-  UpdateGiftPinRequestDto,
 } from './dto/survey-gift.dto.js';
 import { SurveyGiftService } from './survey-gift.service.js';
 
@@ -35,45 +27,46 @@ import { SurveyGiftService } from './survey-gift.service.js';
 export class SurveyGiftController {
   constructor(private readonly surveyGiftService: SurveyGiftService) {}
 
-  @ApiOperation({
-    summary: '기념품 직원 PIN 설정 여부 조회',
-    description: 'PIN이 설정돼 있는지만 돌려준다. PIN 자체는 조회할 수 없다.',
-  })
-  @ApiOkResponse({ type: GiftPinResponseDto })
-  @ApiErrorResponse(
-    404,
-    '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
-  )
-  @Header('Cache-Control', 'no-store')
-  @ExpoAdminAccess()
-  @Get(':expoId/gift-pin')
-  async findPin(
-    @Param('expoId', ParseUUIDPipe) expoId: string,
-  ): Promise<GiftPinResponseDto> {
-    return this.surveyGiftService.findPin(expoId);
-  }
-
-  @ApiOperation({
-    summary: '기념품 직원 PIN 설정·변경',
-    description:
-      '(수령 확인에는 더 이상 쓰지 않는다.) 박람회의 공용 직원 PIN(숫자 4~8자리)을 설정하거나 바꾼다. 해시로만 저장하고 응답·로그에 싣지 않는다. 바꾸면 그 뒤 확인부터 옛 PIN은 통하지 않는다.',
-  })
-  @ApiOkResponse({ type: GiftPinResponseDto })
-  @ApiHttpErrorResponse(400, 'PIN 형식이 맞지 않음')
-  @ApiErrorResponse(
-    404,
-    '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
-  )
-  @ExpoAdminAccess()
-  @AdminChangeNotify('기념품 직원 PIN 설정')
-  @Header('Cache-Control', 'no-store')
-  @Put(':expoId/gift-pin')
-  async updatePin(
-    @Param('expoId', ParseUUIDPipe) expoId: string,
-    @Body() dto: UpdateGiftPinRequestDto,
-  ): Promise<GiftPinResponseDto> {
-    return this.surveyGiftService.updatePin(expoId, dto);
-  }
+  // 직원 PIN 검사를 다시 붙일 때(#298)까지 PIN 설정·조회 API를 막아 둔다. 서비스·저장소는 그대로 있다.
+  // @ApiOperation({
+  // summary: '기념품 직원 PIN 설정 여부 조회',
+  // description: 'PIN이 설정돼 있는지만 돌려준다. PIN 자체는 조회할 수 없다.',
+  // })
+  // @ApiOkResponse({ type: GiftPinResponseDto })
+  // @ApiErrorResponse(
+  // 404,
+  // '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
+  // )
+  // @Header('Cache-Control', 'no-store')
+  // @ExpoAdminAccess()
+  // @Get(':expoId/gift-pin')
+  // async findPin(
+  // @Param('expoId', ParseUUIDPipe) expoId: string,
+  // ): Promise<GiftPinResponseDto> {
+  // return this.surveyGiftService.findPin(expoId);
+  // }
+  //
+  // @ApiOperation({
+  // summary: '기념품 직원 PIN 설정·변경',
+  // description:
+  // '(수령 확인에는 더 이상 쓰지 않는다.) 박람회의 공용 직원 PIN(숫자 4~8자리)을 설정하거나 바꾼다. 해시로만 저장하고 응답·로그에 싣지 않는다. 바꾸면 그 뒤 확인부터 옛 PIN은 통하지 않는다.',
+  // })
+  // @ApiOkResponse({ type: GiftPinResponseDto })
+  // @ApiHttpErrorResponse(400, 'PIN 형식이 맞지 않음')
+  // @ApiErrorResponse(
+  // 404,
+  // '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
+  // )
+  // @ExpoAdminAccess()
+  // @AdminChangeNotify('기념품 직원 PIN 설정')
+  // @Header('Cache-Control', 'no-store')
+  // @Put(':expoId/gift-pin')
+  // async updatePin(
+  // @Param('expoId', ParseUUIDPipe) expoId: string,
+  // @Body() dto: UpdateGiftPinRequestDto,
+  // ): Promise<GiftPinResponseDto> {
+  // return this.surveyGiftService.updatePin(expoId, dto);
+  // }
 
   @ApiOperation({
     summary: '기념품 수령 상태 조회',
