@@ -17,6 +17,7 @@ import {
   type DynamicSurveyQuestion,
   type NewDynamicSurveyQuestion,
 } from './dynamic-survey-question.js';
+import { SurveyAnswerSubmissionStatus } from './entities/survey-answer-submission-status.enum.js';
 import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
 
@@ -94,7 +95,7 @@ export class SurveyStore {
   }
 
   /**
-   * `findByExpoAndType`과 같지만 문항을 불러오지 않는다. id·경품 추첨 설정·누적 응답 수처럼 설문 행만
+   * `findByExpoAndType`과 같지만 문항을 불러오지 않는다. id·경품 추첨 설정처럼 설문 행만
    * 필요한 경로가 문항 배열을 읽고 옮기는 비용을 치르지 않게 따로 둔다.
    */
   async findHeaderByExpoAndType(
@@ -158,8 +159,7 @@ export class SurveyStore {
    *
    * 문항이 지금과 똑같으면 교체하지 않는다. 다시 만들면 내용이 같아도 문항 id가 바뀌어, 열어 둔 화면의
    * 제출이 400이 된다. 문항이 하나라도 다르면 교체하는데, 응답이 있는 설문이면 막는다(#179). 응답 여부는
-   * 누적 응답 수로 본다 — 공개 답변·로그인/SMS 답변 접수가 저장과 같은 트랜잭션에서 이 값을 늘리고(옛 종이
-   * QR 답변도 당시 같은 방식으로 셌다), 거절된 접수만 되돌린다. 설문 row를 잠근 뒤 읽으므로 그 사이 들어온 응답도 빠뜨리지 않는다.
+   * {@link countAnswers}로 본다. 설문 row를 잠근 뒤 따로 세므로, 잠금을 기다리는 사이 커밋된 접수도 빠뜨리지 않는다.
    *
    * 메타데이터와 문항은 `update()`로 컬럼을 지정해서만 바꾼다 — `save(SurveyEntity, survey)`로
    * 엔티티를 통째로 저장하면 메모리상의 `totalAnswers`도 같이 실려 나가서, 이 트랜잭션이
@@ -186,9 +186,10 @@ export class SurveyStore {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, survey.expoId);
 
+      // FOR UPDATE여야 접수의 FOR KEY SHARE와 부딪힌다(FOR NO KEY UPDATE는 부딪히지 않아 진행 중인 접수를 놓친다).
       const locked = await manager.findOne(SurveyEntity, {
         where: { id: survey.id },
-        select: { id: true, totalAnswers: true, dynamicSurveys: true },
+        select: { id: true, dynamicSurveys: true },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
@@ -196,7 +197,7 @@ export class SurveyStore {
       }
 
       const replace = !hasSameQuestions(locked.dynamicSurveys, questions);
-      if (replace && locked.totalAnswers > 0) {
+      if (replace && (await this.countAnswers(survey.id, manager)) > 0) {
         throw new SurveyAlreadyAnsweredException();
       }
 
@@ -224,6 +225,22 @@ export class SurveyStore {
     });
   }
 
+  /**
+   * 설문의 응답 수. 공개 링크 답변(과 옛 종이 QR 답변)을 센 `totalAnswers`에 거절되지 않은 로그인/SMS 답변
+   * 접수 기록 수를 더한다. 설문이 없으면 0이다.
+   */
+  async countAnswers(
+    surveyId: string,
+    manager: EntityManager = this.dataSource.manager,
+  ): Promise<number> {
+    // 원시 SQL이라 SnakeNamingStrategy가 적용되지 않는다 — 실제 컬럼명을 쓴다. count(*)는 bigint라 문자열로 오므로 int로 바꾼다.
+    const [row] = await manager.query<Array<{ count: number }>>(
+      `SELECT (s.total_answers + (SELECT count(*) FROM survey_answer_submission a WHERE a.survey_id = s.id AND a.status <> $2))::int AS "count" FROM survey s WHERE s.id = $1`,
+      [surveyId, SurveyAnswerSubmissionStatus.REJECTED],
+    );
+    return row?.count ?? 0;
+  }
+
   /** 새 문항들에 `dynamic_survey_id_seq`에서 받은 id를 작성 순서대로 붙인다. */
   private async withNewIds(
     manager: EntityManager,
@@ -245,7 +262,7 @@ export class SurveyStore {
       await manager.delete(SurveyEntity, { id });
       // 접수 기록(아웃박스)에는 설문 FK가 없어 CASCADE가 닿지 않는다. 남겨 두면 릴레이가 지워진 설문의 답변을 계속
       // 유저 서비스로 발행한다. 설문을 먼저 지우는 순서는 박람회 일괄 삭제(`deleteByExpoId`)와 같다 — 접수가 설문
-      // row를 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤 접수 기록 삭제가 방금 커밋된 기록까지 지운다.
+      // row를 KEY SHARE로 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤 접수 기록 삭제가 방금 커밋된 기록까지 지운다.
       await manager.delete(SurveyAnswerSubmissionEntity, { surveyId: id });
     });
   }
@@ -266,7 +283,7 @@ export class SurveyStore {
    *
    * 설문 답변 접수 기록(아웃박스)은 설문 FK가 없어 여기서 직접 지운다. 남겨 두면 릴레이가 지워진
    * 설문의 답변을 계속 발행한다. 설문을 먼저 지우는 건 접수(`createReceived`)와 순서를 맞추기
-   * 위해서다 — 접수가 설문 row를 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤의 접수
+   * 위해서다 — 접수가 설문 row를 KEY SHARE로 잠근 채 진행 중이면 이 DELETE가 커밋을 기다리고, 그 뒤의 접수
    * 기록 삭제는 새 스냅샷으로 실행돼 방금 커밋된 기록까지 지운다.
    *
    * 박람회 삭제 트랜잭션(`ExpoPurgeService`) 안에서 부르므로 그 트랜잭션의 `manager`로 지운다.

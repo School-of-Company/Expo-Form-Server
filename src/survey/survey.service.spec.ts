@@ -48,6 +48,7 @@ describe('SurveyService', () => {
     updateWithQuestions: Mock;
     deleteById: Mock;
     findSummariesByExpoIds: Mock;
+    countAnswers: Mock;
   };
   let expoClient: {
     exists: Mock;
@@ -66,6 +67,7 @@ describe('SurveyService', () => {
       updateWithQuestions: vi.fn().mockResolvedValue(true),
       deleteById: vi.fn(),
       findSummariesByExpoIds: vi.fn(),
+      countAnswers: vi.fn(),
     };
     expoClient = {
       exists: vi.fn().mockResolvedValue(true),
@@ -333,12 +335,14 @@ describe('SurveyService', () => {
       ).rejects.toThrow(SurveyNotFoundException);
     });
 
-    it('누적 응답 수만 돌려준다', async () => {
+    it('저장소가 센 그 설문의 응답 수만 돌려준다', async () => {
       surveyStore.findHeaderByExpoAndType.mockResolvedValue(existingSurvey);
+      surveyStore.countAnswers.mockResolvedValue(9);
 
       await expect(
         service.countAnswers(expoId, { type: createDto.participationType }),
-      ).resolves.toEqual({ totalAnswers: 7 });
+      ).resolves.toEqual({ totalAnswers: 9 });
+      expect(surveyStore.countAnswers).toHaveBeenCalledWith(existingSurvey.id);
     });
   });
 

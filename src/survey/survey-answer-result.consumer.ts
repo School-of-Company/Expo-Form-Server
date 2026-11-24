@@ -27,7 +27,7 @@ interface SurveyAnswerResultEvent {
  * 유저 서비스가 설문 답변을 처리한 결과(`STORED`/`REJECTED`)를 받아 접수 기록 상태를 갱신한다.
  *
  * 실제 상태 갱신은 {@link SurveyAnswerSubmissionStore.markFinal}이 종결되지 않은 row만
- * 조건부로 갱신하고, `REJECTED`면 누적 응답 수 보정까지 같은 트랜잭션에서 처리한다 —
+ * 조건부로 갱신한다(거절된 기록은 응답 수에서 저절로 빠진다) —
  * 늦게·중복으로 도착한 이벤트는 자동으로 무시되므로, 이 클래스는 결과를 넘기기만 한다.
  */
 @Injectable()

@@ -9,6 +9,7 @@ import { SurveyAlreadyAnsweredException } from '../common/exceptions/domain.exce
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoEntity } from '../deleted-expo/entities/deleted-expo.entity.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
+import { SurveyAnswerSubmissionEntity } from './entities/survey-answer-submission.entity.js';
 import { SurveyDrawResultEntity } from './entities/survey-draw-result.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
@@ -74,6 +75,7 @@ describe.skipIf(adminUrl === undefined)(
           SurveyEntity,
           SurveyDrawResultEntity,
           SurveyPublicAnswerEntity,
+          SurveyAnswerSubmissionEntity,
         ],
         synchronize: true,
         logging: ['query'],
