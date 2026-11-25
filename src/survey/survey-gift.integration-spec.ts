@@ -19,6 +19,7 @@ import { SurveyGiftPinEntity } from './entities/survey-gift-pin.entity.js';
 import { SurveyLotteryParticipantEntity } from './entities/survey-lottery-participant.entity.js';
 import { SurveyPublicAnswerEntity } from './entities/survey-public-answer.entity.js';
 import { SurveyEntity } from './entities/survey.entity.js';
+import { hashPin } from './gift-secret.js';
 import { SurveyGiftController } from './survey-gift.controller.js';
 import { SurveyGiftService } from './survey-gift.service.js';
 import { SurveyGiftStore } from './survey-gift.store.js';
@@ -122,11 +123,11 @@ describe.skipIf(adminUrl === undefined)(
       return (response.body as { giftToken: string }).giftToken;
     }
 
-    const setPin = (expoId: string, pin: string) =>
-      request(app.getHttpServer())
-        .put(`/surveys/${expoId}/gift-pin`)
-        .set('Authorization', 'Bearer integration-admin')
-        .send({ pin });
+    // PIN API는 막혀 있어(#298) 저장소에 직접 넣는다.
+    const setPin = async (surveyId: string, pin: string) =>
+      dataSource
+        .getRepository(SurveyGiftPinEntity)
+        .insert({ surveyId, pinHash: await hashPin(pin) });
 
     const confirm = (expoId: string, token: string, pin?: string) =>
       request(app.getHttpServer())
@@ -186,34 +187,25 @@ describe.skipIf(adminUrl === undefined)(
     it('이전 클라이언트가 틀린 pin을 보내도 실패하지 않고 그 값으로 거절하지 않는다', async () => {
       const survey = await seed();
       const token = await submit(survey.expoId);
-      await setPin(survey.expoId, '1234').expect(200);
+      await setPin(survey.id, '1234');
 
       const done = await confirm(survey.expoId, token, '9999').expect(200);
 
       expect(done.body).toMatchObject({ claimed: true });
     });
 
-    it('관리자 인증 없이 PIN을 바꾸면 401이고 저장하지 않는다', async () => {
+    it('PIN 설정·조회 API는 막혀 있다', async () => {
       const survey = await seed();
 
       await request(app.getHttpServer())
         .put(`/surveys/${survey.expoId}/gift-pin`)
+        .set('Authorization', 'Bearer integration-admin')
         .send({ pin: '1234' })
-        .expect(401);
-
-      expect(
-        await dataSource
-          .getRepository(SurveyGiftPinEntity)
-          .countBy({ surveyId: survey.id }),
-      ).toBe(0);
-    });
-
-    it('PIN 관리 API는 그대로 동작하고 PIN 형식이 틀리면 400이다', async () => {
-      const survey = await seed();
-
-      const saved = await setPin(survey.expoId, '1234').expect(200);
-      expect(saved.body).toEqual({ configured: true });
-      await setPin(survey.expoId, '12').expect(400);
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/surveys/${survey.expoId}/gift-pin`)
+        .set('Authorization', 'Bearer integration-admin')
+        .expect(404);
     });
 
     it('이미 완료된 토큰의 반복 확인은 같은 완료 상태를 돌려주고 시각을 다시 쓰지 않는다', async () => {
@@ -303,7 +295,7 @@ describe.skipIf(adminUrl === undefined)(
     it('설문이 지워지면 PIN과 수령 기록도 함께 지워진다', async () => {
       const survey = await seed();
       await submit(survey.expoId);
-      await setPin(survey.expoId, '1234').expect(200);
+      await setPin(survey.id, '1234');
 
       await dataSource.getRepository(SurveyEntity).delete({ id: survey.id });
 

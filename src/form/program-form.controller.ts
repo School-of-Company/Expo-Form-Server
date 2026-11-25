@@ -20,7 +20,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ExpoAdminAccess } from '../admin-access/expo-admin-access.decorator.js';
-import { ApiErrorResponse } from '../common/swagger/api-error-response.decorator.js';
+import {
+  ApiErrorResponse,
+  ApiHttpErrorResponse,
+} from '../common/swagger/api-error-response.decorator.js';
 import { AdminChangeNotify } from '../common/notification/admin-change-notify.js';
 import { ProgramAdminAccessGuard } from './program-admin-access.guard.js';
 import {
@@ -124,8 +127,8 @@ export class ProgramFormController {
     '박람회 권한을 확인할 수 없음 (EXTERNAL_SERVICE_UNAVAILABLE), 또는 박람회 서비스에 변경을 예약하지 못해 수정할 수 없음 (PROGRAM_FORM_RESERVATION_UNAVAILABLE). 박람회 서비스 설정이 없거나 변경 예약 API가 배포되지 않은 경우처럼 재시도로 풀리지 않을 수 있다',
   )
   @ApiBearerAuth()
-  @ApiErrorResponse(401, '인증이 필요함')
-  @ApiErrorResponse(403, '박람회 접근 권한이 없음')
+  @ApiHttpErrorResponse(401, '인증이 필요함')
+  @ApiHttpErrorResponse(403, '박람회 접근 권한이 없음')
   @UseGuards(ProgramAdminAccessGuard)
   @AdminChangeNotify('프로그램용 폼 수정')
   @Patch('by-id/:formId')
@@ -148,8 +151,8 @@ export class ProgramFormController {
     '참조 보호가 연결되기 전이라 삭제할 수 없음 (PROGRAM_FORM_PROTECTION_PENDING)',
   )
   @ApiBearerAuth()
-  @ApiErrorResponse(401, '인증이 필요함')
-  @ApiErrorResponse(403, '박람회 접근 권한이 없음')
+  @ApiHttpErrorResponse(401, '인증이 필요함')
+  @ApiHttpErrorResponse(403, '박람회 접근 권한이 없음')
   @UseGuards(ProgramAdminAccessGuard)
   @ApiErrorResponse(503, '박람회 권한을 확인할 수 없음')
   @AdminChangeNotify('프로그램용 폼 삭제')
