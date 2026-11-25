@@ -183,7 +183,10 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
             update: op('survey.update'),
             delete: op('survey.delete'),
             findOne: (...args: unknown[]) => read('survey.findOne', ...args),
-            countAnswers: () => ({ count: 7 }),
+            countAnswers(...args: unknown[]) {
+              read('survey.countAnswers', ...args);
+              return { count: 7 };
+            },
           },
         },
         {
@@ -339,6 +342,13 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
         .get(`/surveys/${EXPO}/answer-count?type=STANDARD`)
         .set('Authorization', authorization(role))
         .expect(200, { count: 7 });
+      expect(read).toHaveBeenCalledExactlyOnceWith(
+        'survey.countAnswers',
+        EXPO,
+        {
+          type: 'STANDARD',
+        },
+      );
     },
   );
 
