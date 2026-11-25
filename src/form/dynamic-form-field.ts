@@ -50,3 +50,32 @@ export function toStoredField(
     dynamicFormType: field.dynamicFormType,
   };
 }
+
+/**
+ * 수정 요청의 필드마다 유지할 기존 id를 찾는다(#290). 요청에 id가 없어서 내용으로 짝짓는다. 제목·입력 종류·의미
+ * 종류(`dynamicFormType`)가 모두 같은 기존 필드를 위치와 상관없이 짝짓고(순서 변경·선택지·필수 여부 수정), 기존 id는
+ * 한 번만 쓴다. 짝이 없으면 `undefined`이고 새 id를 받는다. 제목을 고친 필드도 새 id를 받는다: 위치만으로 짝지으면
+ * 지운 문항 자리에 넣은 다른 문항이 옛 답변을 이어받기 때문이다(`src/database/dynamic-field-ids.ts`).
+ */
+export function matchExistingIds(
+  fields: readonly NewDynamicFormField[],
+  current: readonly DynamicFormField[],
+): Array<number | undefined> {
+  const used = new Set<number>();
+
+  return fields.map((field) => {
+    const found = current.find(
+      (old) =>
+        !used.has(old.id) &&
+        old.title === field.title &&
+        old.formType === field.formType &&
+        old.dynamicFormType === field.dynamicFormType,
+    );
+    if (found === undefined) {
+      return undefined;
+    }
+
+    used.add(found.id);
+    return found.id;
+  });
+}

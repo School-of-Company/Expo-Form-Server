@@ -12,7 +12,9 @@ import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
 import { allocateFieldIds } from '../database/dynamic-field-ids.js';
 import { isOccupationOpenAtInPeriod } from './dto/create-form.request.dto.js';
 import {
+  matchExistingIds,
   toStoredField,
+  type DynamicFormField,
   type NewDynamicFormField,
 } from './dynamic-form-field.js';
 import { ApplicationType } from './entities/application-type.enum.js';
@@ -111,14 +113,14 @@ export class FormStore {
     return this.dataSource.transaction(async (manager) => {
       await this.deletedExpos.lockAndAssertNotDeleted(manager, form.expoId);
 
-      form.dynamicForms = await this.withNewIds(manager, fields);
+      form.dynamicForms = await this.withIds(manager, fields, []);
       return manager.save(FormEntity, form);
     });
   }
 
   /**
-   * 폼 메타를 갱신하면서 입력 필드를 통째로 교체한다. 새 필드는 모두 새 id를 받는다(수정하면 문항 id가 바뀐다는
-   * 지금까지의 동작 그대로다).
+   * 폼 메타를 갱신하면서 입력 필드를 통째로 교체한다. 기존 필드와 짝이 맞는 필드는 그 id를 유지하고
+   * ({@link matchExistingIds}), 나머지만 새 id를 받는다.
    *
    * 폼을 읽은 뒤 그 폼이 삭제됐다면 아래 `save`가 지워진 폼을 다시 INSERT해 버린다. 그래서 박람회
    * 삭제와 같은 잠금 안에서 삭제 기록을 확인하고, 폼 row를 잠가 아직 있는지 확인한 뒤에만 바꾼다.
@@ -142,7 +144,12 @@ export class FormStore {
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id },
-        select: { id: true, version: true, occupationOpenAt: true },
+        select: {
+          id: true,
+          version: true,
+          occupationOpenAt: true,
+          dynamicForms: true,
+        },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
@@ -159,7 +166,11 @@ export class FormStore {
       // 폼을 읽은 뒤 다른 요청이 먼저 고쳤다면 `form.version`은 낡은 값이다. 그대로 저장한 뒤 +1 하면
       // 버전이 거꾸로 가므로, 잠근 뒤 읽은 현재 값으로 맞춘 다음 올린다.
       form.version = locked.version;
-      form.dynamicForms = await this.withNewIds(manager, fields);
+      form.dynamicForms = await this.withIds(
+        manager,
+        fields,
+        locked.dynamicForms,
+      );
       await manager.save(FormEntity, form);
       await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
@@ -206,7 +217,13 @@ export class FormStore {
 
       const locked = await manager.findOne(FormEntity, {
         where: { id: form.id, purpose: FormPurpose.PROGRAM },
-        select: { id: true, version: true, startDate: true, endDate: true },
+        select: {
+          id: true,
+          version: true,
+          startDate: true,
+          endDate: true,
+          dynamicForms: true,
+        },
         lock: { mode: 'pessimistic_write' },
       });
       if (!locked) {
@@ -223,7 +240,11 @@ export class FormStore {
       }
 
       form.version = locked.version;
-      form.dynamicForms = await this.withNewIds(manager, fields);
+      form.dynamicForms = await this.withIds(
+        manager,
+        fields,
+        locked.dynamicForms,
+      );
       await manager.save(FormEntity, form);
       await manager.increment(FormEntity, { id: form.id }, 'version', 1);
 
@@ -231,17 +252,21 @@ export class FormStore {
     });
   }
 
-  /** 새 필드들에 `dynamic_form_id_seq`에서 받은 id를 작성 순서대로 붙인다. */
-  private async withNewIds(
+  /** 기존 필드와 짝이 맞으면 그 id를, 아니면 `dynamic_form_id_seq`에서 받은 id를 작성 순서대로 붙인다. */
+  private async withIds(
     manager: EntityManager,
     fields: NewDynamicFormField[],
+    current: DynamicFormField[],
   ) {
-    const ids = await allocateFieldIds(
+    const kept = matchExistingIds(fields, current);
+    const fresh = await allocateFieldIds(
       manager,
       'dynamic_form_id_seq',
-      fields.length,
+      kept.filter((id) => id === undefined).length,
     );
-    return fields.map((field, index) => toStoredField(field, ids[index]));
+    return fields.map((field, index) =>
+      toStoredField(field, kept[index] ?? fresh.shift()!),
+    );
   }
 
   /** 폼을 삭제한다. 입력 필드는 폼 행 안(`fields`)에 있어 함께 지워진다. */
