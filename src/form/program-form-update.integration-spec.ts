@@ -7,6 +7,7 @@ import { ParticipationType } from '../common/enums/participation-type.enum.js';
 import { namingStrategy } from '../database/database.config.js';
 import { DeletedExpoEntity } from '../deleted-expo/entities/deleted-expo.entity.js';
 import { DeletedExpoStore } from '../deleted-expo/deleted-expo.store.js';
+import { ApplicationType } from './entities/application-type.enum.js';
 import { DynamicFormType } from './entities/dynamic-form-type.enum.js';
 import { FormPurpose } from './entities/form-purpose.enum.js';
 import { FormEntity } from './entities/form.entity.js';
@@ -112,6 +113,60 @@ describe.skipIf(adminUrl === undefined)(
 
       return form;
     }
+
+    it('프로그램용 폼을 수정하면 짝이 맞는 필드는 잠근 뒤 읽은 기존 id를 유지하고 나머지만 새 id를 받는다', async () => {
+      const created = await createProgramForm('id 유지(프로그램)');
+      await store.updateProgramWithFields(await load(created.id), 1, [
+        field('이름'),
+        field('소속'),
+      ]);
+      const before = await load(created.id);
+      const [nameId, groupId] = before.dynamicForms.map((item) => item.id);
+
+      await store.updateProgramWithFields(before, 2, [
+        field('소속'),
+        field('이름'),
+        field('연락처'),
+      ]);
+
+      const saved = await load(created.id);
+      expect(saved.dynamicForms.map((item) => [item.title, item.id])).toEqual([
+        ['소속', groupId],
+        ['이름', nameId],
+        ['연락처', expect.any(Number)],
+      ]);
+      expect([nameId, groupId]).not.toContain(saved.dynamicForms[2]?.id);
+    });
+
+    it('등록용 폼을 수정해도 짝이 맞는 필드의 id를 유지한다', async () => {
+      const created = await store.save(
+        Object.assign(new FormEntity(), {
+          expoId,
+          purpose: FormPurpose.REGISTRATION,
+          title: 'id 유지(등록)',
+          informationText: '안내',
+          participationType: ParticipationType.STANDARD,
+          applicationType: ApplicationType.PRE,
+          startDate: new Date('2026-10-01T00:00:00Z'),
+          endDate: new Date('2026-10-31T00:00:00Z'),
+          occupationOpenAt: null,
+        }),
+        [field('이름'), field('소속')],
+      );
+      const [nameId] = created.dynamicForms.map((item) => item.id);
+
+      await expect(
+        store.updateWithFields(created, [field('새 문항'), field('이름')]),
+      ).resolves.toBe('UPDATED');
+
+      const saved = await dataSource
+        .getRepository(FormEntity)
+        .findOneByOrFail({ id: created.id });
+      expect(saved.dynamicForms.map((item) => [item.title, item.id])).toEqual([
+        ['새 문항', expect.any(Number)],
+        ['이름', nameId],
+      ]);
+    });
 
     it('같은 version을 들고 동시에 저장하면 한 명만 반영되고 다른 한 명은 CONFLICT다', async () => {
       const created = await createProgramForm('동시 수정');
