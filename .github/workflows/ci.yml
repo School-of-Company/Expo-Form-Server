@@ -3,30 +3,65 @@ name: CI
 on:
   pull_request:
     branches: [develop, main]
-    types: [opened, edited, synchronize, reopened]
+  # 병합 대기열(develop)에서도 필수 체크가 돌아야 대기열이 진행된다.
+  merge_group:
+
+# 같은 PR에 새 push가 오면 이전 실행을 취소한다.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  pr-title:
+  # 테스트 범위를 한 곳에서 정한다.
+  # - tests=full: 병합 대기열, main으로 가는 PR, import 그래프로 따라갈 수 없는 파일(의존성·TS/빌드/테스트 설정·
+  #   마이그레이션·CI 자체)이 바뀐 PR. 그 밖의 develop PR은 changed(vitest --changed로 영향받는 테스트만).
+  # - e2e: 앱 전체를 띄우므로 그래프로 고를 수 없다. 전체 실행 대상이거나 코어(부팅·DB·Kafka·공통)가 바뀌면
+  #   실제 Kafka를 붙인 full, 그 밖의 앱 코드만 바뀌면 smoke, 앱 코드 변경이 없으면 skip.
+  # - migration: 전체 실행 대상이거나 엔티티·마이그레이션·DB 설정이 바뀌면 마이그레이션을 검증한다.
+  scope:
     runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.scope.outputs.tests }}
+      e2e: ${{ steps.scope.outputs.e2e }}
+      migration: ${{ steps.scope.outputs.migration }}
     steps:
-      - name: PR 제목 형식 검증
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: scope
         env:
-          TITLE: ${{ github.event.pull_request.title }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [[ "$BASE_REF" == "main" && "$TITLE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
+          if [[ "$EVENT" == "merge_group" || "$BASE_REF" == "main" ]]; then
+            out tests full; out e2e full; out migration run
             exit 0
           fi
-          if [[ ! "$TITLE" =~ ^\[(form|survey|json|global|ci/cd)\]\ .+ ]]; then
-            echo "PR 제목은 '[scope] description' 형식이어야 합니다 (scope: form/survey/json/global/ci-cd)." >&2
-            echo "main으로 가는 릴리즈 PR은 'vX.Y.Z' 형식도 허용됩니다." >&2
-            echo "현재 제목: $TITLE" >&2
-            exit 1
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          full='^(package\.json|pnpm-lock\.yaml|tsconfig[^/]*\.json|nest-cli\.json|vitest\.config[^/]*\.ts|xo\.config\.ts|src/database/migrations/|\.github/)'
+          core='^(src/app\.module\.ts|src/main\.ts|src/database/|src/kafka/|src/common/|test/full/)'
+          db='(^src/database/|/entities/)'
+          if grep -qE "$full" <<< "$changed"; then
+            out tests full; out e2e full; out migration run
+            exit 0
           fi
+          out tests changed
+          if grep -qE "$core" <<< "$changed"; then
+            out e2e full
+          elif grep -qE '^(src/|test/)' <<< "$changed"; then
+            out e2e smoke
+          else
+            out e2e skip
+          fi
+          if grep -qE "$db" <<< "$changed"; then out migration run; else out migration skip; fi
 
   # 린트는 별도 잡으로 둔다. 브랜치 보호의 필수 체크(`lint`)로 걸려 있어서, 테스트·빌드와 따로
   # 통과 여부가 보여야 하고 한쪽이 실패해도 다른 쪽 결과를 같이 볼 수 있다.
   lint:
+    needs: scope
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,14 +76,27 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # XO는 파일 내용 기준으로 결과를 캐시하지만 다른 파일의 타입 변경은 감지하지 못한다. 그래서 테스트도
+      # 영향받는 것만 도는 PR에서만 캐시를 쓰고, 전체 검사 대상(대기열·main PR·설정 변경)은 캐시 없이 검사한다.
+      - name: XO 캐시
+        if: needs.scope.outputs.tests == 'changed'
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/xo-linter
+          key: xo-${{ hashFiles('pnpm-lock.yaml', 'xo.config.ts', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: xo-${{ hashFiles('pnpm-lock.yaml', 'xo.config.ts', 'tsconfig.json') }}-
 
       - name: XO 린트
         run: pnpm run lint
 
   verify:
+    needs: scope
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -61,13 +109,27 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run test
+      - name: 단위 테스트 영향 범위
+        if: needs.scope.outputs.tests == 'changed'
+        run: .github/scripts/affected-tests.sh "단위 테스트" "origin/${{ github.base_ref }}"
+
+      - name: 단위 테스트
+        env:
+          TESTS: ${{ needs.scope.outputs.tests }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [[ "$TESTS" == "changed" ]]; then
+            pnpm run test --changed "origin/$BASE_REF" --passWithNoTests
+          else
+            pnpm run test
+          fi
 
       - run: pnpm run build
 
   # DB 통합 테스트(`*.integration-spec.ts`)는 `DATABASE_URL`이 없으면 건너뛰므로, Postgres를 띄워 따로 돌린다.
   # 각 spec이 이 접속 정보로 임시 DB를 만들고 지운다. 버전은 로컬 `docker-compose.yml`과 맞춘다.
   integration:
+    needs: scope
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -84,6 +146,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -96,20 +160,138 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: 통합 테스트 영향 범위
+        if: needs.scope.outputs.tests == 'changed'
+        run: .github/scripts/affected-tests.sh "통합 테스트" "origin/${{ github.base_ref }}" --config ./vitest.config.integration.ts
+
       - name: DB 통합 테스트
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
-        run: pnpm run test:integration
+          TESTS: ${{ needs.scope.outputs.tests }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [[ "$TESTS" == "changed" ]]; then
+            pnpm run test:integration --changed "origin/$BASE_REF" --passWithNoTests
+          else
+            pnpm run test:integration
+          fi
 
+  # smoke는 Kafka를 가짜로 바꿔 앱이 뜨는지만 보고, full은 실제 Kafka를 띄워 접속·구독까지 검증한다.
+  # skip이면 단계만 건너뛰어 잡은 성공으로 끝난다(필수 체크와 호환).
+  e2e:
+    needs: scope
+    runs-on: ubuntu-latest
+    # 부팅 때 필수로 검사하는 설정. 외부 서비스는 호출하지 않으므로 형식만 맞는 가짜 값이다.
+    env:
+      USER_SERVICE_URL: http://localhost:1
+      USER_SERVICE_INTERNAL_TOKEN: e2e-user-service-token-0123456789abcdef
+      INTERNAL_TOKEN: e2e-internal-token-0123456789abcdef0123
+      KAFKA_BROKERS: localhost:9092
+      KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC: survey.answer.submit
+      KAFKA_SURVEY_ANSWER_RESULT_TOPIC: survey.answer.result
+      KAFKA_SURVEY_ANSWER_RESULT_GROUP_ID: expo-form-server.survey-answer-result
+      KAFKA_SMS_REQUESTED_TOPIC: notification.sms.requested
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - if: needs.scope.outputs.e2e != 'skip'
+        uses: actions/checkout@v4
+
+      - if: needs.scope.outputs.e2e != 'skip'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - if: needs.scope.outputs.e2e != 'skip'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - if: needs.scope.outputs.e2e != 'skip'
+        run: pnpm install --frozen-lockfile
+
+      - name: Kafka 기동
+        if: needs.scope.outputs.e2e == 'full'
+        run: .github/scripts/start-kafka.sh "$KAFKA_SURVEY_ANSWER_SUBMIT_TOPIC" "$KAFKA_SURVEY_ANSWER_RESULT_TOPIC" "$KAFKA_SMS_REQUESTED_TOPIC"
+
+      - name: 스모크 e2e
+        if: needs.scope.outputs.e2e == 'smoke'
+        run: pnpm run test:e2e:smoke
+
+      - name: 전체 e2e (실제 Kafka)
+        if: needs.scope.outputs.e2e == 'full'
+        run: pnpm run test:e2e
+
+  # 빈 DB에 마이그레이션을 처음부터 끝까지 적용한 뒤, 엔티티와 비교해 마이그레이션으로 만들지 않은 스키마
+  # 차이가 없는지 본다. CI의 다른 잡은 synchronize로 스키마를 맞추므로 마이그레이션은 여기서만 검증된다.
+  migration:
+    needs: scope
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - if: needs.scope.outputs.migration == 'run'
+        uses: actions/checkout@v4
+
+      - if: needs.scope.outputs.migration == 'run'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - if: needs.scope.outputs.migration == 'run'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - if: needs.scope.outputs.migration == 'run'
+        run: pnpm install --frozen-lockfile
+
+      - name: 마이그레이션 적용
+        if: needs.scope.outputs.migration == 'run'
+        run: pnpm run migration:run
+
+      - name: 엔티티와 스키마 차이 확인
+        if: needs.scope.outputs.migration == 'run'
+        run: .github/scripts/check-migration-drift.sh
+
+  # 실패했을 때만 알린다.
   notify-discord:
-    needs: [lint, verify, integration]
+    needs: [lint, verify, integration, e2e, migration]
+    if: failure()
     runs-on: ubuntu-latest
     steps:
       - name: Discord 알림 전송
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          status: success
+          status: failure
           title: Expo Form CI
           content: |
             <@${{ secrets.DISCORD_USER_ID_1 }}> <@${{ secrets.DISCORD_USER_ID_2 }}>
