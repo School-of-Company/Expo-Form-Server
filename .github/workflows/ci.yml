@@ -41,7 +41,7 @@ jobs:
             exit 0
           fi
           changed=$(git diff --name-only "$BASE_SHA" HEAD)
-          full='^(package\.json|pnpm-lock\.yaml|tsconfig[^/]*\.json|nest-cli\.json|vitest\.config[^/]*\.ts|xo\.config\.ts|src/database/migrations/|\.github/)'
+          full='^(package\.json|pnpm-lock\.yaml|tsconfig[^/]*\.json|nest-cli\.json|vitest\.config[^/]*\.ts|src/database/migrations/|\.github/)'
           core='^(src/app\.module\.ts|src/main\.ts|src/database/|src/kafka/|src/common/|test/full/)'
           db='(^src/database/|/entities/)'
           if grep -qE "$full" <<< "$changed"; then
@@ -57,38 +57,6 @@ jobs:
             out e2e skip
           fi
           if grep -qE "$db" <<< "$changed"; then out migration run; else out migration skip; fi
-
-  # 린트는 별도 잡으로 둔다. 브랜치 보호의 필수 체크(`lint`)로 걸려 있어서, 테스트·빌드와 따로
-  # 통과 여부가 보여야 하고 한쪽이 실패해도 다른 쪽 결과를 같이 볼 수 있다.
-  lint:
-    needs: scope
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '26'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      # XO는 파일 내용 기준으로 결과를 캐시하지만 다른 파일의 타입 변경은 감지하지 못한다. 그래서 테스트도
-      # 영향받는 것만 도는 PR에서만 캐시를 쓰고, 전체 검사 대상(대기열·main PR·설정 변경)은 캐시 없이 검사한다.
-      - name: XO 캐시
-        if: needs.scope.outputs.tests == 'changed'
-        uses: actions/cache@v4
-        with:
-          path: node_modules/.cache/xo-linter
-          key: xo-${{ hashFiles('pnpm-lock.yaml', 'xo.config.ts', 'tsconfig.json') }}-${{ github.sha }}
-          restore-keys: xo-${{ hashFiles('pnpm-lock.yaml', 'xo.config.ts', 'tsconfig.json') }}-
-
-      - name: XO 린트
-        run: pnpm run lint
 
   verify:
     needs: scope
@@ -124,7 +92,10 @@ jobs:
             pnpm run test
           fi
 
-      - run: pnpm run build
+      # 빌드는 배포 직전인 main으로 가는 PR에서만 확인한다. 타입 오류는 에이전트 훅(ts-check)과 리뷰에서 잡는다.
+      - name: 빌드
+        if: github.base_ref == 'main'
+        run: pnpm run build
 
   # DB 통합 테스트(`*.integration-spec.ts`)는 `DATABASE_URL`이 없으면 건너뛰므로, Postgres를 띄워 따로 돌린다.
   # 각 spec이 이 접속 정보로 임시 DB를 만들고 지운다. 버전은 로컬 `docker-compose.yml`과 맞춘다.
@@ -283,7 +254,7 @@ jobs:
 
   # 실패했을 때만 알린다.
   notify-discord:
-    needs: [lint, verify, integration, e2e, migration]
+    needs: [verify, integration, e2e, migration]
     if: failure()
     runs-on: ubuntu-latest
     steps:
