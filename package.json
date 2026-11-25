@@ -17,6 +17,7 @@
     "start:prod": "node dist/main",
     "lint": "xo",
     "lint:fix": "xo --fix",
+    "prepare": "git config core.hooksPath .githooks || true",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
