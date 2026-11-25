@@ -258,12 +258,38 @@ jobs:
     if: failure()
     runs-on: ubuntu-latest
     steps:
+      # 대기열 실패는 ref(gh-readonly-queue/develop/pr-316-…)만으로는 어느 PR인지 알기 어려워, PR 번호와 실패한 잡을 적는다.
+      - name: 실패 내용 정리
+        id: info
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          PR: ${{ github.event.pull_request.number }}
+          RESULTS: ${{ toJSON(needs) }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          if [[ "$EVENT" == "merge_group" ]]; then
+            PR=$(sed -nE 's#.*/pr-([0-9]+)-.*#\1#p' <<< "$REF")
+            where="병합 대기열에서 빠졌습니다. 고친 뒤 다시 대기열에 넣어 주세요."
+          else
+            where="PR CI가 실패했습니다."
+          fi
+          failed=$(jq -r 'to_entries | map(select(.value.result == "failure") | .key) | join(", ")' <<< "$RESULTS")
+          {
+            echo "description<<EOF"
+            echo "PR: $REPO_URL/pull/$PR"
+            echo "실패한 잡: $failed"
+            echo "$where"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Discord 알림 전송
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
           status: failure
           title: Expo Form CI
+          description: ${{ steps.info.outputs.description }}
           content: |
             <@${{ secrets.DISCORD_USER_ID_1 }}> <@${{ secrets.DISCORD_USER_ID_2 }}>
             확인해주세요.
