@@ -29,7 +29,6 @@ import { SurveyModule } from './survey/survey.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    // 앱 시작/종료·처리되지 않은 예외를 Discord 채널로 알림. webhookUrl 미설정 시 자동 비활성화.
     DicoshotModule.registerAsync({
       imports: [ConfigModule],
       useFactory(...args: unknown[]) {
@@ -44,9 +43,6 @@ import { SurveyModule } from './survey/survey.module.js';
       filter: dicoshotFilterOptions,
     }),
     ScheduleModule.forRoot(),
-    // Gateway가 `/forms`, `/surveys`를 Eureka에서 찾을 수 있게 `expo-form-server`로 등록한다.
-    // EUREKA_SERVICE_URL이 없으면(로컬·테스트·CI) 모듈을 불러오지 않는다. `.env`까지 읽힌 뒤에 판단하도록
-    // ConditionalModule을 쓴다.
     ConditionalModule.registerWhen(
       EurekaModule.forRootAsync({
         imports: [ConfigModule],
@@ -62,7 +58,7 @@ import { SurveyModule } from './survey/survey.module.js';
             getMetricsRuntime()?.bind,
           ),
       }),
-      EUREKA_SERVICE_URL_ENV,
+      (env) => (env[EUREKA_SERVICE_URL_ENV] ?? '') !== '',
     ),
     KafkaModule,
     DatabaseModule,
@@ -70,7 +66,6 @@ import { SurveyModule } from './survey/survey.module.js';
     FormModule,
     SurveyModule,
     ExpoModule,
-    // 박람회 변경 이벤트로 박람회 프로젝션을 채운다. KAFKA_EXPO_PROJECTION_ENABLED=true일 때만 구독한다.
     ConditionalModule.registerWhen(ExpoChangedConsumerModule, (env) =>
       isExpoProjectionEnabled(env[EXPO_PROJECTION_ENABLED_KEY]),
     ),

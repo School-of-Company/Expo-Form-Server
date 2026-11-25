@@ -68,6 +68,14 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
   let responseExpo: string;
   let programExpo: string | null;
   const write = vi.fn();
+  // 어느 서비스 메서드가 어떤 인자로 불렸는지 남기되, 기존 단언처럼 `write` 하나로 쓰기 여부도 본다.
+  const op =
+    (name: string) =>
+    (...args: unknown[]): void => {
+      write(name, ...args);
+    };
+
+  const read = vi.fn((..._args: unknown[]) => ({}));
   async function fakeExpoServer(input: string, init?: RequestInit) {
     const url = new URL(input);
     const headers = new Headers(init?.headers);
@@ -155,13 +163,13 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
         {
           provide: FormService,
           useValue: {
-            create: write,
-            update: write,
-            delete: write,
+            create: op('form.create'),
+            update: op('form.update'),
+            delete: op('form.delete'),
             createProgram: write,
             updateProgram: write,
             deleteProgram: write,
-            findOne: () => ({}),
+            findOne: (...args: unknown[]) => read('form.findOne', ...args),
             findProgram: () => ({}),
             findProgramsByExpo: () => [],
           },
@@ -169,11 +177,14 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
         {
           provide: SurveyService,
           useValue: {
-            create: write,
-            update: write,
-            delete: write,
-            findOne: () => ({}),
-            countAnswers: () => ({ count: 7 }),
+            create: op('survey.create'),
+            update: op('survey.update'),
+            delete: op('survey.delete'),
+            findOne: (...args: unknown[]) => read('survey.findOne', ...args),
+            countAnswers(...args: unknown[]) {
+              read('survey.countAnswers', ...args);
+              return { count: 7 };
+            },
           },
         },
         {
@@ -205,6 +216,7 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
     responseExpo = EXPO;
     programExpo = EXPO;
     write.mockClear();
+    read.mockClear();
     fetchMock.mockReset().mockImplementation(fakeExpoServer);
     resetDownstreamGuards();
     vi.stubGlobal('fetch', fetchMock);
@@ -280,6 +292,47 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
+  const body = { title: '제목' };
+  it.each([
+    ['post', `/forms/${EXPO}`, ['form.create', EXPO, body]],
+    ['patch', `/forms/${EXPO}`, ['form.update', EXPO, body]],
+    [
+      'delete',
+      `/forms/${EXPO}/TRAINEE/FIELD`,
+      ['form.delete', EXPO, 'TRAINEE', 'FIELD'],
+    ],
+    ['post', `/surveys/${EXPO}`, ['survey.create', EXPO, body]],
+    ['patch', `/surveys/${EXPO}`, ['survey.update', EXPO, body]],
+    ['delete', `/surveys/${EXPO}/TRAINEE`, ['survey.delete', EXPO, 'TRAINEE']],
+  ] as const)(
+    '%s %s는 경로와 바디를 서비스 인자로 그대로 넘긴다',
+    async (method, path, expected) => {
+      const call = request(app.getHttpServer())[method](path);
+      const response = await call
+        .set('Authorization', authorization('MANAGER'))
+        .send(body);
+      expect(response.status).toBeLessThan(300);
+      expect(write).toHaveBeenCalledExactlyOnceWith(...expected);
+    },
+  );
+
+  it.each([
+    [
+      `/forms/${EXPO}?type=TRAINEE&applicationType=FIELD`,
+      ['form.findOne', EXPO, { type: 'TRAINEE', applicationType: 'FIELD' }],
+    ],
+    [
+      `/surveys/${EXPO}?type=TRAINEE`,
+      ['survey.findOne', EXPO, { type: 'TRAINEE' }],
+    ],
+  ] as const)(
+    'GET %s는 경로와 쿼리를 서비스 인자로 넘긴다',
+    async (path, expected) => {
+      await request(app.getHttpServer()).get(path).expect(200);
+      expect(read).toHaveBeenCalledExactlyOnceWith(...expected);
+    },
+  );
+
   it.each(['VIEWER', 'STAFF'] as const)(
     '%s는 STATS_READ로 answer-count를 조회한다',
     async (role) => {
@@ -287,6 +340,13 @@ describe('관리자 박람회 접근 HTTP 계약', () => {
         .get(`/surveys/${EXPO}/answer-count?type=STANDARD`)
         .set('Authorization', authorization(role))
         .expect(200, { count: 7 });
+      expect(read).toHaveBeenCalledExactlyOnceWith(
+        'survey.countAnswers',
+        EXPO,
+        {
+          type: 'STANDARD',
+        },
+      );
     },
   );
 

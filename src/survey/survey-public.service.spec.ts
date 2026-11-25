@@ -146,8 +146,9 @@ describe('SurveyPublicService', () => {
         });
       });
 
-      it('번호 없이 당첨돼도 당첨을 알려 준다', async () => {
-        answerStore.create.mockResolvedValue({ won: true, drawNumber: 10 });
+      it('번호 없이 제출하면 번호 없이 저장소에 넘기고, 저장소 결과(미당첨)를 그대로 알린다', async () => {
+        // 저장소는 번호 없는 응답을 당첨시키지 않는다(survey-public-answer.store.spec 참고).
+        answerStore.create.mockResolvedValue({ won: false, drawNumber: null });
 
         const result = await service.submit(expoId, answerDto);
 
@@ -158,7 +159,7 @@ describe('SurveyPublicService', () => {
           null,
           expect.any(String),
         );
-        expect(result.won).toBe(true);
+        expect(result.won).toBe(false);
       });
 
       it('추첨이 켜져 있으면 번호를 숫자만 남겨 넘긴다', async () => {
