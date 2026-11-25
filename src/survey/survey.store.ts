@@ -226,8 +226,8 @@ export class SurveyStore {
   }
 
   /**
-   * 설문의 응답 수. 공개 링크 답변(과 옛 종이 QR 답변)을 센 `totalAnswers`에 거절되지 않은 로그인/SMS 답변
-   * 접수 기록 수를 더한다. 설문이 없으면 0이다.
+   * 설문의 응답 수. `totalAnswers`(공개 링크 답변·옛 종이 QR 답변과, 예전 버전이 접수 때 더해 둔 로그인/SMS 답변)에
+   * 아직 더해지지 않은(`countedInTotal` false) 거절되지 않은 접수 기록 수를 더한다. 설문이 없으면 0이다.
    */
   async countAnswers(
     surveyId: string,
@@ -235,7 +235,7 @@ export class SurveyStore {
   ): Promise<number> {
     // 원시 SQL이라 SnakeNamingStrategy가 적용되지 않는다 — 실제 컬럼명을 쓴다. count(*)는 bigint라 문자열로 오므로 int로 바꾼다.
     const [row] = await manager.query<Array<{ count: number }>>(
-      `SELECT (s.total_answers + (SELECT count(*) FROM survey_answer_submission a WHERE a.survey_id = s.id AND a.status <> $2))::int AS "count" FROM survey s WHERE s.id = $1`,
+      `SELECT (s.total_answers + (SELECT count(*) FROM survey_answer_submission a WHERE a.survey_id = s.id AND a.status <> $2 AND a.counted_in_total = false))::int AS "count" FROM survey s WHERE s.id = $1`,
       [surveyId, SurveyAnswerSubmissionStatus.REJECTED],
     );
     return row?.count ?? 0;

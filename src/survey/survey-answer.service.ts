@@ -158,6 +158,8 @@ export class SurveyAnswerService {
       retryCount: 0,
       publishedAt: null,
       eventVersion: null,
+      // 응답 수는 totalAnswers를 늘리지 않고 이 행으로 센다(SurveyStore.countAnswers).
+      countedInTotal: false,
       payload: {
         answers: result.data,
         personalInformationStatus: dto.personalInformationStatus,

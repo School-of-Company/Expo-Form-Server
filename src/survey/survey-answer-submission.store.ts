@@ -56,8 +56,9 @@ export type AnswerRelayOptions = Pick<
  * 상태 전이(특히 종결 상태로의 전이)는 전부 조건부 UPDATE로 구현한다 — 이미 종결된 row를
  * 애플리케이션 레벨에서 다시 읽어 판단하면, 그 사이 다른 요청이 끼어드는 경합을 못 막는다.
  *
- * 설문의 응답 수는 이 테이블의 거절되지 않은 행 수로 센다(`SurveyStore.countAnswers`). 접수·거절이
- * 설문 행의 카운터를 바꾸지 않으므로, 같은 설문에 몰린 접수가 설문 행 잠금을 두고 줄 서지 않는다.
+ * 설문의 응답 수는 `totalAnswers`에 이 테이블의 거절되지 않고 `countedInTotal`이 false인 행 수를 더해 센다
+ * (`SurveyStore.countAnswers`). 접수는 설문 행의 카운터를 바꾸지 않으므로, 같은 설문에 몰린 접수가 설문 행 잠금을 두고
+ * 줄 서지 않는다.
  */
 @Injectable()
 export class SurveyAnswerSubmissionStore {
@@ -351,7 +352,8 @@ export class SurveyAnswerSubmissionStore {
    * 결과 이벤트를 반영한다. 아직 종결되지 않은(`RECEIVED`/`PUBLISHED`) row만 갱신한다 —
    * 릴레이는 발행 전에 `PUBLISHED`로 claim하지만, 발행 실패로 claim을 되돌린 건(`RECEIVED`)에 앞서 일부 나간 묶음의 결과가 올 수 있다.
    * 이미 종결된 row는 조건에 안 걸려 무시되므로, 늦게·중복으로 도착한 이벤트가 최종 상태를
-   * 덮어쓰지 못한다. 거절된 기록은 응답 수에서 저절로 빠진다.
+   * 덮어쓰지 못한다. 거절된 기록은 응답 수에서 저절로 빠지고, 예전 버전이 `totalAnswers`에 더해 둔 기록이면 같은
+   * 트랜잭션에서 되돌린다.
    *
    * @returns 실제로 갱신됐으면 true, 이미 종결 상태라 무시됐으면 false
    */
@@ -362,10 +364,34 @@ export class SurveyAnswerSubmissionStore {
       | SurveyAnswerSubmissionStatus.REJECTED,
     rejectReason: string | null,
   ): Promise<boolean> {
-    const { affected } = await this.submissions.update(
-      { eventId, status: In(IN_FLIGHT_STATUSES) },
-      { status, rejectReason },
-    );
-    return (affected ?? 0) > 0;
+    return this.dataSource.transaction(async (manager) => {
+      const { affected } = await manager.update(
+        SurveyAnswerSubmissionEntity,
+        { eventId, status: In(IN_FLIGHT_STATUSES) },
+        { status, rejectReason },
+      );
+      if ((affected ?? 0) === 0) {
+        return false;
+      }
+
+      // 예전 버전이 접수하며 totalAnswers에 더해 둔 행만 되돌린다. 지금 접수한 행은 거절되면 집계에서 저절로 빠진다.
+      if (status === SurveyAnswerSubmissionStatus.REJECTED) {
+        const { surveyId, countedInTotal } = await manager.findOneOrFail(
+          SurveyAnswerSubmissionEntity,
+          { select: { surveyId: true, countedInTotal: true }, where: { eventId } },
+        );
+        if (countedInTotal) {
+          await manager.decrement(
+            SurveyEntity,
+            { id: surveyId },
+            'totalAnswers',
+            1,
+          );
+        }
+      }
+
+      return true;
+    });
   }
+
 }

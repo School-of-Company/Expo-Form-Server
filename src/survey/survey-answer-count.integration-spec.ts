@@ -115,6 +115,7 @@ describe.skipIf(adminUrl === undefined)('설문 응답 수와 접수 잠금', ()
       phoneNumber,
       eventId: randomUUID(),
       status: SurveyAnswerSubmissionStatus.RECEIVED,
+      countedInTotal: false,
       payload: { answers: {}, personalInformationStatus: true },
     });
   }
@@ -151,7 +152,7 @@ describe.skipIf(adminUrl === undefined)('설문 응답 수와 접수 잠금', ()
     const runner = dataSource.createQueryRunner();
     await runner.connect();
     await runner.startTransaction();
-    await runner.manager.insert(
+    await runner.manager.save(
       SurveyAnswerSubmissionEntity,
       submission(survey, phoneNumber),
     );
@@ -218,6 +219,33 @@ describe.skipIf(adminUrl === undefined)('설문 응답 수와 접수 잠금', ()
     ).resolves.toBe(false);
 
     await expect(surveyStore.countAnswers(survey.id)).resolves.toBe(2);
+  });
+
+  it('예전 버전이 totalAnswers에 더해 둔 접수는 한 번만 세고, 거절되면 totalAnswers에서 되돌린다', async () => {
+    const survey = await seed();
+    // 예전 버전처럼 접수하며 totalAnswers를 늘리고, 컬럼 기본값(true)으로 행을 넣는다.
+    await dataSource
+      .getRepository(SurveyEntity)
+      .increment({ id: survey.id }, 'totalAnswers', 1);
+    const legacy = submission(survey);
+    await dataSource
+      .getRepository(SurveyAnswerSubmissionEntity)
+      .save({ ...legacy, countedInTotal: true });
+    await submissionStore.createReceived(submission(survey));
+
+    await expect(surveyStore.countAnswers(survey.id)).resolves.toBe(2);
+
+    await submissionStore.markFinal(
+      legacy.eventId,
+      SurveyAnswerSubmissionStatus.REJECTED,
+      '미등록',
+    );
+
+    await expect(surveyStore.countAnswers(survey.id)).resolves.toBe(1);
+    const { totalAnswers } = await dataSource
+      .getRepository(SurveyEntity)
+      .findOneByOrFail({ id: survey.id });
+    expect(totalAnswers).toBe(0);
   });
 
   it('로그인/SMS 접수만 있는 설문도 문항 교체를 막는다', async () => {

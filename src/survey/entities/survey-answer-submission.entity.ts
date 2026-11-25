@@ -33,6 +33,12 @@ import { SurveyAnswerSubmissionStatus } from './survey-answer-submission-status.
 @Index('IX_survey_answer_submission_in_flight', ['status', 'createdAt'], {
   where: `"status" IN ('RECEIVED', 'PUBLISHED')`,
 })
+/**
+ * 설문 응답 수 집계용 부분 인덱스(`SurveyStore.countAnswers`). 집계 조건과 같아 인덱스만 읽고 센다.
+ */
+@Index('IX_survey_answer_submission_uncounted', ['surveyId'], {
+  where: `"status" <> 'REJECTED' AND "counted_in_total" = false`,
+})
 @Entity('survey_answer_submission')
 export class SurveyAnswerSubmissionEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -68,6 +74,14 @@ export class SurveyAnswerSubmissionEntity {
   /** 거절 사유. `REJECTED`가 아니면 null. */
   @Column({ type: 'text', nullable: true })
   rejectReason: string | null;
+
+  /**
+   * 이 접수가 설문의 `totalAnswers`에 이미 더해져 있는지. 예전 버전은 접수할 때 `totalAnswers`를 늘렸고, 지금은
+   * 늘리지 않고 이 값이 false인 행을 따로 센다. 기본값이 true라 배포 중 예전 버전이 넣는 행도 예전 방식대로 맞는다.
+   * 지금 버전은 접수할 때 false로 넣는다(`SurveyAnswerService`).
+   */
+  @Column({ type: 'boolean', default: true })
+  countedInTotal: boolean;
 
   /** 재발행 횟수. 릴레이가 무한정 재발행하지 않도록 상한을 두는 데 쓴다. */
   @Column({ type: 'int', default: 0 })
