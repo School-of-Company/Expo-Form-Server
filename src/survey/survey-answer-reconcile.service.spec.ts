@@ -319,13 +319,15 @@ describe('SurveyAnswerReconcileService', () => {
     const before = Date.now();
 
     await service.reconcile();
+    const after = Date.now();
 
     const [query] = store.findExhausted.mock.calls[0] as [
       { maxRetryCount: number; staleBefore: Date },
     ];
     expect(query.maxRetryCount).toBe(7);
-    expect(before - query.staleBefore.getTime()).toBeGreaterThanOrEqual(60_000);
-    expect(before - query.staleBefore.getTime()).toBeLessThan(65_000);
+    // 서비스가 시각을 읽는 순간은 before와 after 사이라, staleBefore도 그 구간에서 60초를 뺀 범위에 든다.
+    expect(query.staleBefore.getTime()).toBeGreaterThanOrEqual(before - 60_000);
+    expect(query.staleBefore.getTime()).toBeLessThanOrEqual(after - 60_000);
   });
 
   it('릴레이처럼 잘못된 설정값은 받아들이지 않는다', async () => {
