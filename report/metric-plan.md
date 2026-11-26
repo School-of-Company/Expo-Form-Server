@@ -111,17 +111,64 @@ PR마다 댓글 하나가 달리고, 푸시할 때마다 같은 댓글이 갱신
   "schemaVersion": 1,
   "metricSet": "public-answers",
   "title": "GET /internal/surveys/:expoId/public-answers",
-  "source": { "sha": "<40 hex>", "baseSha": "<40 hex>", "event": "pull_request", "runId": 123, "runAttempt": 1 },
+  "source": {
+    "sha": "<40 hex>",
+    "baseSha": "<40 hex>",
+    "event": "pull_request",
+    "runId": 123,
+    "runAttempt": 1
+  },
   "env": { "node": "v26.13.1", "postgres": "17.11" },
   "params": { "n": 250, "limit": 100, "questions": "3/30", "noiseRows": 1000 },
   "metrics": [
-    { "id": "queries.firstPage", "label": "첫 페이지 쿼리 수", "kind": "invariant", "unit": "count", "value": 7,
-      "samples": [{ "label": "N=250", "value": 7 }, { "label": "2N=500", "value": 7 }, { "label": "questions=30", "value": 7 }] },
-    { "id": "queries.nextPage", "label": "다음 페이지 쿼리 수", "kind": "invariant", "unit": "count", "value": 2, "samples": ["..."] },
-    { "id": "bytes.firstPage", "label": "첫 페이지 바이트", "kind": "max", "unit": "bytes", "value": 16746 },
-    { "id": "bytes.nextPage", "label": "다음 페이지 바이트", "kind": "max", "unit": "bytes", "value": 16746 },
-    { "id": "bytes.total", "label": "전체 바이트 (N=250)", "kind": "max", "unit": "bytes", "value": 42052 },
-    { "id": "bytes.perRow", "label": "행당 바이트", "kind": "max", "unit": "bytes", "value": 159 }
+    {
+      "id": "queries.firstPage",
+      "label": "첫 페이지 쿼리 수",
+      "kind": "invariant",
+      "unit": "count",
+      "value": 7,
+      "samples": [
+        { "label": "N=250", "value": 7 },
+        { "label": "2N=500", "value": 7 },
+        { "label": "questions=30", "value": 7 }
+      ]
+    },
+    {
+      "id": "queries.nextPage",
+      "label": "다음 페이지 쿼리 수",
+      "kind": "invariant",
+      "unit": "count",
+      "value": 2,
+      "samples": ["..."]
+    },
+    {
+      "id": "bytes.firstPage",
+      "label": "첫 페이지 바이트",
+      "kind": "max",
+      "unit": "bytes",
+      "value": 16746
+    },
+    {
+      "id": "bytes.nextPage",
+      "label": "다음 페이지 바이트",
+      "kind": "max",
+      "unit": "bytes",
+      "value": 16746
+    },
+    {
+      "id": "bytes.total",
+      "label": "전체 바이트 (N=250)",
+      "kind": "max",
+      "unit": "bytes",
+      "value": 42052
+    },
+    {
+      "id": "bytes.perRow",
+      "label": "행당 바이트",
+      "kind": "max",
+      "unit": "bytes",
+      "value": 159
+    }
   ],
   "details": { "sql.firstPage": ["..."], "sql.nextPage": ["..."] },
   "stable": true
