@@ -1,0 +1,113 @@
+name: perf-metrics
+
+# public-answers의 쿼리 수와 응답 바이트를 재서 아티팩트로 올린다(report/metric-plan.md 4.1). 판정은 하지 않는다.
+# develop push 실행이 기준선이 된다.
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR은 새 push가 오면 이전 측정을 취소하고, 기준선(push)은 커밋마다 남도록 sha별로 둔다.
+concurrency:
+  group: perf-metrics-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # 실행 사이 결과가 같도록 다이제스트로 고정한다(postgres:17-alpine).
+        image: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: 시작 시각 기록
+        run: echo "JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: public-answers 측정
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          PERF_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: pnpm exec vitest run --config ./vitest.config.metrics.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf-metrics
+          path: ${{ runner.temp }}/perf-metrics/public-answers.json
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+
+      - name: 실행 요약
+        if: always()
+        env:
+          RESULT: ${{ runner.temp }}/perf-metrics/public-answers.json
+        run: |
+          elapsed=$(( $(date +%s) - JOB_STARTED ))
+          {
+            echo "### public-answers 성능 지표"
+            echo
+            if [[ ! -f "$RESULT" ]]; then
+              echo "측정 결과가 없습니다. 측정 단계 로그를 확인하세요."
+            else
+              jq -r '
+                .metrics as $m |
+                "| 지표 | N | 2N | 문항 30개 |",
+                "|---|---|---|---|",
+                "| 첫 페이지 쿼리 수 | \($m["queries.firstPage"].n) | \($m["queries.firstPage"]["2n"]) | \($m["queries.firstPage"].q30) |",
+                "| 다음 페이지 쿼리 수 | \($m["queries.nextPage"].n) | \($m["queries.nextPage"]["2n"]) | \($m["queries.nextPage"].q30) |",
+                "",
+                "| 바이트 지표 (N=\(.seed.n), limit=\(.seed.limit)) | 값 |",
+                "|---|---|",
+                "| 첫 페이지 | \($m["bytes.firstPage"]) B |",
+                "| 다음 페이지 | \($m["bytes.nextPage"]) B |",
+                "| 전체 | \($m["bytes.total"]) B |",
+                "| 행당 | \($m["bytes.perRow"]) B |",
+                "",
+                "stable: \(.stable) · Postgres \(.env.postgres) · Node \(.env.node)",
+                "",
+                "<details><summary>첫 페이지 SQL (\(.sql.firstPage | length))</summary>",
+                "",
+                "```sql",
+                (.sql.firstPage[]),
+                "```",
+                "</details>",
+                "",
+                "<details><summary>다음 페이지 SQL (\(.sql.nextPage | length))</summary>",
+                "",
+                "```sql",
+                (.sql.nextPage[]),
+                "```",
+                "</details>"
+              ' "$RESULT"
+            fi
+            echo
+            echo "전체 잡 소요 시간: ${elapsed}초 (요약 단계까지)"
+          } >> "$GITHUB_STEP_SUMMARY"
