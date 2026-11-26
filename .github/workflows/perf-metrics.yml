@@ -1,0 +1,97 @@
+name: perf-metrics
+
+# public-answers의 쿼리 수와 응답 바이트를 재서 아티팩트로 올린다(report/metric-plan.md 4.1). 판정은 하지 않는다.
+# develop push 실행이 기준선이 된다.
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR은 새 push가 오면 이전 측정을 취소하고, 기준선(push)은 커밋마다 남도록 sha별로 둔다.
+concurrency:
+  group: perf-metrics-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # 실행 사이 결과가 같도록 다이제스트로 고정한다(postgres:17-alpine).
+        image: postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: 시작 시각 기록
+        run: echo "JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: public-answers 측정
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+          PERF_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        # 에이전트와 사람이 로컬에서 쓰는 것과 같은 명령이다. DATABASE_URL·RUNNER_TEMP가 있어 컨테이너는 띄우지 않는다.
+        run: pnpm perf:measure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf-metrics
+          path: ${{ runner.temp }}/perf-metrics/*.json
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+
+      # 지표 이름을 모르고도 그리도록 결과 파일의 metrics 배열을 그대로 표로 만든다(report/metric-schema.md).
+      - name: 실행 요약
+        if: always()
+        env:
+          RESULT_DIR: ${{ runner.temp }}/perf-metrics
+        run: |
+          elapsed=$(( $(date +%s) - JOB_STARTED ))
+          {
+            shopt -s nullglob
+            files=("$RESULT_DIR"/*.json)
+            if [[ ${#files[@]} -eq 0 ]]; then
+              echo "측정 결과가 없습니다. 측정 단계 로그를 확인하세요."
+            fi
+            for file in "${files[@]}"; do
+              jq -r '
+                "### \(.metricSet): \(.title)",
+                "",
+                "| 지표 | kind | 값 | 단위 | 표본 |",
+                "|---|---|---|---|---|",
+                (.metrics[] | "| \(.label) (`\(.id)`) | \(.kind) | \(.value) | \(.unit) | \(if .kind == "invariant" then ([.samples[] | "\(.label): \(.value)"] | join(", ")) else "" end) |"),
+                "",
+                "stable: \(.stable) · params: \(.params | to_entries | map("\(.key)=\(.value)") | join(", ")) · env: \(.env | to_entries | map("\(.key) \(.value)") | join(", "))",
+                "",
+                (.details | to_entries[] | "<details><summary>\(.key) (\(.value | length))</summary>\n\n```\n\(.value | join("\n"))\n```\n</details>\n")
+              ' "$file"
+            done
+            echo
+            echo "전체 잡 소요 시간: ${elapsed}초 (요약 단계까지)"
+          } >> "$GITHUB_STEP_SUMMARY"
