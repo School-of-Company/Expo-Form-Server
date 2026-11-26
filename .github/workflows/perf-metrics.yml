@@ -56,7 +56,8 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
           PERF_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: pnpm exec vitest run --config ./vitest.config.metrics.ts
+        # 에이전트와 사람이 로컬에서 쓰는 것과 같은 명령이다. DATABASE_URL·RUNNER_TEMP가 있어 컨테이너는 띄우지 않는다.
+        run: pnpm perf:measure
 
       - uses: actions/upload-artifact@v4
         with:
