@@ -190,10 +190,14 @@ export class SurveyService {
   /** 여러 박람회에 어떤 설문이 만들어져 있는지 돌려준다. 설문이 없는 박람회는 결과에 나오지 않는다. */
   async summarize(expoIds: string[]): Promise<SurveySummaryDto[]> {
     const surveys = await this.surveyStore.findSummariesByExpoIds(expoIds);
-    return surveys.map(({ expoId, participationType }) => ({
-      expoId,
-      participationType,
-    }));
+    return surveys.map(
+      ({ expoId, participationType, lotteryEnabled, lotteryNumbers }) => ({
+        expoId,
+        participationType,
+        lotteryEnabled,
+        lotteryNumbersConfigured: lotteryNumbers.length > 0,
+      }),
+    );
   }
 
   /**

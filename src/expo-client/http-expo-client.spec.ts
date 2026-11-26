@@ -100,6 +100,72 @@ describe('HttpExpoClient', () => {
     expect(url).toBe('http://expo-server/internal/expo/a%2Fb%3Fc');
   });
 
+  describe('findFeatures', () => {
+    it('선행 기능까지 반영한 실효 값(effectiveEnabled)으로 설문·추첨 설정을 돌려준다', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse(200, {
+          startedDay: '2026-10-01',
+          features: [
+            { key: 'SURVEY', configuredEnabled: true, effectiveEnabled: true },
+            // 부모 SURVEY가 OFF였다면 선택값과 달리 실효 값이 OFF다 — 선택값을 쓰지 않는다.
+            {
+              key: 'SURVEY_LOTTERY',
+              configuredEnabled: true,
+              effectiveEnabled: false,
+            },
+            { key: 'PAPER_QR', effectiveEnabled: true },
+          ],
+        }),
+      );
+
+      await expect(client.findFeatures(expoId)).resolves.toEqual({
+        survey: true,
+        surveyLottery: false,
+      });
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`http://expo-server/internal/expo/${expoId}`);
+      expect(init.headers).toMatchObject({ 'X-Internal-Token': internalToken });
+    });
+
+    it('박람회가 없으면(404) null이다', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(404));
+
+      await expect(client.findFeatures(expoId)).resolves.toBeNull();
+    });
+
+    it('기능 설정이 없는 구형 응답·필요한 키가 빠진 응답·장애는 허용으로 보지 않고 503으로 던진다', async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, { startedDay: '2026-10-01' }),
+      );
+      await expect(client.findFeatures(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          features: [{ key: 'SURVEY', effectiveEnabled: true }],
+        }),
+      );
+      await expect(client.findFeatures(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse(200, {
+          features: [{ key: 'SURVEY', effectiveEnabled: 'true' }],
+        }),
+      );
+      await expect(client.findFeatures(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+
+      fetchMock.mockResolvedValueOnce(jsonResponse(500));
+      await expect(client.findFeatures(expoId)).rejects.toThrow(
+        ExternalServiceUnavailableException,
+      );
+    });
+  });
+
   describe('findPeriod', () => {
     it('박람회 기간을 돌려주고 내부 토큰을 싣는다', async () => {
       fetchMock.mockResolvedValue(

@@ -15,7 +15,11 @@ import {
 } from '../common/http/fetch-json.util.js';
 import type { InternalServiceOptions } from '../common/http/internal-service.config.js';
 import { INTERNAL_TOKEN_HEADER } from '../common/http/internal-token.constants.js';
-import type { ExpoClient, ExpoPeriod } from './expo-client.interface.js';
+import type {
+  ExpoClient,
+  ExpoFeatures,
+  ExpoPeriod,
+} from './expo-client.interface.js';
 
 /** 박람회 서비스가 수정 예약을 "이 폼에 진행 중인 변경이 있다"며 409로 거절할 때 바디에 싣는 `code`. */
 const CHANGE_IN_PROGRESS_CODE = 'PROGRAM_FORM_CHANGE_IN_PROGRESS';
@@ -27,6 +31,17 @@ const expoResponseSchema = z.looseObject({});
 const expoPeriodResponseSchema = z.looseObject({
   startedDay: z.string(),
   finishedDay: z.string(),
+});
+
+/**
+ * 기능 설정 응답 모양(Expo-Expo-Server#266이 `GET /internal/expo/{expoId}`에 가산하는 `features`). 키마다 선행
+ * 기능까지 반영한 `effectiveEnabled`를 쓴다. `features`가 없는 응답은 기능 설정을 모르는 박람회 서비스라서
+ * 허용으로 보지 않는다.
+ */
+const expoFeaturesResponseSchema = z.looseObject({
+  features: z.array(
+    z.looseObject({ key: z.string(), effectiveEnabled: z.boolean() }),
+  ),
 });
 
 /**
@@ -85,6 +100,47 @@ export class HttpExpoClient implements ExpoClient {
       );
       throw new ExternalServiceUnavailableException();
     }
+  }
+
+  /**
+   * 박람회가 없으면(404) null이다. 응답 실패·타임아웃, `features`가 없거나 필요한 키가 빠진 응답은 모두 503으로
+   * 던진다 — 모르는 설정을 ON으로 보면 꺼진 기능에 응답이 쌓이고, OFF로 보면 켜진 기능을 막는다.
+   */
+  async findFeatures(expoId: string): Promise<ExpoFeatures | null> {
+    const url = `${this.options.baseUrl}/internal/expo/${encodeURIComponent(expoId)}`;
+
+    let result: z.infer<typeof expoFeaturesResponseSchema> | null;
+    try {
+      result = await fetchJson(url, expoFeaturesResponseSchema, {
+        headers: { [INTERNAL_TOKEN_HEADER]: this.options.internalToken },
+        observe: { service: 'expo', operation: 'find_features' },
+      });
+    } catch (error) {
+      logDownstreamFailure(
+        this.logger,
+        `박람회 서비스 기능 설정 조회 실패: ${url}`,
+        error,
+      );
+      throw new ExternalServiceUnavailableException();
+    }
+
+    if (result === null) {
+      return null;
+    }
+
+    const effective = new Map(
+      result.features.map((feature) => [feature.key, feature.effectiveEnabled]),
+    );
+    const survey = effective.get('SURVEY');
+    const surveyLottery = effective.get('SURVEY_LOTTERY');
+    if (survey === undefined || surveyLottery === undefined) {
+      this.logger.error(
+        `박람회 서비스 기능 설정에 SURVEY·SURVEY_LOTTERY가 없습니다: ${url}`,
+      );
+      throw new ExternalServiceUnavailableException();
+    }
+
+    return { survey, surveyLottery };
   }
 
   /**

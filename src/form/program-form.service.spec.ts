@@ -93,6 +93,7 @@ describe('FormService 프로그램용 폼', () => {
     findPeriod: Mock;
     reserveProgramFormUpdate: Mock;
     releaseProgramFormChange: Mock;
+    findFeatures: Mock;
   };
   let service: FormService;
 
@@ -108,6 +109,7 @@ describe('FormService 프로그램용 폼', () => {
       findPeriod: vi.fn(),
       reserveProgramFormUpdate: vi.fn().mockResolvedValue(undefined),
       releaseProgramFormChange: vi.fn().mockResolvedValue(undefined),
+      findFeatures: vi.fn(),
     };
     service = new FormService(formStore as unknown as FormStore, expoClient);
   });

@@ -26,6 +26,10 @@ const skippingExpoClient: ExpoClient = {
   async findPeriod() {
     throw new ExternalServiceUnavailableException();
   },
+  // 기능 설정은 모르는 상태를 ON/OFF로 대신하지 않는다(공통 계약). 설정 없이 배포되면 새 설문 응답은 503이다.
+  async findFeatures() {
+    throw new ExternalServiceUnavailableException();
+  },
   // 보호자 동반 정책 참조를 확인할 수 없으니 프로그램용 폼 수정을 막는다(fail-closed).
   async reserveProgramFormUpdate() {
     // 부팅 때 한 번 남기는 경고는 묻히기 쉬워서, 막을 때마다 원인을 남긴다.

@@ -25,12 +25,17 @@ export class SurveyPublicController {
   @ApiOperation({
     summary: '공개 설문 조회',
     description:
-      '박람회 일반 참가자 설문(문항 포함)을 입장 확인 없이 조회한다. 응답자를 식별하지 않는다. `lotteryEnabled`가 true일 때만 경품 번호 입력을 보여 준다.',
+      '박람회 일반 참가자 설문(문항 포함)을 입장 확인 없이 조회한다. 응답자를 식별하지 않는다. `lotteryEnabled`는 박람회 추첨 기능과 설문의 추첨 운영이 둘 다 켜졌을 때만 true이고, 그때만 경품 번호 입력을 보여 준다.',
   })
   @ApiOkResponse({ type: PublicSurveyResponseDto })
   @ApiErrorResponse(
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
+  )
+  @ApiErrorResponse(409, '박람회 설정에서 설문이 꺼져 있음 (FEATURE_DISABLED)')
+  @ApiErrorResponse(
+    503,
+    '박람회 서비스에서 기능 설정을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
   @Get('public/:expoId')
   async findSurvey(
@@ -53,6 +58,11 @@ export class SurveyPublicController {
   @ApiErrorResponse(
     404,
     '그 박람회에 일반 참가자 설문이 없음 (SURVEY_NOT_FOUND)',
+  )
+  @ApiErrorResponse(409, '박람회 설정에서 설문이 꺼져 있음 (FEATURE_DISABLED)')
+  @ApiErrorResponse(
+    503,
+    '박람회 서비스에서 기능 설정을 확인하지 못함 — 잠시 후 재시도 (EXTERNAL_SERVICE_UNAVAILABLE)',
   )
   @Post('answer/public/:expoId')
   @HttpCode(HttpStatus.OK)
