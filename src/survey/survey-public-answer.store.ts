@@ -46,7 +46,7 @@ export class SurveyPublicAnswerStore {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * 응답을 저장하고 설문의 누적 응답 수를 늘린다(순번과 같은 UPDATE 한 번, #137). 경품 추첨이 켜져 있으면 같은 트랜잭션에서 이 응답의
+   * 응답을 저장하고 설문의 공개 링크 답변 수(`totalAnswers`)를 늘린다(순번과 같은 UPDATE 한 번, #137). 경품 추첨이 켜져 있으면 같은 트랜잭션에서 이 응답의
    * 순번을 매겨 당첨인지 정한다.
    *
    * 응답자를 식별하지 않아 같은 응답자의 중복을 막지 않는다.

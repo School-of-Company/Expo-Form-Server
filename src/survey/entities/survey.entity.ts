@@ -33,7 +33,10 @@ export class SurveyEntity {
   @Column({ type: 'enum', enum: ParticipationType })
   participationType: ParticipationType;
 
-  /** 누적 응답 수. 응답이 생성될 때마다 증가시킨다. */
+  /**
+   * 공개 링크 답변 수(옛 종이 QR 답변 포함). 로그인/SMS 답변은 접수 기록으로 따로 세므로, 설문의 응답 수는
+   * 이 값만 보지 말고 `SurveyStore.countAnswers`로 읽는다.
+   */
   @Column({ type: 'int', default: 0 })
   totalAnswers: number;
 

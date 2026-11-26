@@ -56,8 +56,9 @@ export type AnswerRelayOptions = Pick<
  * 상태 전이(특히 종결 상태로의 전이)는 전부 조건부 UPDATE로 구현한다 — 이미 종결된 row를
  * 애플리케이션 레벨에서 다시 읽어 판단하면, 그 사이 다른 요청이 끼어드는 경합을 못 막는다.
  *
- * 접수·거절은 설문의 누적 응답 수(`SurveyEntity.totalAnswers`)를 같이 바꾼다. 둘 중 하나만
- * 반영되면 재처리 때 종결 상태 가드에 막혀 보정할 기회가 없으므로, 같은 트랜잭션으로 묶는다.
+ * 설문의 응답 수는 `totalAnswers`에 이 테이블의 거절되지 않고 `countedInTotal`이 false인 행 수를 더해 센다
+ * (`SurveyStore.countAnswers`). 접수는 설문 행의 카운터를 바꾸지 않으므로, 같은 설문에 몰린 접수가 설문 행 잠금을 두고
+ * 줄 서지 않는다.
  */
 @Injectable()
 export class SurveyAnswerSubmissionStore {
@@ -96,14 +97,14 @@ export class SurveyAnswerSubmissionStore {
   }
 
   /**
-   * 설문의 누적 응답 수를 늘리고 접수 기록을 저장한다.
+   * 설문이 아직 있는지 확인하고 접수 기록을 저장한다.
    *
    * 동시 요청이 둘 다 {@link findActiveByKey}를 통과하면 활성 제출 유니크 제약이 한쪽을
    * 막는다 — 그 위반은 그대로 던지므로 호출부가 409로 변환해야 한다.
    *
-   * 카운트를 먼저 올리는 건 박람회 일괄 삭제(`SurveyStore.deleteByExpoId`)와 순서를 맞추기
-   * 위해서다. 이 UPDATE가 설문 row를 잠그므로, 삭제가 먼저면 0행이 갱신돼 기록을 남기지 않고,
-   * 이쪽이 먼저면 삭제가 커밋을 기다렸다가 방금 남긴 기록까지 지운다.
+   * 설문 행을 `FOR KEY SHARE`로 잠가 박람회·설문 삭제(`SurveyStore.deleteByExpoId`·`deleteById`)와 순서를 맞춘다.
+   * 이 잠금은 DELETE와만 부딪히고 같은 잠금끼리는 부딪히지 않아, 한 설문에 몰린 접수가 서로 기다리지 않는다.
+   * 삭제가 먼저면 행이 없어 기록을 남기지 않고, 이쪽이 먼저면 삭제가 커밋을 기다렸다가 방금 남긴 기록까지 지운다.
    *
    * @returns 기록했으면 true, 그 사이 설문이 지워져 기록하지 않았으면 false
    */
@@ -111,13 +112,14 @@ export class SurveyAnswerSubmissionStore {
     submission: SurveyAnswerSubmissionEntity,
   ): Promise<boolean> {
     return this.dataSource.transaction(async (manager) => {
-      const { affected } = await manager.increment(
-        SurveyEntity,
-        { id: submission.surveyId },
-        'totalAnswers',
-        1,
-      );
-      if ((affected ?? 0) === 0) {
+      // 집계(getCount)에는 Postgres가 FOR KEY SHARE를 허용하지 않아 행을 그대로 고른다.
+      const survey: unknown = await manager
+        .createQueryBuilder(SurveyEntity, 'survey')
+        .select('1')
+        .where('survey.id = :id', { id: submission.surveyId })
+        .setLock('for_key_share')
+        .getRawOne();
+      if (survey === undefined) {
         return false;
       }
 
@@ -350,9 +352,8 @@ export class SurveyAnswerSubmissionStore {
    * 결과 이벤트를 반영한다. 아직 종결되지 않은(`RECEIVED`/`PUBLISHED`) row만 갱신한다 —
    * 릴레이는 발행 전에 `PUBLISHED`로 claim하지만, 발행 실패로 claim을 되돌린 건(`RECEIVED`)에 앞서 일부 나간 묶음의 결과가 올 수 있다.
    * 이미 종결된 row는 조건에 안 걸려 무시되므로, 늦게·중복으로 도착한 이벤트가 최종 상태를
-   * 덮어쓰지 못한다.
-   *
-   * `REJECTED`로 바꿨다면 접수 때 미리 늘려둔 누적 응답 수를 같은 트랜잭션에서 되돌린다.
+   * 덮어쓰지 못한다. 거절된 기록은 응답 수에서 저절로 빠지고, 예전 버전이 `totalAnswers`에 더해 둔 기록이면 같은
+   * 트랜잭션에서 되돌린다.
    *
    * @returns 실제로 갱신됐으면 true, 이미 종결 상태라 무시됐으면 false
    */
@@ -364,29 +365,33 @@ export class SurveyAnswerSubmissionStore {
     rejectReason: string | null,
   ): Promise<boolean> {
     return this.dataSource.transaction(async (manager) => {
-      const result = await manager.update(
+      const { affected } = await manager.update(
         SurveyAnswerSubmissionEntity,
         { eventId, status: In(IN_FLIGHT_STATUSES) },
         { status, rejectReason },
       );
-      if ((result.affected ?? 0) === 0) {
+      if ((affected ?? 0) === 0) {
         return false;
       }
 
+      // 예전 버전이 접수하며 totalAnswers에 더해 둔 행만 되돌린다. 지금 접수한 행은 거절되면 집계에서 저절로 빠진다.
       if (status === SurveyAnswerSubmissionStatus.REJECTED) {
-        const { surveyId } = await manager.findOneByOrFail(
+        const { surveyId, countedInTotal } = await manager.findOneOrFail(
           SurveyAnswerSubmissionEntity,
-          { eventId },
+          { select: { surveyId: true, countedInTotal: true }, where: { eventId } },
         );
-        await manager.decrement(
-          SurveyEntity,
-          { id: surveyId },
-          'totalAnswers',
-          1,
-        );
+        if (countedInTotal) {
+          await manager.decrement(
+            SurveyEntity,
+            { id: surveyId },
+            'totalAnswers',
+            1,
+          );
+        }
       }
 
       return true;
     });
   }
+
 }

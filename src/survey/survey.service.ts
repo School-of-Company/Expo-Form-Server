@@ -233,6 +233,6 @@ export class SurveyService {
       throw new SurveyNotFoundException();
     }
 
-    return { totalAnswers: survey.totalAnswers };
+    return { totalAnswers: await this.surveyStore.countAnswers(survey.id) };
   }
 }
