@@ -1,9 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:http';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import process from 'node:process';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -29,6 +26,12 @@ import { SurveyPublicAnswerStore } from '../../src/survey/survey-public-answer.s
 import { SurveyPublicService } from '../../src/survey/survey-public.service.js';
 import { SurveyService } from '../../src/survey/survey.service.js';
 import { SurveyStore } from '../../src/survey/survey.store.js';
+import {
+  invariantMetric,
+  isInvariantHeld,
+  maxMetric,
+  writeMetricReport,
+} from '../../perf/metric-report.js';
 
 /**
  * `GET /internal/surveys/:expoId/public-answers`의 쿼리 수와 응답 바이트를 고정 시드로 재서 JSON으로 남긴다
@@ -254,24 +257,46 @@ describe.skipIf(adminUrl === undefined)('public-answers 성능 지표', () => {
     const twoN = await measureSurvey(SURVEYS.twoN.prefix);
     const q30 = await measureSurvey(SURVEYS.q30.prefix);
     const { total, perRow } = await measureTotal();
+    const axes = (
+      pick: (page: { first: PageMeasure; next: PageMeasure }) => PageMeasure,
+    ) => [
+      { label: `N=${N}`, value: pick(n).queries.length },
+      { label: `2N=${N * 2}`, value: pick(twoN).queries.length },
+      { label: 'questions=30', value: pick(q30).queries.length },
+    ];
     return {
-      metrics: {
-        'queries.firstPage': {
-          n: n.first.queries.length,
-          '2n': twoN.first.queries.length,
-          q30: q30.first.queries.length,
-        },
-        'queries.nextPage': {
-          n: n.next.queries.length,
-          '2n': twoN.next.queries.length,
-          q30: q30.next.queries.length,
-        },
-        'bytes.firstPage': n.first.bytes,
-        'bytes.nextPage': n.next.bytes,
-        'bytes.total': total,
-        'bytes.perRow': perRow,
+      metrics: [
+        invariantMetric(
+          'queries.firstPage',
+          '첫 페이지 쿼리 수',
+          'count',
+          axes((page) => page.first),
+        ),
+        invariantMetric(
+          'queries.nextPage',
+          '다음 페이지 쿼리 수',
+          'count',
+          axes((page) => page.next),
+        ),
+        maxMetric(
+          'bytes.firstPage',
+          '첫 페이지 바이트',
+          'bytes',
+          n.first.bytes,
+        ),
+        maxMetric(
+          'bytes.nextPage',
+          '다음 페이지 바이트',
+          'bytes',
+          n.next.bytes,
+        ),
+        maxMetric('bytes.total', `전체 바이트 (N=${N})`, 'bytes', total),
+        maxMetric('bytes.perRow', '행당 바이트', 'bytes', perRow),
+      ],
+      details: {
+        'sql.firstPage': n.first.queries,
+        'sql.nextPage': n.next.queries,
       },
-      sql: { firstPage: n.first.queries, nextPage: n.next.queries },
     };
   }
 
@@ -283,35 +308,20 @@ describe.skipIf(adminUrl === undefined)('public-answers 성능 지표', () => {
     const [{ server_version: postgres }] = await dataSource.query<
       Array<{ server_version: string }>
     >('SHOW server_version');
-    const result = {
-      schemaVersion: 1,
+    await writeMetricReport({
       metricSet: 'public-answers',
-      endpoint: 'GET /internal/surveys/:expoId/public-answers',
-      source: {
-        sha: process.env.GITHUB_SHA ?? null,
-        baseSha: process.env.PERF_BASE_SHA ?? null,
-        event: process.env.GITHUB_EVENT_NAME ?? null,
-        runId: Number(process.env.GITHUB_RUN_ID ?? 0),
-        runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? 0),
-      },
-      env: { postgres, node: process.version },
-      seed: { n: N, limit: LIMIT, questions: [3, 30], noiseRows: NOISE_ROWS },
+      title: 'GET /internal/surveys/:expoId/public-answers',
+      params: { n: N, limit: LIMIT, questions: '3/30', noiseRows: NOISE_ROWS },
       ...run1,
       stable,
-    };
-    const outDir = path.join(
-      process.env.RUNNER_TEMP ?? tmpdir(),
-      'perf-metrics',
-    );
-    await mkdir(outDir, { recursive: true });
-    await writeFile(
-      path.join(outDir, 'public-answers.json'),
-      `${JSON.stringify(result, null, 2)}\n`,
-    );
+      env: { postgres },
+    });
 
-    for (const key of ['queries.firstPage', 'queries.nextPage'] as const) {
-      const { n, '2n': twoN, q30 } = run1.metrics[key];
-      expect({ key, twoN, q30 }).toEqual({ key, twoN: n, q30: n });
+    for (const metric of run1.metrics) {
+      expect({ id: metric.id, held: isInvariantHeld(metric) }).toEqual({
+        id: metric.id,
+        held: true,
+      });
     }
 
     expect(stable).toBe(true);

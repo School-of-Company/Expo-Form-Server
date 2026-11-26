@@ -61,53 +61,36 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: perf-metrics
-          path: ${{ runner.temp }}/perf-metrics/public-answers.json
+          path: ${{ runner.temp }}/perf-metrics/*.json
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
 
+      # 지표 이름을 모르고도 그리도록 결과 파일의 metrics 배열을 그대로 표로 만든다(report/metric-schema.md).
       - name: 실행 요약
         if: always()
         env:
-          RESULT: ${{ runner.temp }}/perf-metrics/public-answers.json
+          RESULT_DIR: ${{ runner.temp }}/perf-metrics
         run: |
           elapsed=$(( $(date +%s) - JOB_STARTED ))
           {
-            echo "### public-answers 성능 지표"
-            echo
-            if [[ ! -f "$RESULT" ]]; then
+            shopt -s nullglob
+            files=("$RESULT_DIR"/*.json)
+            if [[ ${#files[@]} -eq 0 ]]; then
               echo "측정 결과가 없습니다. 측정 단계 로그를 확인하세요."
-            else
-              jq -r '
-                .metrics as $m |
-                "| 지표 | N | 2N | 문항 30개 |",
-                "|---|---|---|---|",
-                "| 첫 페이지 쿼리 수 | \($m["queries.firstPage"].n) | \($m["queries.firstPage"]["2n"]) | \($m["queries.firstPage"].q30) |",
-                "| 다음 페이지 쿼리 수 | \($m["queries.nextPage"].n) | \($m["queries.nextPage"]["2n"]) | \($m["queries.nextPage"].q30) |",
-                "",
-                "| 바이트 지표 (N=\(.seed.n), limit=\(.seed.limit)) | 값 |",
-                "|---|---|",
-                "| 첫 페이지 | \($m["bytes.firstPage"]) B |",
-                "| 다음 페이지 | \($m["bytes.nextPage"]) B |",
-                "| 전체 | \($m["bytes.total"]) B |",
-                "| 행당 | \($m["bytes.perRow"]) B |",
-                "",
-                "stable: \(.stable) · Postgres \(.env.postgres) · Node \(.env.node)",
-                "",
-                "<details><summary>첫 페이지 SQL (\(.sql.firstPage | length))</summary>",
-                "",
-                "```sql",
-                (.sql.firstPage[]),
-                "```",
-                "</details>",
-                "",
-                "<details><summary>다음 페이지 SQL (\(.sql.nextPage | length))</summary>",
-                "",
-                "```sql",
-                (.sql.nextPage[]),
-                "```",
-                "</details>"
-              ' "$RESULT"
             fi
+            for file in "${files[@]}"; do
+              jq -r '
+                "### \(.metricSet): \(.title)",
+                "",
+                "| 지표 | kind | 값 | 단위 | 표본 |",
+                "|---|---|---|---|---|",
+                (.metrics[] | "| \(.label) (`\(.id)`) | \(.kind) | \(.value) | \(.unit) | \(if .kind == "invariant" then ([.samples[] | "\(.label): \(.value)"] | join(", ")) else "" end) |"),
+                "",
+                "stable: \(.stable) · params: \(.params | to_entries | map("\(.key)=\(.value)") | join(", ")) · env: \(.env | to_entries | map("\(.key) \(.value)") | join(", "))",
+                "",
+                (.details | to_entries[] | "<details><summary>\(.key) (\(.value | length))</summary>\n\n```\n\(.value | join("\n"))\n```\n</details>\n")
+              ' "$file"
+            done
             echo
             echo "전체 잡 소요 시간: ${elapsed}초 (요약 단계까지)"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -95,45 +95,49 @@ PR마다 댓글 하나가 달리고, 푸시할 때마다 같은 댓글이 갱신
 
 ## 3. 측정 결과 JSON
 
-### 스키마(v1)
+### 스키마(v1, 프로젝트 무관)
+
+형식 정의는 `report/metric-schema.md`에 따로 둡니다. 다른 프로젝트에서도 같은 형식을 쓰기 위해서입니다. 이 계획의 지표는 그 형식에 아래처럼 담깁니다.
+
+- 지표마다 `kind`, `value`, `unit`을 담습니다. 보고 쪽은 지표 이름을 몰라도 `kind`만 보고 판정합니다.
+  - `invariant`: 쿼리 수 2개. 표본 3개(N=250, 2N=500, 문항 30개)가 모두 같아야 합니다.
+  - `max`: 바이트 4개(첫 페이지, 다음 페이지, 전체, 행당). 상한 이하여야 합니다.
+- 상한은 결과 파일에 넣지 않고 `perf/limits.json`에 둡니다(7장).
+- 실행된 SQL 목록은 `details`(`sql.firstPage`, `sql.nextPage`)에 담습니다. 표시만 합니다.
+- 시드 같은 측정 조건은 `params`에, 런타임 버전은 `env`에 담습니다.
 
 ```json
 {
   "schemaVersion": 1,
   "metricSet": "public-answers",
-  "endpoint": "GET /internal/surveys/:expoId/public-answers",
-  "source": {
-    "sha": "<40 hex>",
-    "baseSha": "<40 hex>",
-    "event": "pull_request",
-    "runId": 123,
-    "runAttempt": 1
-  },
-  "env": { "postgres": "17.6", "node": "26.x" },
-  "seed": { "n": 250, "limit": 100, "questions": [3, 30], "noiseRows": 1000 },
-  "metrics": {
-    "queries.firstPage": { "n": 7, "2n": 7, "q30": 7 },
-    "queries.nextPage": { "n": 2, "2n": 2, "q30": 2 },
-    "bytes.firstPage": 41234,
-    "bytes.nextPage": 40987,
-    "bytes.total": 102345,
-    "bytes.perRow": 312
-  },
-  "sql": {
-    "firstPage": ["SELECT ... FROM \"survey\" ..."],
-    "nextPage": ["..."]
-  },
+  "title": "GET /internal/surveys/:expoId/public-answers",
+  "source": { "sha": "<40 hex>", "baseSha": "<40 hex>", "event": "pull_request", "runId": 123, "runAttempt": 1 },
+  "env": { "node": "v26.13.1", "postgres": "17.11" },
+  "params": { "n": 250, "limit": 100, "questions": "3/30", "noiseRows": 1000 },
+  "metrics": [
+    { "id": "queries.firstPage", "label": "첫 페이지 쿼리 수", "kind": "invariant", "unit": "count", "value": 7,
+      "samples": [{ "label": "N=250", "value": 7 }, { "label": "2N=500", "value": 7 }, { "label": "questions=30", "value": 7 }] },
+    { "id": "queries.nextPage", "label": "다음 페이지 쿼리 수", "kind": "invariant", "unit": "count", "value": 2, "samples": ["..."] },
+    { "id": "bytes.firstPage", "label": "첫 페이지 바이트", "kind": "max", "unit": "bytes", "value": 16746 },
+    { "id": "bytes.nextPage", "label": "다음 페이지 바이트", "kind": "max", "unit": "bytes", "value": 16746 },
+    { "id": "bytes.total", "label": "전체 바이트 (N=250)", "kind": "max", "unit": "bytes", "value": 42052 },
+    { "id": "bytes.perRow", "label": "행당 바이트", "kind": "max", "unit": "bytes", "value": 159 }
+  ],
+  "details": { "sql.firstPage": ["..."], "sql.nextPage": ["..."] },
   "stable": true
 }
 ```
 
-- `stable`: 같은 실행 안에서 측정을 두 번 해 모든 값이 같으면 true입니다(6장).
+- 코드 구조:
+  - 공통 부분: `perf/metric-report.ts`가 결과 파일을 만듭니다. Node 표준 모듈에만 의존해 다른 프로젝트에 복사할 수 있습니다.
+  - 프로젝트별 부분: `test/metrics/public-answers.metrics-spec.ts`. 엔드포인트, 시드, 문항 수, 지표 이름은 이 파일에만 둡니다.
+  - 공통 헬퍼를 `test/` 밖에 둔 이유: 린트 규칙(`node-test/no-import-test-files`)이 `test/` 아래 파일을 테스트 파일로 보고 import를 막습니다.
 - `source`와 `env`는 표시용입니다. PR 번호, sha, 기준선 선택에는 GitHub API 값을 씁니다(4.3).
 
 ### 저장 위치
 
-- 측정 잡이 러너의 `$RUNNER_TEMP/perf-metrics/public-answers.json`에 씁니다. 리포 안에는 쓰지 않습니다.
-- 아티팩트 이름은 `perf-metrics`이고, 이 파일 하나만 담습니다. 보존 기간은 PR 실행 14일, 기준선(push) 실행 90일입니다.
+- 측정 잡이 러너의 `$RUNNER_TEMP/perf-metrics/<metricSet>.json`에 씁니다. 리포 안에는 쓰지 않습니다.
+- 아티팩트 이름은 `perf-metrics`이고, 이 폴더의 `*.json`을 담습니다. 보존 기간은 PR 실행 14일, 기준선(push) 실행 90일입니다.
 - 상한 파일은 리포의 `perf/limits.json`에 둡니다(7장).
 
 ## 4. 워크플로우 구조
@@ -161,7 +165,7 @@ jobs:
     steps:
       - checkout → pnpm install
       - DATABASE_URL=... pnpm exec vitest run --config ./vitest.config.metrics.ts # 측정 spec 하나만
-      - upload-artifact: name=perf-metrics, path=$RUNNER_TEMP/perf-metrics/public-answers.json
+      - upload-artifact: name=perf-metrics, path=$RUNNER_TEMP/perf-metrics/*.json
 ```
 
 - push(기준선) 실행은 sha별 그룹이라 서로 취소하지 않습니다. 머지가 연달아 들어와도 커밋마다 기준선이 남습니다(검토 지적 A3).
@@ -190,11 +194,11 @@ concurrency:
 1. `workflow_run.event`가 `pull_request`나 `merge_group`일 때만 보고합니다. `push`(기준선) 실행은 보고하지 않습니다.
 2. 측정 실행의 아티팩트 `perf-metrics`를 `actions/download-artifact@v4`(`run-id`, `github-token`)로 내려받습니다.
 3. **실행하지 않고 크기와 스키마만 검증합니다.**
-   - zip 안에 `public-answers.json` 파일 하나만 있어야 합니다.
-   - 파일 크기는 64KB 이하여야 합니다(`sql` 목록 포함).
-   - `jq -e`로 스키마를 검사합니다: `schemaVersion==1`, `metricSet` 고정 문자열, 모든 지표가 0 이상 10^8 이하의 정수, `seed`가 main의 기대값과 같음.
+   - zip 안에는 `<metricSet>.json` 파일만 있어야 하고, 파일 이름과 내용의 `metricSet`이 같아야 합니다.
+   - 파일 크기는 64KB 이하여야 합니다(`details` 포함).
+   - `jq -e`로 `report/metric-schema.md`의 스키마를 검사합니다: `schemaVersion==1`, 모든 `value`가 0 이상의 숫자, `kind`가 `max`나 `invariant`, `invariant`는 `samples`가 2개 이상, `params`가 main의 상한 파일에 적힌 기대 조건과 같음.
    - 하나라도 어긋나면 ❌와 "측정 결과 형식 오류"를 남깁니다.
-   - JSON의 문자열 값(`sql` 포함)은 셸 명령에 끼워 넣지 않고, 환경 변수와 `jq --arg`로만 다룹니다. 댓글에 넣을 때는 코드 블록 안에 넣고 백틱을 이스케이프합니다.
+   - JSON의 문자열 값(`details` 포함)은 셸 명령에 끼워 넣지 않고, 환경 변수와 `jq --arg`로만 다룹니다. 댓글에 넣을 때는 코드 블록 안에 넣고 백틱을 이스케이프합니다.
 4. 기준선은 PR의 base sha와 같은 커밋을 측정한 push 실행에서 가져옵니다(4.6).
 5. 상한은 base 브랜치와 PR head의 `perf/limits.json`을 둘 다 읽습니다(7장).
 6. 판정 결과로 커밋 상태 `perf-budget`을 남기고(4.4), PR 이벤트면 댓글을 만들거나 갱신합니다(4.3).
